@@ -1,0 +1,207 @@
+/*
+ * Learnix design tokens.
+ *
+ * Layer 1 (brand):    raw, immutable brand colors. Never change per theme.
+ * Layer 2 (semantic): role-based tokens (background, primary, border…) that
+ *                     map brand colors to UI roles and DO change per theme.
+ * Layer 3 (Tailwind): exposed to utilities in globals.css via `@theme inline`.
+ *
+ * Components must consume semantic tokens only (e.g. `bg-card`, `text-muted-foreground`),
+ * never raw hex values. See docs/design-tokens.md.
+ */
+
+:root {
+  /* ---------- Layer 1: Brand palette ---------- */
+  --brand-background: #f8f8f7;
+  --brand-white: #ffffff;
+  --brand-charcoal: #202124;
+  --brand-gold: #a88945;
+  --brand-gold-highlight: #e5cc83;
+  --brand-gold-shadow: #806127;
+  --brand-grey: #737373;
+
+  /* Metallic gold */
+  --gradient-gold: linear-gradient(
+    110deg,
+    #806127 0%,
+    #a88945 25%,
+    #e5cc83 48%,
+    #a88945 72%,
+    #806127 100%
+  );
+  /* Soft top-down light reflection layered over the metallic surface. */
+  --gradient-gold-reflection: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.32) 0%,
+    rgb(255 255 255 / 0.08) 45%,
+    rgb(255 255 255 / 0) 55%
+  );
+  /* Narrow diagonal light sweep used on hover. */
+  --gradient-gold-sheen: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 70%
+  );
+
+  /* ---------- Layer 2: Semantic tokens (light) ---------- */
+  --background: var(--brand-background);
+  --foreground: var(--brand-charcoal);
+
+  --card: var(--brand-white);
+  --card-foreground: var(--brand-charcoal);
+  --popover: var(--brand-white);
+  --popover-foreground: var(--brand-charcoal);
+
+  --primary: var(--brand-gold);
+  --primary-foreground: var(--brand-charcoal);
+
+  --secondary: #efeeeb;
+  --secondary-foreground: var(--brand-charcoal);
+
+  --muted: #f0efec;
+  --muted-foreground: var(--brand-grey);
+
+  --accent: #f4efe2;
+  --accent-foreground: var(--brand-charcoal);
+
+  /* Gold used as text/icon on neutral surfaces (AA compliant). */
+  --gold-foreground: var(--brand-gold-shadow);
+  --gold-subtle: #f6f0e0;
+  --gold-border: #dccb9c;
+
+  --destructive: #b42318;
+  --destructive-foreground: var(--brand-white);
+  --destructive-subtle: #fdecea;
+
+  --success: #2f7a4b;
+  --success-foreground: var(--brand-white);
+  --success-subtle: #e8f3ec;
+
+  --warning: #a15c07;
+  --warning-foreground: var(--brand-white);
+  --warning-subtle: #fdf3e2;
+
+  --info: #31659c;
+  --info-foreground: var(--brand-white);
+  --info-subtle: #e9f0f8;
+
+  --border: #e5e3df;
+  --input: #dcdad5;
+  --ring: var(--brand-gold);
+
+  --overlay: rgb(32 33 36 / 0.45);
+
+  /* Sidebar */
+  --sidebar: var(--brand-white);
+  --sidebar-foreground: var(--brand-charcoal);
+  --sidebar-muted-foreground: var(--brand-grey);
+  --sidebar-accent: #f3f2ef;
+  --sidebar-accent-foreground: var(--brand-charcoal);
+  --sidebar-border: #ebe9e5;
+
+  /* Charts (Recharts) */
+  --chart-1: var(--brand-gold);
+  --chart-2: var(--brand-charcoal);
+  --chart-3: var(--brand-gold-highlight);
+  --chart-4: var(--brand-grey);
+  --chart-5: var(--brand-gold-shadow);
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px 0 rgb(32 33 36 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(32 33 36 / 0.07), 0 1px 2px -1px rgb(32 33 36 / 0.05);
+  --shadow-md: 0 6px 16px -6px rgb(32 33 36 / 0.12), 0 2px 4px -2px rgb(32 33 36 / 0.06);
+  --shadow-lg: 0 16px 40px -12px rgb(32 33 36 / 0.18);
+  --shadow-gold:
+    inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 16px -8px rgb(128 97 39 / 0.65);
+  --shadow-gold-hover:
+    inset 0 1px 0 rgb(255 255 255 / 0.4), 0 10px 22px -10px rgb(128 97 39 / 0.75);
+
+  /* Shape */
+  --radius: 0.625rem;
+
+  /* Layout */
+  --sidebar-width: 16rem;
+  --sidebar-width-collapsed: 4.25rem;
+  --topbar-height: 4rem;
+  --bottom-nav-height: 4rem;
+
+  /* Motion */
+  --duration-fast: 150ms;
+  --duration-base: 220ms;
+  --duration-slow: 420ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ---------- Layer 2: Semantic tokens (dark) ---------- */
+.dark {
+  --background: #17181a;
+  --foreground: #f1f0ed;
+
+  --card: var(--brand-charcoal);
+  --card-foreground: #f1f0ed;
+  --popover: #26272b;
+  --popover-foreground: #f1f0ed;
+
+  --primary: var(--brand-gold);
+  --primary-foreground: var(--brand-charcoal);
+
+  --secondary: #2b2c30;
+  --secondary-foreground: #f1f0ed;
+
+  --muted: #26272b;
+  --muted-foreground: #a3a3a3;
+
+  --accent: #2c2a24;
+  --accent-foreground: #f1f0ed;
+
+  --gold-foreground: var(--brand-gold-highlight);
+  --gold-subtle: #2a261c;
+  --gold-border: #5c4a24;
+
+  --destructive: #e5534b;
+  --destructive-foreground: #17181a;
+  --destructive-subtle: #3a1f1d;
+
+  --success: #57b37a;
+  --success-foreground: #17181a;
+  --success-subtle: #1c2e23;
+
+  --warning: #e0a04a;
+  --warning-foreground: #17181a;
+  --warning-subtle: #33281a;
+
+  --info: #6fa3d8;
+  --info-foreground: #17181a;
+  --info-subtle: #1c2733;
+
+  --border: #313236;
+  --input: #3a3b40;
+  --ring: var(--brand-gold-highlight);
+
+  --overlay: rgb(0 0 0 / 0.6);
+
+  --sidebar: #1c1d20;
+  --sidebar-foreground: #f1f0ed;
+  --sidebar-muted-foreground: #a3a3a3;
+  --sidebar-accent: #2a2b2f;
+  --sidebar-accent-foreground: #f1f0ed;
+  --sidebar-border: #2a2b2f;
+
+  --chart-1: var(--brand-gold);
+  --chart-2: #f1f0ed;
+  --chart-3: var(--brand-gold-highlight);
+  --chart-4: #a3a3a3;
+  --chart-5: #c7a964;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.35), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 6px 16px -6px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 16px 40px -12px rgb(0 0 0 / 0.6);
+  --shadow-gold:
+    inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 18px -8px rgb(229 204 131 / 0.28);
+  --shadow-gold-hover:
+    inset 0 1px 0 rgb(255 255 255 / 0.32), 0 10px 24px -10px rgb(229 204 131 / 0.38);
+
+  color-scheme: dark;
+}
