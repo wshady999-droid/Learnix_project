@@ -15,7 +15,6 @@ import {
   UserPlus,
 } from "lucide-react";
 
-import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { PasswordStrengthChecklist } from "@/components/auth/password-strength-checklist";
 import { useLocale } from "@/components/i18n/locale-provider";
@@ -204,8 +203,10 @@ export function SignupForm() {
   }
 
   return (
-    <AuthPageLayout maxWidthClass="max-w-xl">
-      <Card variant="premium" className="shadow-md">
+    <Card
+      variant="premium"
+      className="rounded-2xl border-none bg-transparent shadow-none backdrop-blur-md [--gold-fill:color-mix(in_oklab,var(--card)_94%,transparent)]"
+    >
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-between">
             <Badge variant="gold-subtle">
@@ -217,7 +218,7 @@ export function SignupForm() {
           <CardDescription>{authT.signup.subtitle}</CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-4">
           {/* Student vs Teacher Registration Tabs (No Admin public signup allowed) */}
           <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1">
             <button
@@ -258,8 +259,8 @@ export function SignupForm() {
               : authT.signup.teacherDescription}
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="signup-full-name">{authT.signup.fullNameLabel}</Label>
                 <Input
@@ -324,7 +325,7 @@ export function SignupForm() {
 
             {/* Teacher-specific professional & educational fields */}
             {accountType === "teacher" ? (
-              <div className="space-y-4 rounded-xl border border-border bg-muted/30 p-4">
+              <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
                 <div className="grid gap-2">
                   <Label htmlFor="signup-specialization">
                     {authT.signup.specializationLabel}
@@ -377,7 +378,7 @@ export function SignupForm() {
             </div>
 
             {/* Password & Confirm Password with Visibility Toggles */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="signup-password">{authT.signup.passwordLabel}</Label>
                 <div className="relative">
@@ -492,8 +493,7 @@ export function SignupForm() {
               {authT.signup.loginLink}
             </Link>
           </p>
-        </CardFooter>
-      </Card>
-    </AuthPageLayout>
+      </CardFooter>
+    </Card>
   );
 }

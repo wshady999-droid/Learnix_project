@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { KeyRound, ShieldAlert, ShieldCheck } from "lucide-react";
 
-import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { PasswordStrengthChecklist } from "@/components/auth/password-strength-checklist";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
@@ -68,8 +67,10 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <AuthPageLayout>
-      <Card variant="premium" className="shadow-md">
+    <Card
+      variant="premium"
+      className="rounded-2xl shadow-lg backdrop-blur-md [--gold-fill:color-mix(in_oklab,var(--card)_94%,transparent)]"
+    >
         <CardHeader className="space-y-2">
           <Badge variant="gold-subtle">
             <ShieldCheck className="size-3.5" aria-hidden="true" />
@@ -139,8 +140,7 @@ export function ResetPasswordForm() {
           <Link href="/login" className="font-semibold text-gold-foreground hover:underline">
             {authT.recovery.backToLogin}
           </Link>
-        </CardFooter>
-      </Card>
-    </AuthPageLayout>
+      </CardFooter>
+    </Card>
   );
 }

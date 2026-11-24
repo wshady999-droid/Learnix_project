@@ -168,8 +168,9 @@ export function LandingPageContent() {
           className="relative scroll-mt-20"
         >
           <div className="relative flex min-h-[37rem] w-full items-center overflow-hidden bg-[#F8F8F7] pt-28 pb-24 sm:min-h-[41rem] sm:pt-32 sm:pb-28 lg:min-h-[44rem] lg:pt-36 lg:pb-32 dark:bg-[#17181A]">
-
-            <div className="absolute inset-y-0 right-0 w-full md:w-[85%] lg:w-[80%] [mask-image:linear-gradient(to_left,black_30%,transparent_95%)] rtl:[mask-image:linear-gradient(to_right,black_30%,transparent_95%)]">
+            
+            {/* 1. الصورة الخلفية: تاخد العرض كامل وتتعكس في العربي */}
+            <div className="absolute inset-y-0 ltr:right-0 rtl:left-0 w-full rtl:scale-x-[-1]">
               <Image
                 src="/learnix-hero.jpg"
                 alt="Learnix Academic Campus & Modern Architecture"
@@ -181,6 +182,10 @@ export function LandingPageContent() {
               />
             </div>
 
+            {/* 2. طبقة التدرج (Gradient) عشان النص يبان */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-full bg-gradient-to-r from-[#F8F8F7] via-[#F8F8F7]/80 to-transparent md:w-2/3 dark:from-[#17181A] dark:via-[#17181A]/80 rtl:left-auto rtl:right-0 rtl:bg-gradient-to-l" />
+
+            {/* 3. طبقات التدرج العلوية والسفلية (للتأثير السينمائي) */}
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-[#F8F8F7]/80 to-transparent dark:from-[#17181A]/80"
@@ -254,8 +259,9 @@ export function LandingPageContent() {
               </div>
             </div>
           </div>
+          
           {/* OVERLAPPING SERVICES DOCK PANEL */}
-         <div className="relative z-30 w-full -mt-12 px-4 sm:-mt-14 sm:px-6 lg:-mt-16 lg:px-8">
+          <div className="relative z-30 w-full -mt-12 px-4 sm:-mt-14 sm:px-6 lg:-mt-16 lg:px-8">
             <div className="rounded-3xl border border-[#E5E3DF] bg-[#FFFFFF]/95 p-6 shadow-[0_20px_50px_rgba(32,33,36,0.12)] backdrop-blur-xl sm:p-7 lg:p-8 dark:border-[#252630] dark:bg-[#11131F]/95 dark:shadow-[0_24px_60px_rgba(0,0,0,0.85)]">
               <div className="grid items-center gap-8 lg:grid-cols-[0.25fr_0.75fr] lg:gap-10">
                 <div className="flex items-start gap-4">

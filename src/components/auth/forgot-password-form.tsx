@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { KeyRound, MailCheck, ShieldAlert } from "lucide-react";
 
-import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,10 +46,11 @@ export function ForgotPasswordForm() {
     setSubmittedEmail(email.trim());
   }
 
-  return (
-    <AuthPageLayout>
-      {submittedEmail ? (
-        <Card variant="premium" className="shadow-md">
+  return submittedEmail ? (
+    <Card
+      variant="premium"
+      className="rounded-2xl shadow-lg backdrop-blur-md [--gold-fill:color-mix(in_oklab,var(--card)_94%,transparent)]"
+    >
           <CardHeader className="space-y-2">
             <Badge variant="gold-subtle">
               <MailCheck className="size-3.5" aria-hidden="true" />
@@ -79,8 +79,11 @@ export function ForgotPasswordForm() {
             </Button>
           </CardContent>
         </Card>
-      ) : (
-        <Card variant="premium" className="shadow-md">
+  ) : (
+    <Card
+      variant="premium"
+      className="rounded-2xl shadow-lg backdrop-blur-md [--gold-fill:color-mix(in_oklab,var(--card)_94%,transparent)]"
+    >
           <CardHeader className="space-y-2">
             <Badge variant="gold-subtle">
               <KeyRound className="size-3.5" aria-hidden="true" />
@@ -134,9 +137,7 @@ export function ForgotPasswordForm() {
                 {authT.recovery.backToLogin}
               </Link>
             </p>
-          </CardFooter>
-        </Card>
-      )}
-    </AuthPageLayout>
+        </CardFooter>
+    </Card>
   );
 }

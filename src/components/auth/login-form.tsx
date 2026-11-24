@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, EyeOff, LogIn, ShieldAlert, Sparkles } from "lucide-react";
 
-import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
@@ -71,8 +70,10 @@ export function LoginForm() {
   }
 
   return (
-    <AuthPageLayout>
-      <Card variant="premium" className="shadow-md">
+    <Card
+      variant="premium"
+      className="rounded-2xl shadow-lg backdrop-blur-md [--gold-fill:color-mix(in_oklab,var(--card)_94%,transparent)]"
+    >
         <CardHeader className="space-y-2">
           <div className="flex items-center justify-between">
             <Badge variant="gold-subtle">
@@ -205,8 +206,7 @@ export function LoginForm() {
               {authT.login.createAccountLink}
             </Link>
           </p>
-        </CardFooter>
-      </Card>
-    </AuthPageLayout>
+      </CardFooter>
+    </Card>
   );
 }

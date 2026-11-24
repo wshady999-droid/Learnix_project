@@ -214,3 +214,51 @@
     }
   }
 }
+
+/* ---------- Auth full-screen background & floating dialog motion ---------- */
+@keyframes auth-bg-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-card-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--auth-slide-x, 12px), 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@utility animate-auth-bg-fade {
+  animation: auth-bg-fade 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-auth-card-enter {
+  animation: auth-card-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility auth-dialog-position {
+  transition-property: transform;
+  transition-duration: 520ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-auth-bg-fade,
+  .animate-auth-card-enter {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .auth-dialog-position {
+    transition: none !important;
+  }
+}
