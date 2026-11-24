@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Bookmark,
@@ -44,6 +44,8 @@ interface StudentCoursesClientProps {
 
 export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedCourseId = searchParams.get("courseId");
   const { locale } = useLocale();
   const t = getStudentDictionary(locale);
   const [isPending, startTransition] = useTransition();
@@ -52,9 +54,15 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
     "enrolled" | "catalog" | "favorites"
   >("enrolled");
   const [search, setSearch] = useState("");
-  const [selectedCourseId, setSelectedCourseId] = useState<string>(
-    data.enrolledCourses[0]?.id ?? "",
-  );
+  const [selectedCourseId, setSelectedCourseId] = useState<string>(() => {
+    if (
+      requestedCourseId &&
+      data.enrolledCourses.some((course) => course.id === requestedCourseId)
+    ) {
+      return requestedCourseId;
+    }
+    return data.enrolledCourses[0]?.id ?? "";
+  });
 
   const activeCourseId = selectedCourseId || data.enrolledCourses[0]?.id || "";
   const progressMap = useMemo(

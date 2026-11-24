@@ -4,9 +4,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const code = (searchParams.get("code") ?? "").trim();
+  const rawCode = (searchParams.get("code") ?? "").trim();
+  const code = rawCode.replace(/[,()"'\\]/g, "");
 
-  if (code.length < 6) {
+  if (code.length < 6 || code.length > 128) {
     return NextResponse.json(
       { ok: false, error: "Enter a valid certificate number or verification hash." },
       { status: 400 },

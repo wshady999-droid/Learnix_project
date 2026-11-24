@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { CalendarCheck } from "lucide-react";
 
 import { EmptyState } from "@/components/feedback/empty-state";
@@ -23,6 +24,7 @@ export const metadata: Metadata = {
 };
 
 async function StudentAttendanceLoader() {
+  await connection();
   const res = await getStudentAttendanceViewData();
   if (!res.ok) {
     return <ErrorState description={res.error} />;

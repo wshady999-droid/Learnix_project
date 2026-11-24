@@ -96,13 +96,13 @@ export function SignupForm() {
       const filePath = `${userId}/avatar-${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("avatars")
+        .from("profile-pictures")
         .upload(filePath, file, { upsert: true, contentType: file.type });
 
       if (!uploadError) {
         const {
           data: { publicUrl },
-        } = supabase.storage.from("avatars").getPublicUrl(filePath);
+        } = supabase.storage.from("profile-pictures").getPublicUrl(filePath);
         await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", userId);
       }
     } catch {

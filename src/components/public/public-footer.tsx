@@ -39,17 +39,19 @@ export function PublicFooter() {
   ] as const;
 
   return (
-    <footer className="border-t border-border bg-card text-card-foreground">
+    <footer className="border-t border-[#E5E3DF] bg-[#FFFFFF] text-[#202124] dark:border-[#252630] dark:bg-[#17181A] dark:text-[#F5F5F5]">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.35fr_0.85fr_0.9fr_1.3fr]">
           {/* Column 1: About Learnix */}
           <div className="flex flex-col gap-4">
-            <BrandLogo />
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            <div className="[&_span]:!text-[#202124] dark:[&_span]:!text-[#F5F5F5]">
+              <BrandLogo />
+            </div>
+            <p className="max-w-sm text-sm leading-relaxed text-[#737373] dark:text-[#A1A1AA]">
               {t.footer.aboutDescription}
             </p>
             <div className="space-y-2 pt-1">
-              <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              <p className="text-xs font-semibold tracking-wider text-[#737373] uppercase dark:text-[#A1A1AA]">
                 {t.footer.socialLabel}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -62,7 +64,7 @@ export function PublicFooter() {
                         description: t.footer.socialPlaceholderToast,
                       })
                     }
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-border hover:bg-gold-subtle hover:text-gold-foreground"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E3DF] bg-[#F8F8F7] px-2.5 py-1.5 text-xs font-medium text-[#737373] transition-colors hover:border-[#C99A22] hover:bg-[#C99A22]/10 hover:text-[#997214] dark:border-[#252630] dark:bg-[#11131F] dark:text-[#A1A1AA] dark:hover:bg-[#252630] dark:hover:text-[#C99A22]"
                   >
                     <Share2 className="size-3" aria-hidden="true" />
                     <span>{social.name}</span>
@@ -74,7 +76,7 @@ export function PublicFooter() {
 
           {/* Column 2: Useful links */}
           <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold tracking-wider text-foreground uppercase">
+            <h2 className="text-xs font-semibold tracking-wider text-[#202124] uppercase dark:text-[#F5F5F5]">
               {t.footer.usefulLinksTitle}
             </h2>
             <ul className="flex flex-col gap-2 text-sm">
@@ -82,7 +84,7 @@ export function PublicFooter() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="text-muted-foreground transition-colors hover:text-gold-foreground"
+                    className="text-[#737373] transition-colors hover:text-[#C99A22] dark:text-[#A1A1AA] dark:hover:text-[#C99A22]"
                   >
                     {item.label}
                   </Link>
@@ -93,7 +95,7 @@ export function PublicFooter() {
 
           {/* Column 3: Legal & Account */}
           <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold tracking-wider text-foreground uppercase">
+            <h2 className="text-xs font-semibold tracking-wider text-[#202124] uppercase dark:text-[#F5F5F5]">
               {t.footer.legalLinksTitle}
             </h2>
             <ul className="flex flex-col gap-2 text-sm">
@@ -101,7 +103,7 @@ export function PublicFooter() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="text-muted-foreground transition-colors hover:text-gold-foreground"
+                    className="text-[#737373] transition-colors hover:text-[#C99A22] dark:text-[#A1A1AA] dark:hover:text-[#C99A22]"
                   >
                     {item.label}
                   </Link>
@@ -113,39 +115,42 @@ export function PublicFooter() {
           {/* Column 4: Contact Information (Clearly labeled owner placeholders) */}
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xs font-semibold tracking-wider text-foreground uppercase">
+              <h2 className="text-xs font-semibold tracking-wider text-[#202124] uppercase dark:text-[#F5F5F5]">
                 {t.footer.contactTitle}
               </h2>
-              <Badge variant="gold-subtle" className="text-[10px]">
+              <Badge
+                variant="gold-subtle"
+                className="border-[#C99A22]/40 bg-[#C99A22]/15 text-[10px] text-[#997214] dark:text-[#C99A22]"
+              >
                 {t.common.placeholderTag}
               </Badge>
             </div>
-            <ul className="flex flex-col gap-2.5 text-xs text-muted-foreground">
+            <ul className="flex flex-col gap-2.5 text-xs text-[#737373] dark:text-[#A1A1AA]">
               <li className="flex items-start gap-2">
-                <Mail className="mt-0.5 size-3.5 shrink-0 text-gold-foreground" aria-hidden="true" />
+                <Mail className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-foreground">{t.contact.emailLabel}: </span>
+                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.emailLabel}: </span>
                   <span>{t.contact.emailPlaceholderValue}</span>
                 </div>
               </li>
               <li className="flex items-start gap-2">
-                <Phone className="mt-0.5 size-3.5 shrink-0 text-gold-foreground" aria-hidden="true" />
+                <Phone className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-foreground">{t.contact.phoneLabel}: </span>
+                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.phoneLabel}: </span>
                   <span>{t.contact.phonePlaceholderValue}</span>
                 </div>
               </li>
               <li className="flex items-start gap-2">
-                <MapPin className="mt-0.5 size-3.5 shrink-0 text-gold-foreground" aria-hidden="true" />
+                <MapPin className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-foreground">{t.contact.addressLabel}: </span>
+                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.addressLabel}: </span>
                   <span>{t.contact.addressPlaceholderValue}</span>
                 </div>
               </li>
               <li className="flex items-start gap-2">
-                <Clock className="mt-0.5 size-3.5 shrink-0 text-gold-foreground" aria-hidden="true" />
+                <Clock className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-foreground">{t.contact.hoursLabel}: </span>
+                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.hoursLabel}: </span>
                   <span>{t.contact.hoursPlaceholderValue}</span>
                 </div>
               </li>
@@ -153,20 +158,20 @@ export function PublicFooter() {
           </div>
         </div>
 
-        <Separator className="my-8" />
+        <Separator className="my-8 bg-[#E5E3DF] dark:bg-[#252630]" />
 
-        <div className="flex flex-col items-center justify-between gap-4 text-xs text-muted-foreground sm:flex-row">
+        <div className="flex flex-col items-center justify-between gap-4 text-xs text-[#737373] sm:flex-row dark:text-[#A1A1AA]">
           <p>
             © {currentYear} {t.footer.copyright}
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/privacy" className="transition-colors hover:text-gold-foreground">
+            <Link href="/privacy" className="transition-colors hover:text-[#C99A22]">
               {t.footer.privacyPolicy}
             </Link>
-            <Link href="/terms" className="transition-colors hover:text-gold-foreground">
+            <Link href="/terms" className="transition-colors hover:text-[#C99A22]">
               {t.footer.termsOfService}
             </Link>
-            <span className="inline-flex items-center gap-1 text-gold-foreground">
+            <span className="inline-flex items-center gap-1 text-[#997214] dark:text-[#C99A22]">
               <Globe className="size-3.5" aria-hidden="true" />
               <span>EN · AR · DE · IT · FR</span>
             </span>

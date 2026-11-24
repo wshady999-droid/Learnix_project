@@ -5,7 +5,14 @@ import { getDashboardPathForRole } from "@/lib/auth/validation";
 import { getPublicEnv, isSupabaseConfigured } from "@/lib/env";
 import type { Database } from "@/types/database";
 
-const PROTECTED_PREFIXES = ["/admin", "/teacher", "/student", "/profile"] as const;
+const PROTECTED_PREFIXES = [
+  "/admin",
+  "/teacher",
+  "/student",
+  "/profile",
+  "/calendar",
+  "/messages",
+] as const;
 const AUTH_ENTRY_PATHS = ["/login", "/signup", "/forgot-password"] as const;
 
 function isProtectedPath(pathname: string): boolean {
@@ -37,6 +44,21 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  const { pathname } = request.nextUrl;
+  const hasAuthCookie = request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith("sb-") && cookie.value.length > 0);
+
+  if (!hasAuthCookie) {
+    if (isProtectedPath(pathname)) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = "/login";
+      loginUrl.searchParams.set("reason", "session_expired");
+      return NextResponse.redirect(loginUrl);
+    }
+    return supabaseResponse;
+  }
+
   const env = getPublicEnv();
   const supabase = createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -63,7 +85,6 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const userId = claims?.sub;
-  const { pathname } = request.nextUrl;
 
   if (!userId) {
     if (isProtectedPath(pathname)) {

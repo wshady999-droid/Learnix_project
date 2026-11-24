@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { AdminAnalyticsClient } from "@/components/admin/admin-analytics-client";
 import { ErrorState } from "@/components/feedback/error-state";
+import { LoadingState } from "@/components/feedback/loading-state";
 import { getAdminAnalyticsReportData } from "@/services/admin/queries";
 
 export const metadata: Metadata = {
@@ -10,7 +13,8 @@ export const metadata: Metadata = {
     "Student performance, subject difficulty, instructor reports, and PDF/Excel exports for Learnix.",
 };
 
-export default async function AdminAnalyticsPage() {
+async function AdminAnalyticsLoader() {
+  await connection();
   const result = await getAdminAnalyticsReportData();
   if (!result.ok) {
     return (
@@ -22,4 +26,12 @@ export default async function AdminAnalyticsPage() {
   }
 
   return <AdminAnalyticsClient data={result.data} />;
+}
+
+export default function AdminAnalyticsPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <AdminAnalyticsLoader />
+    </Suspense>
+  );
 }

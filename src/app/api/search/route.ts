@@ -10,7 +10,8 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const q = (searchParams.get("q") ?? "").trim();
+  const rawQ = (searchParams.get("q") ?? "").trim();
+  const q = rawQ.replace(/[,()"'\\]/g, "").slice(0, 80);
   if (q.length < 2) {
     return NextResponse.json({
       ok: true,

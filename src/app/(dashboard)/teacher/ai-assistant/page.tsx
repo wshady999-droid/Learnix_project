@@ -1,14 +1,13 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
 import { TeacherAiAssistantClient } from "@/components/teacher/teacher-ai-assistant-client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getAiWorkspaceHistoryData } from "@/services/ai/queries";
-import {
-  getTeacherCoursesData,
-  getTeacherGradingData,
-} from "@/services/teacher/queries";
+import { getTeacherCoursesData } from "@/services/teacher/queries";
 
 export const metadata: Metadata = {
   title: "AI Teacher Assistant | Learnix Teacher",
@@ -16,26 +15,34 @@ export const metadata: Metadata = {
 };
 
 async function TeacherAiAssistantLoader() {
-  const [coursesRes, gradingRes, historyRes] = await Promise.all([
+  await connection();
+  const [coursesRes, historyRes] = await Promise.all([
     getTeacherCoursesData(),
-    getTeacherGradingData(),
     getAiWorkspaceHistoryData("teacher"),
   ]);
 
   if (!coursesRes.ok) {
     return <ErrorState description={coursesRes.error} />;
   }
-  if (!gradingRes.ok) {
-    return <ErrorState description={gradingRes.error} />;
-  }
   if (!historyRes.ok) {
     return <ErrorState description={historyRes.error} />;
   }
 
+  const courseIds = coursesRes.data.courses.map((c) => c.id);
+  const supabase = await createSupabaseServerClient();
+  const examsRes =
+    courseIds.length > 0
+      ? await supabase
+          .from("exams")
+          .select("*")
+          .in("course_id", courseIds)
+          .order("created_at", { ascending: false })
+      : { data: [] };
+
   return (
     <TeacherAiAssistantClient
       coursesData={coursesRes.data}
-      gradingData={gradingRes.data}
+      gradingData={{ exams: examsRes.data ?? [] }}
       history={historyRes.data}
     />
   );

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 };
 
 async function TeacherStudentsLoader() {
+  await connection();
   const res = await getTeacherStudentsData();
   if (!res.ok) {
     return <ErrorState description={res.error} />;

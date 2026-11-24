@@ -75,7 +75,9 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
     data.courses[0]?.id ?? "",
   );
   const [sessionTitle, setSessionTitle] = useState("Weekly Lecture Session");
-  const [sessionDate, setSessionDate] = useState("2026-11-23");
+  const [sessionDate, setSessionDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [attendanceStatuses, setAttendanceStatuses] = useState<
     Record<string, "present" | "absent" | "late" | "excused">
   >({});

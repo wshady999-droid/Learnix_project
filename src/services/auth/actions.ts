@@ -193,6 +193,17 @@ function isDuplicateEmailError(error: { message?: string; code?: string; status?
   );
 }
 
+function isEmailRateLimitError(error: { message?: string; code?: string; status?: number } | null): boolean {
+  if (!error) return false;
+  const code = (error.code ?? "").toLowerCase();
+  const msg = (error.message ?? "").toLowerCase();
+  return (
+    code === "over_email_send_rate_limit" ||
+    msg.includes("email rate limit exceeded") ||
+    msg.includes("rate limit")
+  );
+}
+
 export async function registerAccountAction(
   input: z.infer<typeof signupUnionSchema>,
 ): Promise<
@@ -277,27 +288,61 @@ export async function registerAccountAction(
       if (isDuplicateEmailError(signUpError)) {
         return { ok: false, error: "EMAIL_ALREADY_EXISTS" };
       }
-      return { ok: false, error: signUpError.message };
+
+      if (isEmailRateLimitError(signUpError)) {
+        // Check if an unconfirmed or confirmed account with these credentials already exists
+        const { data: existingSignIn, error: existingSignInErr } =
+          await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password: data.password,
+          });
+
+        if (!existingSignInErr && existingSignIn.user) {
+          createdUserId = existingSignIn.user.id;
+        } else {
+          return {
+            ok: false,
+            error:
+              "Supabase Auth email rate limit exceeded because 'Confirm email' is enabled on the Supabase project and SUPABASE_SERVICE_ROLE_KEY is not set in .env.local. Either disable 'Confirm email' under Supabase Dashboard → Authentication → Providers → Email, or add SUPABASE_SERVICE_ROLE_KEY to .env.local for instant email-free registration.",
+          };
+        }
+      } else {
+        return { ok: false, error: signUpError.message };
+      }
     }
 
-    // Supabase returns an empty identities array for existing emails when confirmation is enabled.
-    if (signUpData.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0) {
-      return { ok: false, error: "EMAIL_ALREADY_EXISTS" };
-    }
+    if (!createdUserId) {
+      // Supabase returns an empty identities array for existing emails when confirmation is enabled.
+      if (
+        signUpData.user &&
+        Array.isArray(signUpData.user.identities) &&
+        signUpData.user.identities.length === 0
+      ) {
+        return { ok: false, error: "EMAIL_ALREADY_EXISTS" };
+      }
 
-    if (!signUpData.user) {
-      return { ok: false, error: "Unable to create account. Please try again." };
-    }
+      if (!signUpData.user) {
+        return { ok: false, error: "Unable to create account. Please try again." };
+      }
 
-    createdUserId = signUpData.user.id;
+      createdUserId = signUpData.user.id;
 
-    if (!signUpData.session) {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password: data.password,
-      });
-      if (signInError) {
-        return { ok: false, error: signInError.message };
+      if (!signUpData.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password: data.password,
+        });
+        if (signInError) {
+          const msg = signInError.message.toLowerCase();
+          if (msg.includes("email not confirmed")) {
+            return {
+              ok: false,
+              error:
+                "Account was created, but Supabase Auth requires email confirmation ('Confirm email' is enabled in Supabase Dashboard). Disable 'Confirm email' under Authentication → Providers → Email or configure SUPABASE_SERVICE_ROLE_KEY in .env.local for instant registration.",
+            };
+          }
+          return { ok: false, error: signInError.message };
+        }
       }
     }
   }

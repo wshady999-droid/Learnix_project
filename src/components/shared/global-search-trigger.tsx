@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen,
@@ -45,29 +45,58 @@ export function GlobalSearchTrigger() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<SearchResults | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<number | null>(null);
 
-  async function handleSearch(nextQuery: string) {
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  function handleSearch(nextQuery: string) {
     setQuery(nextQuery);
-    if (nextQuery.trim().length < 2) {
+    if (debounceTimerRef.current !== null) {
+      window.clearTimeout(debounceTimerRef.current);
+    }
+    abortRef.current?.abort();
+
+    const trimmed = nextQuery.trim();
+    if (trimmed.length < 2) {
+      setLoading(false);
       setResults(null);
       return;
     }
 
     setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/search?q=${encodeURIComponent(nextQuery.trim())}`,
-      );
-      const json = (await res.json()) as {
-        ok: boolean;
-        data?: SearchResults;
-      };
-      if (json.ok && json.data) {
-        setResults(json.data);
+    debounceTimerRef.current = window.setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const res = await fetch(
+          `/api/search?q=${encodeURIComponent(trimmed)}`,
+          { signal: controller.signal },
+        );
+        const json = (await res.json()) as {
+          ok: boolean;
+          data?: SearchResults;
+        };
+        if (!controller.signal.aborted && json.ok && json.data) {
+          setResults(json.data);
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
-    } finally {
-      setLoading(false);
-    }
+    }, 250);
   }
 
   return (

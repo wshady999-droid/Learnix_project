@@ -40,7 +40,7 @@ import type {
 
 interface TeacherAiAssistantClientProps {
   coursesData: TeacherCoursesData;
-  gradingData: TeacherGradingData;
+  gradingData: Pick<TeacherGradingData, "exams">;
   history: AiWorkspaceHistoryData;
 }
 

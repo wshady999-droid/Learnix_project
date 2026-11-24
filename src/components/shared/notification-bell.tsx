@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
 
@@ -29,12 +29,21 @@ export function NotificationBell() {
   const [items, setItems] = useState<BellItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const userIdRef = useRef<string | null>(null);
 
   const loadNotifications = useCallback(async () => {
     const supabase = createSupabaseBrowserClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const uid = userData.user?.id;
-    if (!uid) return;
+    let uid = userIdRef.current;
+    if (!uid) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      uid = sessionData.session?.user?.id ?? null;
+      if (!uid) {
+        const { data: userData } = await supabase.auth.getUser();
+        uid = userData.user?.id ?? null;
+      }
+      userIdRef.current = uid;
+    }
+    if (!uid) return null;
 
     const { data: recipients } = await supabase
       .from("notification_recipients")
@@ -48,7 +57,7 @@ export function NotificationBell() {
     if (notifIds.length === 0) {
       setItems([]);
       setUnreadCount(0);
-      return;
+      return uid;
     }
 
     const { data: notifs } = await supabase
@@ -74,84 +83,61 @@ export function NotificationBell() {
 
     setItems(mapped);
     setUnreadCount(mapped.filter((m) => !m.isRead).length);
+    return uid;
   }, []);
 
   useEffect(() => {
     let active = true;
     const supabase = createSupabaseBrowserClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    async function syncFromSupabase() {
-      const { data: userData } = await supabase.auth.getUser();
-      const uid = userData.user?.id;
-      if (!uid || !active) return;
+    async function init() {
+      const uid = await loadNotifications();
+      if (!active || !uid) return;
 
-      const { data: recipients } = await supabase
-        .from("notification_recipients")
-        .select("id, notification_id, is_read, created_at")
-        .eq("recipient_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(12);
-
-      if (!active) return;
-      const recList = recipients ?? [];
-      const notifIds = recList.map((r) => r.notification_id);
-      if (notifIds.length === 0) {
-        setItems([]);
-        setUnreadCount(0);
-        return;
-      }
-
-      const { data: notifs } = await supabase
-        .from("notifications")
-        .select("id, title, body, notification_type")
-        .in("id", notifIds);
-
-      if (!active) return;
-      const nMap = new Map((notifs ?? []).map((n) => [n.id, n]));
-      const mapped: BellItem[] = recList
-        .map((r) => {
-          const n = nMap.get(r.notification_id);
-          if (!n) return null;
-          return {
-            recipientId: r.id,
-            title: n.title,
-            body: n.body,
-            category: n.notification_type,
-            isRead: r.is_read,
-            createdAt: r.created_at,
-          };
-        })
-        .filter((x): x is NonNullable<typeof x> => x !== null);
-
-      setItems(mapped);
-      setUnreadCount(mapped.filter((m) => !m.isRead).length);
+      channel = supabase
+        .channel(`learnix-notifications-bell-${uid}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notification_recipients",
+            filter: `recipient_id=eq.${uid}`,
+          },
+          () => {
+            if (active) {
+              void loadNotifications();
+            }
+          },
+        )
+        .subscribe();
     }
 
     const timer = window.setTimeout(() => {
-      void syncFromSupabase();
+      void init();
     }, 0);
-
-    const channel = supabase
-      .channel("learnix-notifications-bell")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notification_recipients" },
-        () => {
-          void syncFromSupabase();
-        },
-      )
-      .subscribe();
 
     return () => {
       active = false;
       window.clearTimeout(timer);
-      void supabase.removeChannel(channel);
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
-  }, []);
+  }, [loadNotifications]);
 
   function handleMarkAllRead() {
     startTransition(async () => {
       await sharedMarkNotificationReadAction({ markAll: true });
+      await loadNotifications();
+    });
+  }
+
+  function handleMarkSingleRead(recipientId: string, isRead: boolean) {
+    if (isRead || isPending) return;
+    startTransition(async () => {
+      await sharedMarkNotificationReadAction({ recipientId });
       await loadNotifications();
     });
   }
@@ -201,10 +187,19 @@ export function NotificationBell() {
             items.map((item) => (
               <div
                 key={item.recipientId}
+                role={item.isRead ? undefined : "button"}
+                tabIndex={item.isRead ? undefined : 0}
+                onClick={() => handleMarkSingleRead(item.recipientId, item.isRead)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleMarkSingleRead(item.recipientId, item.isRead);
+                  }
+                }}
                 className={
                   item.isRead
                     ? "rounded-lg p-2.5 text-xs text-muted-foreground"
-                    : "rounded-lg border border-gold-primary/40 bg-gold-primary/5 p-2.5 text-xs text-foreground"
+                    : "cursor-pointer rounded-lg border border-gold-primary/40 bg-gold-primary/5 p-2.5 text-xs text-foreground transition-colors hover:bg-gold-primary/10"
                 }
               >
                 <div className="flex items-center justify-between gap-2">

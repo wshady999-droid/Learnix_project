@@ -337,7 +337,7 @@ export function AdminAnalyticsClient({ data }: AdminAnalyticsClientProps) {
               />
             ) : (
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                   <BarChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis

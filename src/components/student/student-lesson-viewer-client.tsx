@@ -55,6 +55,9 @@ export function StudentLessonViewerClient({
   const [isPending, startTransition] = useTransition();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastTrackedSecondRef = useRef<number>(
+    Number(data.progress?.last_position_seconds ?? 0),
+  );
   const [activeTab, setActiveTab] = useState<
     "overview" | "notes" | "quiz" | "related"
   >("overview");
@@ -224,8 +227,11 @@ export function StudentLessonViewerClient({
                   onTimeUpdate={() => {
                     if (videoRef.current) {
                       const sec = Math.round(videoRef.current.currentTime);
-                      setResumePosition(String(sec));
-                      setNoteTimestamp(String(sec));
+                      if (sec !== lastTrackedSecondRef.current) {
+                        lastTrackedSecondRef.current = sec;
+                        setResumePosition(String(sec));
+                        setNoteTimestamp(String(sec));
+                      }
                     }
                   }}
                   className="aspect-video w-full bg-black"

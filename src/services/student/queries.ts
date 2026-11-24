@@ -67,7 +67,6 @@ export async function getStudentOverviewData(): Promise<
     resultsRes,
     studyRes,
     notifRecipientsRes,
-    allProfilesRes,
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", studentId).maybeSingle(),
     supabase
@@ -88,7 +87,6 @@ export async function getStudentOverviewData(): Promise<
       .eq("recipient_id", studentId)
       .order("created_at", { ascending: false })
       .limit(15),
-    supabase.from("profiles").select("id, full_name, email"),
   ]);
 
   if (profileRes.error || !profileRes.data) {
@@ -102,9 +100,6 @@ export async function getStudentOverviewData(): Promise<
   const results = resultsRes.data ?? [];
   const studySessions = studyRes.data ?? [];
   const notifRecipients = notifRecipientsRes.data ?? [];
-  const profileNameMap = new Map(
-    (allProfilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
-  );
 
   const courseIds = enrollments.map((e) => e.course_id);
 
@@ -131,6 +126,17 @@ export async function getStudentOverviewData(): Promise<
   ]);
 
   const courses = coursesRes.data ?? [];
+  const teacherIds = Array.from(new Set(courses.map((c) => c.teacher_id)));
+  const teacherProfilesRes =
+    teacherIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", teacherIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
+  const profileNameMap = new Map(
+    (teacherProfilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
+  );
   const courseMap = new Map(courses.map((c) => [c.id, c]));
   const exams = examsRes.data ?? [];
   const examMap = new Map(exams.map((e) => [e.id, e]));
@@ -273,7 +279,6 @@ export async function getStudentCoursesData(): Promise<
     publishedCoursesRes,
     lessonProgressRes,
     favoritesRes,
-    profilesRes,
   ] = await Promise.all([
     supabase
       .from("course_enrollments")
@@ -287,7 +292,6 @@ export async function getStudentCoursesData(): Promise<
       .order("created_at", { ascending: false }),
     supabase.from("lesson_progress").select("*").eq("student_id", studentId),
     supabase.from("favorites").select("*").eq("student_id", studentId),
-    supabase.from("profiles").select("id, full_name, email"),
   ]);
 
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
@@ -297,9 +301,6 @@ export async function getStudentCoursesData(): Promise<
 
   const enrollments = enrollmentsRes.data ?? [];
   const publishedCourses = publishedCoursesRes.data ?? [];
-  const profileNameMap = new Map(
-    (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
-  );
 
   const enrolledIdsSet = new Set(enrollments.map((e) => e.course_id));
   const enrolledCourseIds = Array.from(enrolledIdsSet);
@@ -313,7 +314,14 @@ export async function getStudentCoursesData(): Promise<
     (enrolledCoursesRawRes.data ?? []).map((c) => [c.id, c]),
   );
 
-  const [chaptersRes, lessonsRes] = await Promise.all([
+  const teacherIds = Array.from(
+    new Set([
+      ...publishedCourses.map((c) => c.teacher_id),
+      ...(enrolledCoursesRawRes.data ?? []).map((c) => c.teacher_id),
+    ]),
+  );
+
+  const [chaptersRes, lessonsRes, profilesRes] = await Promise.all([
     enrolledCourseIds.length > 0
       ? supabase
           .from("chapters")
@@ -330,7 +338,20 @@ export async function getStudentCoursesData(): Promise<
           .eq("is_published", true)
           .order("position", { ascending: true })
       : Promise.resolve({ data: [] as Array<TableRow<"lessons">>, error: null }),
+    teacherIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", teacherIds)
+      : Promise.resolve({
+          data: [] as Array<{ id: string; full_name: string | null; email: string }>,
+          error: null,
+        }),
   ]);
+
+  const profileNameMap = new Map(
+    (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
+  );
 
   const enrolledCourses = enrollments
     .map((enr) => {
@@ -604,7 +625,6 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
     certsRes,
     courseRevsRes,
     teacherRevsRes,
-    allProfilesRes,
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", studentId).single(),
     supabase
@@ -639,7 +659,6 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
       .order("issued_at", { ascending: false }),
     supabase.from("course_reviews").select("*").eq("student_id", studentId),
     supabase.from("teacher_reviews").select("*").eq("student_id", studentId),
-    supabase.from("profiles").select("id, full_name, email"),
   ]);
 
   if (profileRes.error || !profileRes.data) {
@@ -649,9 +668,6 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
   const enrollments = enrollmentsRes.data ?? [];
   const results = resultsRes.data ?? [];
   const certificates = certsRes.data ?? [];
-  const profileNameMap = new Map(
-    (allProfilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
-  );
 
   const courseIds = Array.from(
     new Set([
@@ -675,6 +691,20 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
           )
       : Promise.resolve({ data: [] as Array<{ id: string; title: string }>, error: null }),
   ]);
+
+  const teacherIds = Array.from(
+    new Set((coursesRes.data ?? []).map((c) => c.teacher_id)),
+  );
+  const teacherProfilesRes =
+    teacherIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", teacherIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
+  const profileNameMap = new Map(
+    (teacherProfilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
+  );
 
   const courseMap = new Map((coursesRes.data ?? []).map((c) => [c.id, c]));
   const examTitleMap = new Map((examsRes.data ?? []).map((e) => [e.id, e.title]));

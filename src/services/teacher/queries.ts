@@ -71,7 +71,6 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
     attemptsRes,
     assignmentsRes,
     notifRecipientsRes,
-    profilesRes,
   ] = await Promise.all([
     courseIds.length > 0
       ? supabase.from("course_enrollments").select("*").in("course_id", courseIds)
@@ -108,7 +107,6 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
       .eq("recipient_id", teacherId)
       .order("created_at", { ascending: false })
       .limit(15),
-    supabase.from("profiles").select("id, full_name, email"),
   ]);
 
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
@@ -123,9 +121,7 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
   const attempts = attemptsRes.data ?? [];
   const assignments = assignmentsRes.data ?? [];
   const notifRecipients = notifRecipientsRes.data ?? [];
-  const profiles = profilesRes.data ?? [];
 
-  const profileNameMap = new Map(profiles.map((p) => [p.id, p.full_name || p.email]));
   const examIdsSet = new Set(exams.map((e) => e.id));
   const examTitleMap = new Map(exams.map((e) => [e.id, e.title]));
   const resultByAttemptMap = new Map(results.map((r) => [r.attempt_id, r]));
@@ -146,11 +142,32 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
 
   const assignmentSubmissions = assignmentSubmissionsRes.data ?? [];
 
+  const submissionStudentIds = Array.from(
+    new Set([
+      ...teacherAttempts.slice(0, 10).map((a) => a.student_id),
+      ...assignmentSubmissions.slice(0, 10).map((s) => s.student_id),
+    ]),
+  );
+
   const notifIds = notifRecipients.map((n) => n.notification_id);
-  const notificationsRes =
+  const [notificationsRes, profilesRes] = await Promise.all([
     notifIds.length > 0
-      ? await supabase.from("notifications").select("*").in("id", notifIds)
-      : { data: [] as Array<TableRow<"notifications">>, error: null };
+      ? supabase.from("notifications").select("*").in("id", notifIds)
+      : Promise.resolve({ data: [] as Array<TableRow<"notifications">>, error: null }),
+    submissionStudentIds.length > 0
+      ? supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", submissionStudentIds)
+      : Promise.resolve({
+          data: [] as Array<{ id: string; full_name: string | null; email: string }>,
+          error: null,
+        }),
+  ]);
+
+  const profileNameMap = new Map(
+    (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
+  );
 
   const notificationMap = new Map((notificationsRes.data ?? []).map((n) => [n.id, n]));
 
@@ -274,7 +291,7 @@ export async function getTeacherCoursesData(): Promise<ServiceResult<TeacherCour
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const [coursesRes, departmentsRes, levelsRes, profilesRes] = await Promise.all([
+  const [coursesRes, departmentsRes, levelsRes] = await Promise.all([
     supabase
       .from("courses")
       .select("*")
@@ -282,7 +299,6 @@ export async function getTeacherCoursesData(): Promise<ServiceResult<TeacherCour
       .order("created_at", { ascending: false }),
     supabase.from("departments").select("*").order("name", { ascending: true }),
     supabase.from("educational_levels").select("*").order("rank_order", { ascending: true }),
-    supabase.from("profiles").select("id, full_name, email"),
   ]);
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
@@ -319,6 +335,17 @@ export async function getTeacherCoursesData(): Promise<ServiceResult<TeacherCour
   if (chaptersRes.error) return { ok: false, error: chaptersRes.error.message };
   if (lessonsRes.error) return { ok: false, error: lessonsRes.error.message };
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
+
+  const enrolledStudentIds = Array.from(
+    new Set((enrollmentsRes.data ?? []).map((e) => e.student_id)),
+  );
+  const profilesRes =
+    enrolledStudentIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", enrolledStudentIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
 
   const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
   const enrichedEnrollments = (enrollmentsRes.data ?? []).map((enr) => {
@@ -365,7 +392,7 @@ export async function getTeacherExamBuilderData(): Promise<ServiceResult<Teacher
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const [coursesRes, classesRes, assignmentsRes, profilesRes] = await Promise.all([
+  const [coursesRes, classesRes, assignmentsRes] = await Promise.all([
     supabase
       .from("courses")
       .select("*")
@@ -376,7 +403,6 @@ export async function getTeacherExamBuilderData(): Promise<ServiceResult<Teacher
       .from("student_teacher_assignments")
       .select("*")
       .eq("teacher_id", teacherId),
-    supabase.from("profiles").select("id, full_name, email, role"),
   ]);
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
@@ -431,18 +457,26 @@ export async function getTeacherExamBuilderData(): Promise<ServiceResult<Teacher
 
   if (optionsRes.error) return { ok: false, error: optionsRes.error.message };
 
-  const assignedStudentIds = new Set<string>([
-    ...(enrollmentsRes.data ?? []).map((e) => e.student_id),
-    ...(assignmentsRes.data ?? []).map((a) => a.student_id),
-  ]);
+  const assignedStudentIds = Array.from(
+    new Set<string>([
+      ...(enrollmentsRes.data ?? []).map((e) => e.student_id),
+      ...(assignmentsRes.data ?? []).map((a) => a.student_id),
+    ]),
+  );
 
-  const assignedStudents = (profilesRes.data ?? [])
-    .filter((p) => assignedStudentIds.has(p.id))
-    .map((p) => ({
-      id: p.id,
-      fullName: p.full_name || p.email,
-      email: p.email,
-    }));
+  const profilesRes =
+    assignedStudentIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", assignedStudentIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
+
+  const assignedStudents = (profilesRes.data ?? []).map((p) => ({
+    id: p.id,
+    fullName: p.full_name || p.email,
+    email: p.email,
+  }));
 
   return {
     ok: true,
@@ -503,7 +537,7 @@ export async function getTeacherStudentsData(): Promise<ServiceResult<TeacherStu
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const [coursesRes, directAssignmentsRes, profilesRes] = await Promise.all([
+  const [coursesRes, directAssignmentsRes] = await Promise.all([
     supabase
       .from("courses")
       .select("*")
@@ -513,7 +547,6 @@ export async function getTeacherStudentsData(): Promise<ServiceResult<TeacherStu
       .from("student_teacher_assignments")
       .select("*")
       .eq("teacher_id", teacherId),
-    supabase.from("profiles").select("*"),
   ]);
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
@@ -574,12 +607,22 @@ export async function getTeacherStudentsData(): Promise<ServiceResult<TeacherStu
   const studySessions = studySessionsRes.data ?? [];
   const lessonProgress = lessonProgressRes.data ?? [];
 
-  const assignedStudentIds = new Set<string>([
-    ...enrollments.map((e) => e.student_id),
-    ...(directAssignmentsRes.data ?? []).map((a) => a.student_id),
-  ]);
+  const assignedStudentIds = Array.from(
+    new Set<string>([
+      ...enrollments.map((e) => e.student_id),
+      ...(directAssignmentsRes.data ?? []).map((a) => a.student_id),
+    ]),
+  );
 
-  const studentProfiles = (profilesRes.data ?? []).filter((p) => assignedStudentIds.has(p.id));
+  const profilesRes =
+    assignedStudentIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("*")
+          .in("id", assignedStudentIds)
+      : { data: [] as Array<TableRow<"profiles">> };
+
+  const studentProfiles = profilesRes.data ?? [];
 
   const students: Array<AssignedStudentRow> = studentProfiles.map((profile) => {
     const stuEnrollments = enrollments.filter((e) => e.student_id === profile.id);
@@ -731,20 +774,16 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const [coursesRes, profilesRes] = await Promise.all([
-    supabase
-      .from("courses")
-      .select("*")
-      .eq("teacher_id", teacherId)
-      .order("title", { ascending: true }),
-    supabase.from("profiles").select("id, full_name, email"),
-  ]);
+  const coursesRes = await supabase
+    .from("courses")
+    .select("*")
+    .eq("teacher_id", teacherId)
+    .order("title", { ascending: true });
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
   const courses = coursesRes.data ?? [];
   const courseIds = courses.map((c) => c.id);
   const courseTitleMap = new Map(courses.map((c) => [c.id, c.title]));
-  const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
 
   const [examsRes, resultsRes, assignmentsRes] = await Promise.all([
     courseIds.length > 0
@@ -824,6 +863,23 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
           .in("assignment_id", assignmentIds)
           .order("submitted_at", { ascending: false })
       : { data: [] as Array<TableRow<"assignment_submissions">>, error: null };
+
+  const studentIdsToResolve = Array.from(
+    new Set([
+      ...attempts.map((a) => a.student_id),
+      ...(assignmentSubsRes.data ?? []).map((s) => s.student_id),
+      ...(violationsRes.data ?? []).map((v) => v.student_id),
+    ]),
+  );
+
+  const profilesRes =
+    studentIdsToResolve.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", studentIdsToResolve)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
+  const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
 
   const enrichedAttempts = attempts.map((att) => {
     const profile = profileMap.get(att.student_id);
@@ -927,14 +983,13 @@ export async function getTeacherRatingsData(): Promise<ServiceResult<TeacherRati
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const [coursesRes, teacherReviewsRes, profilesRes] = await Promise.all([
+  const [coursesRes, teacherReviewsRes] = await Promise.all([
     supabase.from("courses").select("id, title").eq("teacher_id", teacherId),
     supabase
       .from("teacher_reviews")
       .select("*")
       .eq("teacher_id", teacherId)
       .order("created_at", { ascending: false }),
-    supabase.from("profiles").select("id, full_name, email"),
   ]);
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
@@ -943,9 +998,6 @@ export async function getTeacherRatingsData(): Promise<ServiceResult<TeacherRati
   const courses = coursesRes.data ?? [];
   const courseIds = courses.map((c) => c.id);
   const courseTitleMap = new Map(courses.map((c) => [c.id, c.title]));
-  const profileNameMap = new Map(
-    (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
-  );
 
   const courseReviewsRes =
     courseIds.length > 0
@@ -957,6 +1009,25 @@ export async function getTeacherRatingsData(): Promise<ServiceResult<TeacherRati
       : { data: [] as Array<TableRow<"course_reviews">>, error: null };
 
   if (courseReviewsRes.error) return { ok: false, error: courseReviewsRes.error.message };
+
+  const reviewerStudentIds = Array.from(
+    new Set([
+      ...(teacherReviewsRes.data ?? []).map((r) => r.student_id),
+      ...(courseReviewsRes.data ?? []).map((r) => r.student_id),
+    ]),
+  );
+
+  const profilesRes =
+    reviewerStudentIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", reviewerStudentIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
+
+  const profileNameMap = new Map(
+    (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
+  );
 
   const courseReviews = (courseReviewsRes.data ?? []).map((rev) => ({
     ...rev,

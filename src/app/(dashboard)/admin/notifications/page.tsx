@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { AdminNotificationsClient } from "@/components/admin/admin-notifications-client";
 import { ErrorState } from "@/components/feedback/error-state";
+import { LoadingState } from "@/components/feedback/loading-state";
 import { getAdminNotificationsData } from "@/services/admin/queries";
 
 export const metadata: Metadata = {
@@ -10,7 +13,8 @@ export const metadata: Metadata = {
     "Broadcast targeted notifications and scheduled announcements across Learnix.",
 };
 
-export default async function AdminNotificationsPage() {
+async function AdminNotificationsLoader() {
+  await connection();
   const result = await getAdminNotificationsData();
   if (!result.ok) {
     return (
@@ -22,4 +26,12 @@ export default async function AdminNotificationsPage() {
   }
 
   return <AdminNotificationsClient data={result.data} />;
+}
+
+export default function AdminNotificationsPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <AdminNotificationsLoader />
+    </Suspense>
+  );
 }

@@ -184,7 +184,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
           </CardHeader>
           <CardContent>
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                 <BarChart
                   data={platformBarData}
                   margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
@@ -243,7 +243,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
               </div>
             ) : (
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                   <PieChart>
                     <Pie
                       data={completionPieData}

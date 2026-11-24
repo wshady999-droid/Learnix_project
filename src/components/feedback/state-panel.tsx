@@ -60,7 +60,13 @@ export function StatePanel({
         <h2 className={cn("font-semibold text-foreground", size === "md" ? "text-base" : "text-sm")}>
           {title}
         </h2>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+        {description ? (
+          typeof description === "string" ? (
+            <p className="text-sm text-muted-foreground">{description}</p>
+          ) : (
+            <div className="text-sm text-muted-foreground">{description}</div>
+          )
+        ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
     </section>

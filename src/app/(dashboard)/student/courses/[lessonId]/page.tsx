@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
@@ -16,6 +17,7 @@ async function LessonViewerLoader({
 }: {
   paramsPromise: Promise<{ lessonId: string }>;
 }) {
+  await connection();
   const { lessonId } = await paramsPromise;
   const res = await getStudentLessonViewerData(lessonId);
   if (!res.ok) {

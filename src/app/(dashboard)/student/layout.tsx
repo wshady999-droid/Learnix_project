@@ -4,25 +4,13 @@ import { connection } from "next/server";
 
 import { LoadingState } from "@/components/feedback/loading-state";
 import { StudentShell } from "@/components/student/student-shell";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCachedCallerProfile } from "@/services/db/utils";
 
 async function StudentLayoutGuard({ children }: { children: React.ReactNode }) {
   await connection();
-  const supabase = await createSupabaseServerClient();
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const userId = claimsData?.claims?.sub;
+  const { userId, profile } = await getCachedCallerProfile();
 
-  if (!userId) {
-    redirect("/login?reason=session_expired");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, avatar_url, role, status")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!profile) {
+  if (!userId || !profile) {
     redirect("/login?reason=session_expired");
   }
 

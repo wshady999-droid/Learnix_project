@@ -353,9 +353,6 @@ export function AppTopbar({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-            <Badge variant="gold-subtle" className="hidden sm:inline-flex">
-              Part 1
-            </Badge>
           </div>
           {subtitle ? (
             <p className="hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { connection } from "next/server";
 
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
@@ -16,6 +17,7 @@ async function StudentExamRunnerLoader({
 }: {
   paramsPromise: Promise<{ examId: string }>;
 }) {
+  await connection();
   const { examId } = await paramsPromise;
   const res = await getStudentExamRunnerData(examId);
   if (!res.ok) {
