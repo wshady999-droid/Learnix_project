@@ -12,6 +12,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  Orbit,
   Settings,
   Sparkles,
   Star,
@@ -77,9 +78,16 @@ export function StudentShell({
           },
           {
             id: "student-courses",
-            label: studentT.nav.courses,
+            label: "Courses",
             href: "/student/courses",
             icon: BookOpen,
+            mobilePrimary: true,
+          },
+          {
+            id: "student-my-learning",
+            label: "My Learning Orbit",
+            href: "/student/my-learning",
+            icon: Orbit,
             mobilePrimary: true,
           },
           {

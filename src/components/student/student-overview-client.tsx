@@ -21,8 +21,6 @@ import {
   ClipboardCheck,
   Clock,
   FileText,
-  GraduationCap,
-  Sparkles,
   TrendingUp,
 } from "lucide-react";
 
@@ -39,6 +37,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getStudentDictionary } from "@/i18n/student-dictionaries";
+import { cn } from "@/lib/utils";
 import { studentMarkNotificationsReadAction } from "@/services/student/actions";
 import type { StudentOverviewData } from "@/services/student/queries";
 
@@ -110,69 +109,29 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Banner with Profile Picture */}
-      <Card className="border-gold-primary/40 bg-gradient-to-r from-card via-card to-gold-primary/10">
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6">
-          <div className="flex items-center gap-4">
-            {data.studentAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={data.studentAvatarUrl}
-                alt={data.studentName}
-                className="size-14 rounded-full border-2 border-gold-primary object-cover"
-              />
-            ) : (
-              <div className="flex size-14 items-center justify-center rounded-full border-2 border-gold-primary/60 bg-gold-primary/15 text-gold-foreground">
-                <GraduationCap className="size-7" />
-              </div>
-            )}
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-                {t.overview.welcomePrefix} {data.studentName}
-              </h1>
-              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
-                {t.overview.subtitle}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="gold" size="sm">
-              <Link href="/student/courses">{t.common.continueLearning}</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/student/ai-assistant">
-                <Sparkles className="size-3.5" />
-                <span>{t.nav.aiAssistant}</span>
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 7 KPI Metric Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {kpiCards.map((item) => {
           const Icon = item.icon;
           return (
             <Card
               key={item.label}
-              className={
+              className={cn(
+                "group transition-all duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.03] hover:shadow-lg hover:border-gold-primary/60 cursor-pointer",
                 item.highlight
-                  ? "border-gold-primary/50 bg-gold-primary/5"
-                  : "border-border/80"
-              }
+                  ? "border-gold-primary/50 bg-gold-primary/5 hover:bg-gold-primary/10"
+                  : "border-border/80 hover:bg-muted/30"
+              )}
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">
+                  <p className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
                     {item.label}
                   </p>
-                  <p className="mt-1 text-xl font-bold text-foreground">
+                  <p className="mt-1 text-xl font-bold text-foreground transition-colors group-hover:text-gold-primary">
                     {item.value}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gold-primary/15 p-2 text-gold-foreground">
+                <div className="rounded-lg bg-gold-primary/15 p-2 text-gold-foreground transition-all duration-300 group-hover:scale-110 group-hover:bg-gold-primary group-hover:text-brand-charcoal">
                   <Icon className="size-4" />
                 </div>
               </CardContent>
@@ -181,7 +140,6 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
         })}
       </div>
 
-      {/* Enrolled Courses Progress Cards */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -261,7 +219,6 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
         </CardContent>
       </Card>
 
-      {/* Study Chart + Notification Center */}
       <div className="grid gap-6 lg:grid-cols-12">
         <Card className="lg:col-span-8">
           <CardHeader>
@@ -361,7 +318,6 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
         </Card>
       </div>
 
-      {/* Upcoming Exams, Upcoming Assignments, Recent Grades */}
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader>
