@@ -12,7 +12,9 @@ import type { Json, ServiceResult } from "@/types";
 // -----------------------------------------------------------------------------
 export async function studentEnrollInCourseAction(params: {
   courseId: string;
-}): Promise<ServiceResult<{ enrollmentId: string }>> {
+}): Promise<
+  ServiceResult<{ enrollmentId: string; firstLessonId: string | null }>
+> {
   const auth = await requireRole(["student", "teacher", "admin"]);
   if (!auth.ok) return auth;
 
@@ -26,31 +28,48 @@ export async function studentEnrollInCourseAction(params: {
     .eq("student_id", studentId)
     .maybeSingle();
 
-  if (existing) {
-    return { ok: true, data: { enrollmentId: existing.id } };
+  let enrollmentId = existing?.id ?? null;
+
+  if (!enrollmentId) {
+    const { data, error } = await supabase
+      .from("course_enrollments")
+      .insert({
+        course_id: params.courseId,
+        student_id: studentId,
+        status: "active",
+        progress_percent: 0,
+      })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message ?? "Failed to enroll in course.",
+      };
+    }
+    enrollmentId = data.id;
   }
 
-  const { data, error } = await supabase
-    .from("course_enrollments")
-    .insert({
-      course_id: params.courseId,
-      student_id: studentId,
-      status: "active",
-      progress_percent: 0,
-    })
+  // Fetch the first published lesson of this course now that the student is enrolled (so RLS allows reading it)
+  const { data: firstLesson } = await supabase
+    .from("lessons")
     .select("id")
-    .single();
-
-  if (error || !data) {
-    return {
-      ok: false,
-      error: error?.message ?? "Failed to enroll in course.",
-    };
-  }
+    .eq("course_id", params.courseId)
+    .eq("is_published", true)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
 
   revalidatePath("/student");
   revalidatePath("/student/courses");
-  return { ok: true, data: { enrollmentId: data.id } };
+  return {
+    ok: true,
+    data: {
+      enrollmentId,
+      firstLessonId: firstLesson?.id ?? null,
+    },
+  };
 }
 
 // -----------------------------------------------------------------------------

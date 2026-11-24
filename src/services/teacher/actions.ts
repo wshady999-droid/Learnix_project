@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { COURSE_CATEGORIES } from "@/lib/constants/categories";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/services/db/utils";
 import type { Json, ServiceResult } from "@/types";
@@ -52,6 +53,7 @@ const saveCourseSchema = z.object({
   id: z.string().uuid().optional(),
   code: z.string().trim().min(2).max(24),
   title: z.string().trim().min(3).max(160),
+  category: z.enum(COURSE_CATEGORIES).default(COURSE_CATEGORIES[0]),
   summary: z.string().trim().max(400).optional(),
   description: z.string().trim().max(5000).optional(),
   departmentId: z.string().uuid().nullable().optional(),
@@ -99,6 +101,7 @@ export async function teacherSaveCourseAction(
       .update({
         code: parsed.data.code.toUpperCase(),
         title: parsed.data.title,
+        category: parsed.data.category,
         subtitle: parsed.data.summary || null,
         description: parsed.data.description || null,
         department_id: parsed.data.departmentId ?? null,
@@ -130,6 +133,8 @@ export async function teacherSaveCourseAction(
 
     revalidatePath("/teacher");
     revalidatePath("/teacher/courses");
+    revalidatePath("/student");
+    revalidatePath("/student/courses");
     return { ok: true, data: { id: data.id } };
   }
 
@@ -140,7 +145,7 @@ export async function teacherSaveCourseAction(
       code: parsed.data.code.toUpperCase(),
       slug: uniqueSlug,
       title: parsed.data.title,
-      category: "Academic Curriculum",
+      category: parsed.data.category || COURSE_CATEGORIES[0],
       subtitle: parsed.data.summary || null,
       description: parsed.data.description || null,
       teacher_id: auth.data.userId,
@@ -172,6 +177,8 @@ export async function teacherSaveCourseAction(
 
   revalidatePath("/teacher");
   revalidatePath("/teacher/courses");
+  revalidatePath("/student");
+  revalidatePath("/student/courses");
   return { ok: true, data: { id: data.id } };
 }
 

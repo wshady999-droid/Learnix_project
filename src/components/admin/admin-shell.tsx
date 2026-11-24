@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -61,85 +61,88 @@ export function AdminShell({
   const authT = getAuthDictionary(locale);
   const [signingOut, setSigningOut] = useState(false);
 
-  const sections: readonly NavSection[] = [
-    {
-      id: "admin-governance",
-      title: adminT.nav.groupGovernance,
-      items: [
-        {
-          id: "admin-overview",
-          label: adminT.nav.overview,
-          href: "/admin",
-          icon: LayoutDashboard,
-          exact: true,
-          mobilePrimary: true,
-        },
-        {
-          id: "admin-users",
-          label: adminT.nav.users,
-          href: "/admin/users",
-          icon: Users,
-          mobilePrimary: true,
-        },
-        {
-          id: "admin-departments",
-          label: adminT.nav.departments,
-          href: "/admin/departments",
-          icon: Building2,
-        },
-      ],
-    },
-    {
-      id: "admin-academic",
-      title: adminT.nav.groupAcademic,
-      items: [
-        {
-          id: "admin-courses",
-          label: adminT.nav.courses,
-          href: "/admin/courses",
-          icon: BookOpen,
-          mobilePrimary: true,
-        },
-        {
-          id: "admin-schedule",
-          label: adminT.nav.schedule,
-          href: "/admin/schedule",
-          icon: CalendarClock,
-        },
-        {
-          id: "admin-analytics",
-          label: adminT.nav.analytics,
-          href: "/admin/analytics",
-          icon: BarChart3,
-          mobilePrimary: true,
-        },
-      ],
-    },
-    {
-      id: "admin-operations",
-      title: adminT.nav.groupOperations,
-      items: [
-        {
-          id: "admin-security",
-          label: adminT.nav.security,
-          href: "/admin/security",
-          icon: ShieldAlert,
-        },
-        {
-          id: "admin-notifications",
-          label: adminT.nav.notifications,
-          href: "/admin/notifications",
-          icon: Bell,
-        },
-        {
-          id: "admin-settings",
-          label: adminT.nav.settings,
-          href: "/admin/settings",
-          icon: Settings,
-        },
-      ],
-    },
-  ];
+  const sections: readonly NavSection[] = useMemo(
+    () => [
+      {
+        id: "admin-governance",
+        title: adminT.nav.groupGovernance,
+        items: [
+          {
+            id: "admin-overview",
+            label: adminT.nav.overview,
+            href: "/admin",
+            icon: LayoutDashboard,
+            exact: true,
+            mobilePrimary: true,
+          },
+          {
+            id: "admin-users",
+            label: adminT.nav.users,
+            href: "/admin/users",
+            icon: Users,
+            mobilePrimary: true,
+          },
+          {
+            id: "admin-departments",
+            label: adminT.nav.departments,
+            href: "/admin/departments",
+            icon: Building2,
+          },
+        ],
+      },
+      {
+        id: "admin-academic",
+        title: adminT.nav.groupAcademic,
+        items: [
+          {
+            id: "admin-courses",
+            label: adminT.nav.courses,
+            href: "/admin/courses",
+            icon: BookOpen,
+            mobilePrimary: true,
+          },
+          {
+            id: "admin-schedule",
+            label: adminT.nav.schedule,
+            href: "/admin/schedule",
+            icon: CalendarClock,
+          },
+          {
+            id: "admin-analytics",
+            label: adminT.nav.analytics,
+            href: "/admin/analytics",
+            icon: BarChart3,
+            mobilePrimary: true,
+          },
+        ],
+      },
+      {
+        id: "admin-operations",
+        title: adminT.nav.groupOperations,
+        items: [
+          {
+            id: "admin-security",
+            label: adminT.nav.security,
+            href: "/admin/security",
+            icon: ShieldAlert,
+          },
+          {
+            id: "admin-notifications",
+            label: adminT.nav.notifications,
+            href: "/admin/notifications",
+            icon: Bell,
+          },
+          {
+            id: "admin-settings",
+            label: adminT.nav.settings,
+            href: "/admin/settings",
+            icon: Settings,
+          },
+        ],
+      },
+    ],
+    [adminT.nav],
+  );
 
   async function handleSignOut() {
     setSigningOut(true);

@@ -38,3 +38,27 @@ export function requireSupabasePublicConfig(): { url: string; publishableKey: st
     publishableKey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   };
 }
+
+const PLACEHOLDER_SERVICE_KEYS = [
+  "your_service_role_key_here",
+  "sb_secret_xxxxxxxxxxxxxxxxxxxx",
+  "<your-service-role-key>",
+];
+
+export function getSupabaseServiceRoleKey(): string | null {
+  const rawKey = (
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    ""
+  ).trim();
+
+  if (
+    !rawKey ||
+    PLACEHOLDER_SERVICE_KEYS.some((pattern) => rawKey.toLowerCase().includes(pattern))
+  ) {
+    return null;
+  }
+
+  return rawKey;
+}
+

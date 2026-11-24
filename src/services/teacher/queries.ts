@@ -52,35 +52,45 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const coursesRes = await supabase
-    .from("courses")
-    .select("*")
-    .eq("teacher_id", teacherId)
-    .order("created_at", { ascending: false });
-
-  if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
-  const courses = coursesRes.data ?? [];
-  const courseIds = courses.map((c) => c.id);
-  const courseTitleMap = new Map(courses.map((c) => [c.id, c.title]));
-
-  const [
-    enrollmentsRes,
-    schedulesRes,
-    examsRes,
-    resultsRes,
-    attemptsRes,
-    assignmentsRes,
-    notifRecipientsRes,
-  ] = await Promise.all([
-    courseIds.length > 0
-      ? supabase.from("course_enrollments").select("*").in("course_id", courseIds)
-      : Promise.resolve({ data: [] as Array<TableRow<"course_enrollments">>, error: null }),
+  const [coursesRes, schedulesRes, notifRecipientsRes] = await Promise.all([
+    supabase
+      .from("courses")
+      .select("*")
+      .eq("teacher_id", teacherId)
+      .order("created_at", { ascending: false }),
     supabase
       .from("class_schedules")
       .select("*")
       .eq("teacher_id", teacherId)
       .order("day_of_week", { ascending: true })
       .order("start_time", { ascending: true }),
+    supabase
+      .from("notification_recipients")
+      .select("*")
+      .eq("recipient_id", teacherId)
+      .order("created_at", { ascending: false })
+      .limit(15),
+  ]);
+
+  if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
+  if (schedulesRes.error) return { ok: false, error: schedulesRes.error.message };
+  const courses = coursesRes.data ?? [];
+  const courseIds = courses.map((c) => c.id);
+  const courseTitleMap = new Map(courses.map((c) => [c.id, c.title]));
+  const schedules = schedulesRes.data ?? [];
+  const notifRecipients = notifRecipientsRes.data ?? [];
+  const notifIds = notifRecipients.map((n) => n.notification_id);
+
+  const [
+    enrollmentsRes,
+    examsRes,
+    resultsRes,
+    assignmentsRes,
+    notificationsRes,
+  ] = await Promise.all([
+    courseIds.length > 0
+      ? supabase.from("course_enrollments").select("*").in("course_id", courseIds)
+      : Promise.resolve({ data: [] as Array<TableRow<"course_enrollments">>, error: null }),
     courseIds.length > 0
       ? supabase
           .from("exams")
@@ -92,54 +102,49 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
       ? supabase.from("results").select("*").in("course_id", courseIds)
       : Promise.resolve({ data: [] as Array<TableRow<"results">>, error: null }),
     courseIds.length > 0
-      ? supabase
-          .from("exam_attempts")
-          .select("*")
-          .order("started_at", { ascending: false })
-          .limit(30)
-      : Promise.resolve({ data: [] as Array<TableRow<"exam_attempts">>, error: null }),
-    courseIds.length > 0
       ? supabase.from("assignments").select("*").in("course_id", courseIds)
       : Promise.resolve({ data: [] as Array<TableRow<"assignments">>, error: null }),
-    supabase
-      .from("notification_recipients")
-      .select("*")
-      .eq("recipient_id", teacherId)
-      .order("created_at", { ascending: false })
-      .limit(15),
+    notifIds.length > 0
+      ? supabase.from("notifications").select("*").in("id", notifIds)
+      : Promise.resolve({ data: [] as Array<TableRow<"notifications">>, error: null }),
   ]);
 
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
-  if (schedulesRes.error) return { ok: false, error: schedulesRes.error.message };
   if (examsRes.error) return { ok: false, error: examsRes.error.message };
   if (resultsRes.error) return { ok: false, error: resultsRes.error.message };
 
   const enrollments = enrollmentsRes.data ?? [];
-  const schedules = schedulesRes.data ?? [];
   const exams = examsRes.data ?? [];
   const results = resultsRes.data ?? [];
-  const attempts = attemptsRes.data ?? [];
   const assignments = assignmentsRes.data ?? [];
-  const notifRecipients = notifRecipientsRes.data ?? [];
 
-  const examIdsSet = new Set(exams.map((e) => e.id));
+  const examIds = exams.map((e) => e.id);
   const examTitleMap = new Map(exams.map((e) => [e.id, e.title]));
   const resultByAttemptMap = new Map(results.map((r) => [r.attempt_id, r]));
 
-  const teacherAttempts = attempts.filter((a) => examIdsSet.has(a.exam_id));
-
   const assignmentIds = assignments.map((a) => a.id);
   const assignmentTitleMap = new Map(assignments.map((a) => [a.id, a.title]));
-  const assignmentSubmissionsRes =
+
+  const [attemptsRes, assignmentSubmissionsRes] = await Promise.all([
+    examIds.length > 0
+      ? supabase
+          .from("exam_attempts")
+          .select("*")
+          .in("exam_id", examIds)
+          .order("started_at", { ascending: false })
+          .limit(30)
+      : Promise.resolve({ data: [] as Array<TableRow<"exam_attempts">>, error: null }),
     assignmentIds.length > 0
-      ? await supabase
+      ? supabase
           .from("assignment_submissions")
           .select("*")
           .in("assignment_id", assignmentIds)
           .order("submitted_at", { ascending: false })
           .limit(20)
-      : { data: [] as Array<TableRow<"assignment_submissions">>, error: null };
+      : Promise.resolve({ data: [] as Array<TableRow<"assignment_submissions">>, error: null }),
+  ]);
 
+  const teacherAttempts = attemptsRes.data ?? [];
   const assignmentSubmissions = assignmentSubmissionsRes.data ?? [];
 
   const submissionStudentIds = Array.from(
@@ -149,21 +154,16 @@ export async function getTeacherOverviewData(): Promise<ServiceResult<TeacherOve
     ]),
   );
 
-  const notifIds = notifRecipients.map((n) => n.notification_id);
-  const [notificationsRes, profilesRes] = await Promise.all([
-    notifIds.length > 0
-      ? supabase.from("notifications").select("*").in("id", notifIds)
-      : Promise.resolve({ data: [] as Array<TableRow<"notifications">>, error: null }),
+  const profilesRes =
     submissionStudentIds.length > 0
-      ? supabase
+      ? await supabase
           .from("profiles")
           .select("id, full_name, email")
           .in("id", submissionStudentIds)
-      : Promise.resolve({
+      : {
           data: [] as Array<{ id: string; full_name: string | null; email: string }>,
           error: null,
-        }),
-  ]);
+        };
 
   const profileNameMap = new Map(
     (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),

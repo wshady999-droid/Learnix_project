@@ -30,23 +30,19 @@ export async function getMyNotificationsData(): Promise<
 
   const { data: recipients, error: recErr } = await supabase
     .from("notification_recipients")
-    .select("*")
+    .select(
+      "id, notification_id, is_read, created_at, notifications(id, title, body, notification_type, action_url)",
+    )
     .eq("recipient_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
 
   if (recErr) return { ok: false, error: recErr.message };
 
-  const notifIds = (recipients ?? []).map((r) => r.notification_id);
-  const { data: notifications } =
-    notifIds.length > 0
-      ? await supabase.from("notifications").select("*").in("id", notifIds)
-      : { data: [] as Array<TableRow<"notifications">> };
-
-  const notifMap = new Map((notifications ?? []).map((n) => [n.id, n]));
   const items: SharedNotificationItem[] = (recipients ?? [])
     .map((nr) => {
-      const n = notifMap.get(nr.notification_id);
+      const rawNotif = nr.notifications;
+      const n = Array.isArray(rawNotif) ? rawNotif[0] : rawNotif;
       if (!n) return null;
       return {
         recipientId: nr.id,

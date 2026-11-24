@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm run format:check",
+    "test:perf": "node scripts/verify-and-benchmark.mjs",
     "provision:admins": "node --env-file=.env.local scripts/provision-admins.mjs"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "@supabase/supabase-js": "2.119.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "framer-motion": "^14.14.0",
     "geist": "1.9.2",
     "lucide-react": "1.78.0",
     "next": "16.4.6",

@@ -32,6 +32,22 @@ function copySupabaseCookies(from: NextResponse, to: NextResponse): NextResponse
   return to;
 }
 
+const PUBLIC_SKIP_PREFIXES = [
+  "/api/health",
+  "/api/contact",
+  "/api/certificates/verify",
+  "/privacy",
+  "/terms",
+  "/verify-certificate",
+] as const;
+
+function isPublicSkipPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return PUBLIC_SKIP_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 /**
  * Refreshes the user's Supabase Auth token on incoming requests via `supabase.auth.getClaims()`,
  * enforces protected route authentication, blocks suspended accounts, and enforces role-based
@@ -45,6 +61,12 @@ export async function updateSession(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
+
+  // Fast path: skip auth/DB inspection on purely public pages and public API endpoints
+  if (isPublicSkipPath(pathname)) {
+    return supabaseResponse;
+  }
+
   const hasAuthCookie = request.cookies
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-") && cookie.value.length > 0);

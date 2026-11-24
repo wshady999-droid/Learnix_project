@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Circle } from "lucide-react";
+import { Check } from "lucide-react";
 
 import type { AuthDictionary } from "@/i18n/auth-dictionaries";
 import { evaluatePasswordStrength } from "@/lib/auth/validation";
@@ -29,27 +29,42 @@ export function PasswordStrengthChecklist({
     <div
       role="status"
       aria-live="polite"
-      className="rounded-lg border border-border bg-muted/40 p-3 text-xs"
+      className="rounded-lg border border-border/50 bg-muted/20 p-3 text-xs"
     >
-      <p className="mb-2 font-semibold text-foreground">{labels.heading}</p>
-      <ul className="grid gap-1.5 sm:grid-cols-2">
+      <p className="mb-3 text-[11px] font-semibold text-foreground/80">
+        {labels.heading}
+      </p>
+      
+      <div className="relative flex items-center justify-between px-1">
+        <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-border/60" />
+
         {items.map((item) => (
-          <li
-            key={item.key}
-            className={cn(
-              "flex items-center gap-1.5 transition-colors",
-              item.passed ? "text-success font-medium" : "text-muted-foreground",
-            )}
-          >
-            {item.passed ? (
-              <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-hidden="true" />
-            ) : (
-              <Circle className="size-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
-            )}
-            <span>{item.label}</span>
-          </li>
+          <div key={item.key} className="relative z-10 flex flex-col items-center gap-1.5">
+            <div
+              className={cn(
+                "flex size-5 items-center justify-center rounded-full border-2 transition-all duration-300",
+                item.passed
+                  ? "border-emerald-500 bg-emerald-500 text-white"
+                  : "border-muted-foreground/30 bg-background text-transparent",
+              )}
+            >
+              {item.passed ? (
+                <Check className="size-3" strokeWidth={3} aria-hidden="true" />
+              ) : (
+                <span className="size-1.5 rounded-full bg-muted-foreground/30" />
+              )}
+            </div>
+            <span
+              className={cn(
+                "text-[9px] sm:text-[10px] leading-tight text-center transition-colors",
+                item.passed ? "font-medium text-emerald-500" : "text-muted-foreground/60",
+              )}
+            >
+              {item.label}
+            </span>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

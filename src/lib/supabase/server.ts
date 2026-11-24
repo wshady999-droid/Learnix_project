@@ -1,9 +1,10 @@
 import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-import { requireSupabasePublicConfig } from "@/lib/env";
+import { getSupabaseServiceRoleKey, requireSupabasePublicConfig } from "@/lib/env";
 import type { Database } from "@/types/database";
 
 /**
@@ -31,3 +32,24 @@ export async function createSupabaseServerClient() {
     },
   });
 }
+
+/**
+ * Server-only Supabase Admin client initialized with SUPABASE_SERVICE_ROLE_KEY.
+ * Use strictly in Server Actions / Route Handlers for admin operations like `auth.admin.createUser({ email_confirm: true })`.
+ */
+export function createSupabaseServiceRoleClient() {
+  const { url } = requireSupabasePublicConfig();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+
+  if (!serviceRoleKey) {
+    return null;
+  }
+
+  return createClient<Database>(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+

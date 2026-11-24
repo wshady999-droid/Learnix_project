@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { getSupabaseServiceRoleKey } from "@/lib/env";
 import type { Database } from "@/types/database";
 
 /**
@@ -9,9 +10,8 @@ import type { Database } from "@/types/database";
  * NEVER import this module in client components or expose service-role credentials to the browser.
  */
 export function createSupabaseAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceKey = getSupabaseServiceRoleKey();
 
   if (!url || !serviceKey) {
     return null;
@@ -24,3 +24,5 @@ export function createSupabaseAdminClient() {
     },
   });
 }
+
+

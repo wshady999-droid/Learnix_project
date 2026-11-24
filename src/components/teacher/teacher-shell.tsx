@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -61,74 +61,77 @@ export function TeacherShell({
   const authT = getAuthDictionary(locale);
   const [signingOut, setSigningOut] = useState(false);
 
-  const sections: readonly NavSection[] = [
-    {
-      id: "teacher-teaching",
-      title: teacherT.nav.groupTeaching,
-      items: [
-        {
-          id: "teacher-overview",
-          label: teacherT.nav.overview,
-          href: "/teacher",
-          icon: LayoutDashboard,
-          exact: true,
-          mobilePrimary: true,
-        },
-        {
-          id: "teacher-courses",
-          label: teacherT.nav.courses,
-          href: "/teacher/courses",
-          icon: BookOpen,
-          mobilePrimary: true,
-        },
-        {
-          id: "teacher-students",
-          label: teacherT.nav.students,
-          href: "/teacher/students",
-          icon: Users,
-          mobilePrimary: true,
-        },
-      ],
-    },
-    {
-      id: "teacher-assessment",
-      title: teacherT.nav.groupAssessment,
-      items: [
-        {
-          id: "teacher-exams",
-          label: teacherT.nav.exams,
-          href: "/teacher/exams",
-          icon: ClipboardCheck,
-          mobilePrimary: true,
-        },
-        {
-          id: "teacher-grading",
-          label: teacherT.nav.grading,
-          href: "/teacher/grading",
-          icon: FileCheck2,
-        },
-      ],
-    },
-    {
-      id: "teacher-intelligence",
-      title: teacherT.nav.groupIntelligence,
-      items: [
-        {
-          id: "teacher-ai-assistant",
-          label: teacherT.nav.aiAssistant,
-          href: "/teacher/ai-assistant",
-          icon: Sparkles,
-          badge: "AI",
-        },
-        {
-          id: "teacher-ratings",
-          label: teacherT.nav.ratings,
-          href: "/teacher/ratings",
-          icon: Star,
-        },
-      ],
-    },
-  ];
+  const sections: readonly NavSection[] = useMemo(
+    () => [
+      {
+        id: "teacher-teaching",
+        title: teacherT.nav.groupTeaching,
+        items: [
+          {
+            id: "teacher-overview",
+            label: teacherT.nav.overview,
+            href: "/teacher",
+            icon: LayoutDashboard,
+            exact: true,
+            mobilePrimary: true,
+          },
+          {
+            id: "teacher-courses",
+            label: teacherT.nav.courses,
+            href: "/teacher/courses",
+            icon: BookOpen,
+            mobilePrimary: true,
+          },
+          {
+            id: "teacher-students",
+            label: teacherT.nav.students,
+            href: "/teacher/students",
+            icon: Users,
+            mobilePrimary: true,
+          },
+        ],
+      },
+      {
+        id: "teacher-assessment",
+        title: teacherT.nav.groupAssessment,
+        items: [
+          {
+            id: "teacher-exams",
+            label: teacherT.nav.exams,
+            href: "/teacher/exams",
+            icon: ClipboardCheck,
+            mobilePrimary: true,
+          },
+          {
+            id: "teacher-grading",
+            label: teacherT.nav.grading,
+            href: "/teacher/grading",
+            icon: FileCheck2,
+          },
+        ],
+      },
+      {
+        id: "teacher-intelligence",
+        title: teacherT.nav.groupIntelligence,
+        items: [
+          {
+            id: "teacher-ai-assistant",
+            label: teacherT.nav.aiAssistant,
+            href: "/teacher/ai-assistant",
+            icon: Sparkles,
+            badge: "AI",
+          },
+          {
+            id: "teacher-ratings",
+            label: teacherT.nav.ratings,
+            href: "/teacher/ratings",
+            icon: Star,
+          },
+        ],
+      },
+    ],
+    [teacherT.nav],
+  );
 
   async function handleSignOut() {
     setSigningOut(true);

@@ -47,17 +47,24 @@ export async function GET(request: Request) {
       .maybeSingle(),
   ]);
 
-  return NextResponse.json({
-    ok: true,
-    data: {
-      certificateNumber: cert.certificate_number,
-      verificationHash: cert.verification_hash,
-      studentName: profileRes.data?.full_name || "Learnix Graduate",
-      courseCode: courseRes.data?.code || "COURSE",
-      courseTitle: courseRes.data?.title || "Certified Course",
-      finalScore: cert.final_score,
-      issuedAt: cert.issued_at,
-      isRevoked: Boolean(cert.revoked_at),
+  return NextResponse.json(
+    {
+      ok: true,
+      data: {
+        certificateNumber: cert.certificate_number,
+        verificationHash: cert.verification_hash,
+        studentName: profileRes.data?.full_name || "Learnix Graduate",
+        courseCode: courseRes.data?.code || "COURSE",
+        courseTitle: courseRes.data?.title || "Certified Course",
+        finalScore: cert.final_score,
+        issuedAt: cert.issued_at,
+        isRevoked: Boolean(cert.revoked_at),
+      },
     },
-  });
+    {
+      headers: {
+        "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      },
+    },
+  );
 }

@@ -61,14 +61,13 @@ export async function getStudentOverviewData(): Promise<
   const supabase = await createSupabaseServerClient();
   const studentId = auth.data.userId;
 
+  // Reuse profile attributes already resolved and cached by requireRole() -> getCachedCallerProfile()
   const [
-    profileRes,
     enrollmentsRes,
     resultsRes,
     studyRes,
     notifRecipientsRes,
   ] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", studentId).maybeSingle(),
     supabase
       .from("course_enrollments")
       .select("*")
@@ -80,7 +79,10 @@ export async function getStudentOverviewData(): Promise<
       .eq("student_id", studentId)
       .eq("is_published", true)
       .order("graded_at", { ascending: false }),
-    supabase.from("study_sessions").select("*").eq("student_id", studentId),
+    supabase
+      .from("study_sessions")
+      .select("duration_seconds")
+      .eq("student_id", studentId),
     supabase
       .from("notification_recipients")
       .select("*")
@@ -89,21 +91,19 @@ export async function getStudentOverviewData(): Promise<
       .limit(15),
   ]);
 
-  if (profileRes.error || !profileRes.data) {
-    return { ok: false, error: profileRes.error?.message ?? "Profile not found." };
-  }
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
   if (resultsRes.error) return { ok: false, error: resultsRes.error.message };
 
-  const profile = profileRes.data;
   const enrollments = enrollmentsRes.data ?? [];
   const results = resultsRes.data ?? [];
   const studySessions = studyRes.data ?? [];
   const notifRecipients = notifRecipientsRes.data ?? [];
 
   const courseIds = enrollments.map((e) => e.course_id);
+  const notifIds = notifRecipients.map((n) => n.notification_id);
 
-  const [coursesRes, examsRes, assignmentsRes] = await Promise.all([
+  // Batch Wave 2 queries in parallel (including notifications!) instead of 3 sequential steps
+  const [coursesRes, examsRes, assignmentsRes, notificationsRes] = await Promise.all([
     courseIds.length > 0
       ? supabase.from("courses").select("*").in("id", courseIds)
       : Promise.resolve({ data: [] as Array<TableRow<"courses">>, error: null }),
@@ -123,6 +123,9 @@ export async function getStudentOverviewData(): Promise<
           .eq("is_published", true)
           .order("due_at", { ascending: true })
       : Promise.resolve({ data: [] as Array<TableRow<"assignments">>, error: null }),
+    notifIds.length > 0
+      ? supabase.from("notifications").select("*").in("id", notifIds)
+      : Promise.resolve({ data: [] as Array<TableRow<"notifications">>, error: null }),
   ]);
 
   const courses = coursesRes.data ?? [];
@@ -141,12 +144,6 @@ export async function getStudentOverviewData(): Promise<
   const exams = examsRes.data ?? [];
   const examMap = new Map(exams.map((e) => [e.id, e]));
   const assignments = assignmentsRes.data ?? [];
-
-  const notifIds = notifRecipients.map((n) => n.notification_id);
-  const notificationsRes =
-    notifIds.length > 0
-      ? await supabase.from("notifications").select("*").in("id", notifIds)
-      : { data: [] as Array<TableRow<"notifications">>, error: null };
   const notifMap = new Map((notificationsRes.data ?? []).map((n) => [n.id, n]));
 
   const enrolledCourses = enrollments
@@ -209,13 +206,15 @@ export async function getStudentOverviewData(): Promise<
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const fallbackEmail = auth.data.email ?? "";
+
   return {
     ok: true,
     data: {
       studentId,
-      studentName: profile.full_name || profile.email,
-      studentEmail: profile.email,
-      studentAvatarUrl: profile.avatar_url,
+      studentName: auth.data.fullName || fallbackEmail,
+      studentEmail: fallbackEmail,
+      studentAvatarUrl: auth.data.avatarUrl ?? null,
       enrolledCoursesCount: enrolledCourses.length,
       averageCompletionPercent,
       upcomingExamsCount: exams.length,

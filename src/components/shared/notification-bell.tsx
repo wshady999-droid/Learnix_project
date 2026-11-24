@@ -47,28 +47,24 @@ export function NotificationBell() {
 
     const { data: recipients } = await supabase
       .from("notification_recipients")
-      .select("id, notification_id, is_read, created_at")
+      .select(
+        "id, notification_id, is_read, created_at, notifications(id, title, body, notification_type)",
+      )
       .eq("recipient_id", uid)
       .order("created_at", { ascending: false })
       .limit(12);
 
     const recList = recipients ?? [];
-    const notifIds = recList.map((r) => r.notification_id);
-    if (notifIds.length === 0) {
+    if (recList.length === 0) {
       setItems([]);
       setUnreadCount(0);
       return uid;
     }
 
-    const { data: notifs } = await supabase
-      .from("notifications")
-      .select("id, title, body, notification_type")
-      .in("id", notifIds);
-
-    const nMap = new Map((notifs ?? []).map((n) => [n.id, n]));
     const mapped: BellItem[] = recList
       .map((r) => {
-        const n = nMap.get(r.notification_id);
+        const rawNotif = r.notifications;
+        const n = Array.isArray(rawNotif) ? rawNotif[0] : rawNotif;
         if (!n) return null;
         return {
           recipientId: r.id,

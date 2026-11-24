@@ -31,22 +31,71 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
   const supabase = await createSupabaseServerClient();
 
   const [
-    profilesRes,
-    coursesRes,
+    studentsCountRes,
+    teachersCountRes,
+    adminsCountRes,
+    activeUsersCountRes,
+    suspendedUsersCountRes,
+    publishedCoursesCountRes,
+    draftCoursesCountRes,
+    archivedCoursesCountRes,
     teacherReqsRes,
     examsCountRes,
-    enrollmentsRes,
+    completedEnrCountRes,
+    activeEnrCountRes,
+    droppedEnrCountRes,
     auditCountRes,
     recentAuditRes,
   ] = await Promise.all([
-    supabase.from("profiles").select("role, status"),
-    supabase.from("courses").select("status"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "student"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "teacher"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "admin"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "suspended"),
+    supabase
+      .from("courses")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "published"),
+    supabase
+      .from("courses")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "draft"),
+    supabase
+      .from("courses")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "archived"),
     supabase
       .from("teacher_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
     supabase.from("exams").select("id", { count: "exact", head: true }),
-    supabase.from("course_enrollments").select("status, progress_percent"),
+    supabase
+      .from("course_enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "completed"),
+    supabase
+      .from("course_enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    supabase
+      .from("course_enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "dropped"),
     supabase.from("audit_logs").select("id", { count: "exact", head: true }),
     supabase
       .from("audit_logs")
@@ -55,31 +104,28 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
       .limit(10),
   ]);
 
-  if (profilesRes.error) return { ok: false, error: profilesRes.error.message };
-  if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
+  if (studentsCountRes.error) return { ok: false, error: studentsCountRes.error.message };
+  if (publishedCoursesCountRes.error) return { ok: false, error: publishedCoursesCountRes.error.message };
   if (teacherReqsRes.error) return { ok: false, error: teacherReqsRes.error.message };
   if (examsCountRes.error) return { ok: false, error: examsCountRes.error.message };
-  if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
+  if (completedEnrCountRes.error) return { ok: false, error: completedEnrCountRes.error.message };
   if (auditCountRes.error) return { ok: false, error: auditCountRes.error.message };
 
-  const profiles = profilesRes.data ?? [];
-  const courses = coursesRes.data ?? [];
-  const enrollments = enrollmentsRes.data ?? [];
+  const totalStudents = studentsCountRes.count ?? 0;
+  const totalTeachers = teachersCountRes.count ?? 0;
+  const totalAdmins = adminsCountRes.count ?? 0;
+  const activeUsers = activeUsersCountRes.count ?? 0;
+  const suspendedUsers = suspendedUsersCountRes.count ?? 0;
 
-  const totalStudents = profiles.filter((p) => p.role === "student").length;
-  const totalTeachers = profiles.filter((p) => p.role === "teacher").length;
-  const totalAdmins = profiles.filter((p) => p.role === "admin").length;
-  const activeUsers = profiles.filter((p) => p.status === "active").length;
-  const suspendedUsers = profiles.filter((p) => p.status === "suspended").length;
+  const publishedCourses = publishedCoursesCountRes.count ?? 0;
+  const draftCourses = draftCoursesCountRes.count ?? 0;
+  const archivedCourses = archivedCoursesCountRes.count ?? 0;
+  const totalCourses = publishedCourses + draftCourses + archivedCourses;
 
-  const totalCourses = courses.length;
-  const publishedCourses = courses.filter((c) => c.status === "published").length;
-  const draftCourses = courses.filter((c) => c.status === "draft").length;
-
-  const totalEnrollments = enrollments.length;
-  const completedEnrollments = enrollments.filter((e) => e.status === "completed").length;
-  const activeEnrollments = enrollments.filter((e) => e.status === "active").length;
-  const droppedEnrollments = enrollments.filter((e) => e.status === "dropped").length;
+  const completedEnrollments = completedEnrCountRes.count ?? 0;
+  const activeEnrollments = activeEnrCountRes.count ?? 0;
+  const droppedEnrollments = droppedEnrCountRes.count ?? 0;
+  const totalEnrollments = completedEnrollments + activeEnrollments + droppedEnrollments;
 
   const completionRatePercent =
     totalEnrollments > 0

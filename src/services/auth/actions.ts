@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
+import { after } from "next/server";
 import { z } from "zod";
 
 import { findCountryByIso2 } from "@/lib/auth/countries";
@@ -11,8 +12,10 @@ import {
   serverStrongPasswordSchema,
 } from "@/lib/auth/validation";
 import { getPublicEnv } from "@/lib/env";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceRoleClient,
+} from "@/lib/supabase/server";
 import type { Json, ServiceResult, UserRole } from "@/types";
 
 const REMEMBER_COOKIE_NAME = "learnix-remember-session";
@@ -74,36 +77,43 @@ async function recordLoginActivity(params: {
   details?: Record<string, string | boolean | null>;
 }) {
   try {
-    const supabase = await createSupabaseServerClient();
     const headerStore = await headers();
     const userAgent = headerStore.get("user-agent") ?? "unknown";
     const ipAddress =
       headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ??
       headerStore.get("x-real-ip") ??
       null;
-
     const fingerprint = `${userAgent.slice(0, 120)}`;
+    const supabase = await createSupabaseServerClient();
 
-    await Promise.all([
-      supabase.from("audit_logs").insert({
-        actor_id: params.userId,
-        action: params.action,
-        entity_type: "auth",
-        entity_id: params.userId,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        new_values: (params.details ?? {}) as Json,
-      }),
-      supabase.from("user_devices").upsert(
-        {
-          user_id: params.userId,
-          device_fingerprint: fingerprint,
-          browser: userAgent.slice(0, 80),
-          last_active_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,device_fingerprint" },
-      ),
-    ]);
+    // Schedule non-critical telemetry after the HTTP response finishes
+    // so login/signup responses return immediately without waiting on 2 extra DB round-trips.
+    after(async () => {
+      try {
+        await Promise.all([
+          supabase.from("audit_logs").insert({
+            actor_id: params.userId,
+            action: params.action,
+            entity_type: "auth",
+            entity_id: params.userId,
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            new_values: (params.details ?? {}) as Json,
+          }),
+          supabase.from("user_devices").upsert(
+            {
+              user_id: params.userId,
+              device_fingerprint: fingerprint,
+              browser: userAgent.slice(0, 80),
+              last_active_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,device_fingerprint" },
+          ),
+        ]);
+      } catch {
+        // Non-blocking telemetry
+      }
+    });
   } catch {
     // Non-blocking telemetry
   }
@@ -123,32 +133,76 @@ export async function signInWithPasswordAction(
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
-    password: parsed.data.password,
-  });
+  const { data: initialAuthData, error: authError } =
+    await supabase.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
 
-  if (authError || !authData.user) {
-    return {
-      ok: false,
-      error: "INVALID_CREDENTIALS",
-    };
+  let authenticatedUser = initialAuthData.user;
+
+  if (authError || !authenticatedUser) {
+    // If an account was created earlier while 'Confirm email' was enabled, auto-confirm it via Admin API and retry sign-in.
+    if (authError?.message?.toLowerCase().includes("email not confirmed")) {
+      const adminClient = createSupabaseServiceRoleClient();
+      if (adminClient) {
+        const { data: existingList } = await adminClient.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
+        const targetUser = existingList?.users.find(
+          (u) => u.email?.toLowerCase() === parsed.data.email,
+        );
+        if (targetUser) {
+          await adminClient.auth.admin.updateUserById(targetUser.id, {
+            email_confirm: true,
+          });
+          const { data: retryData, error: retryError } =
+            await supabase.auth.signInWithPassword({
+              email: parsed.data.email,
+              password: parsed.data.password,
+            });
+          if (!retryError && retryData.user) {
+            authenticatedUser = retryData.user;
+          } else {
+            return { ok: false, error: "INVALID_CREDENTIALS" };
+          }
+        } else {
+          return { ok: false, error: "INVALID_CREDENTIALS" };
+        }
+      } else {
+        return {
+          ok: false,
+          error:
+            "This account's email is still unconfirmed. Please paste your SUPABASE_SERVICE_ROLE_KEY in .env.local and restart your Next.js server so it can be auto-confirmed.",
+        };
+      }
+    } else {
+      return {
+        ok: false,
+        error: "INVALID_CREDENTIALS",
+      };
+    }
   }
 
-  const cookieStore = await cookies();
+  const cookieStorePromise = cookies();
+  const profilePromise = supabase
+    .from("profiles")
+    .select("id, role, status")
+    .eq("id", authenticatedUser.id)
+    .maybeSingle();
+
+  const [cookieStore, { data: profile, error: profileError }] = await Promise.all([
+    cookieStorePromise,
+    profilePromise,
+  ]);
+
   cookieStore.set(REMEMBER_COOKIE_NAME, parsed.data.rememberMe ? "persistent" : "session", {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
     ...(parsed.data.rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {}),
   });
-
-  // Always check authoritative role and status from public.profiles
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id, role, status")
-    .eq("id", authData.user.id)
-    .maybeSingle();
 
   if (profileError || !profile) {
     await supabase.auth.signOut();
@@ -193,17 +247,6 @@ function isDuplicateEmailError(error: { message?: string; code?: string; status?
   );
 }
 
-function isEmailRateLimitError(error: { message?: string; code?: string; status?: number } | null): boolean {
-  if (!error) return false;
-  const code = (error.code ?? "").toLowerCase();
-  const msg = (error.message ?? "").toLowerCase();
-  return (
-    code === "over_email_send_rate_limit" ||
-    msg.includes("email rate limit exceeded") ||
-    msg.includes("rate limit")
-  );
-}
-
 export async function registerAccountAction(
   input: z.infer<typeof signupUnionSchema>,
 ): Promise<
@@ -219,6 +262,15 @@ export async function registerAccountAction(
     return {
       ok: false,
       error: parsed.error.issues[0]?.message ?? "Invalid registration details.",
+    };
+  }
+
+  const adminClient = createSupabaseServiceRoleClient();
+  if (!adminClient) {
+    return {
+      ok: false,
+      error:
+        "Server configuration incomplete: SUPABASE_SERVICE_ROLE_KEY is empty in .env.local. Paste your service_role / secret key after SUPABASE_SERVICE_ROLE_KEY= in .env.local and restart the dev server (`npm run dev`).",
     };
   }
 
@@ -240,121 +292,104 @@ export async function registerAccountAction(
     metadata.qualifications = data.qualifications;
   }
 
-  const supabase = await createSupabaseServerClient();
-  const adminClient = createSupabaseAdminClient();
   let createdUserId: string | null = null;
 
-  if (adminClient) {
-    // Instant registration: create user pre-confirmed without sending confirmation or OTP emails.
-    // Supabase Auth enforces the unique email constraint directly.
-    const { data: created, error: createError } = await adminClient.auth.admin.createUser({
-      email: normalizedEmail,
-      password: data.password,
-      email_confirm: true,
-      user_metadata: metadata,
-    });
+  // Instant registration strictly via Admin API (Service Role Key):
+  // Never calls `supabase.auth.signUp()`, so it never triggers confirmation emails or hits email send rate limits.
+  const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+    email: normalizedEmail,
+    password: data.password,
+    email_confirm: true,
+    user_metadata: metadata,
+  });
 
-    if (createError) {
-      if (isDuplicateEmailError(createError)) {
+  if (createError) {
+    if (isDuplicateEmailError(createError)) {
+      // Recover gracefully if the user was created in a previous attempt while 'Confirm email'
+      // was enabled (leaving the user in an unconfirmed state).
+      const { data: existingList } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+      const existingUser = existingList?.users.find(
+        (u) => u.email?.toLowerCase() === normalizedEmail,
+      );
+
+      if (existingUser && !existingUser.email_confirmed_at) {
+        const { error: confirmError } = await adminClient.auth.admin.updateUserById(
+          existingUser.id,
+          {
+            password: data.password,
+            email_confirm: true,
+            user_metadata: {
+              ...(typeof existingUser.user_metadata === "object" &&
+              existingUser.user_metadata !== null
+                ? existingUser.user_metadata
+                : {}),
+              ...metadata,
+            },
+          },
+        );
+
+        if (!confirmError) {
+          createdUserId = existingUser.id;
+        } else {
+          return { ok: false, error: confirmError.message };
+        }
+      } else {
         return { ok: false, error: "EMAIL_ALREADY_EXISTS" };
       }
+    } else {
       return { ok: false, error: createError.message };
     }
-
+  } else {
     if (!created.user) {
       return { ok: false, error: "Unable to create account. Please try again." };
     }
-
     createdUserId = created.user.id;
+  }
 
-    // Immediately establish an authenticated session so the user enters their workspace right away.
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+  if (!createdUserId) {
+    return { ok: false, error: "Unable to create account. Please try again." };
+  }
+
+  // Immediately establish an authenticated session cookie on the server client AND verify the
+  // authoritative profile role created by the database trigger in parallel.
+  const supabase = await createSupabaseServerClient();
+  const [signInResult, profileResult] = await Promise.all([
+    supabase.auth.signInWithPassword({
       email: normalizedEmail,
       password: data.password,
-    });
+    }),
+    adminClient
+      .from("profiles")
+      .select("id, role")
+      .eq("id", createdUserId)
+      .maybeSingle(),
+  ]);
 
-    if (signInError) {
+  const { error: signInError } = signInResult;
+
+  if (signInError) {
+    if (signInError.message.toLowerCase().includes("email not confirmed")) {
+      await adminClient.auth.admin.updateUserById(createdUserId, {
+        email_confirm: true,
+      });
+      const { error: retryError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: data.password,
+      });
+      if (retryError) {
+        return { ok: false, error: retryError.message };
+      }
+    } else {
       return { ok: false, error: signInError.message };
-    }
-  } else {
-    // Fallback when Confirm Email is disabled in Supabase Auth Dashboard and service key is not set.
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: data.password,
-      options: { data: metadata },
-    });
-
-    if (signUpError) {
-      if (isDuplicateEmailError(signUpError)) {
-        return { ok: false, error: "EMAIL_ALREADY_EXISTS" };
-      }
-
-      if (isEmailRateLimitError(signUpError)) {
-        // Check if an unconfirmed or confirmed account with these credentials already exists
-        const { data: existingSignIn, error: existingSignInErr } =
-          await supabase.auth.signInWithPassword({
-            email: normalizedEmail,
-            password: data.password,
-          });
-
-        if (!existingSignInErr && existingSignIn.user) {
-          createdUserId = existingSignIn.user.id;
-        } else {
-          return {
-            ok: false,
-            error:
-              "Supabase Auth email rate limit exceeded because 'Confirm email' is enabled on the Supabase project and SUPABASE_SERVICE_ROLE_KEY is not set in .env.local. Either disable 'Confirm email' under Supabase Dashboard → Authentication → Providers → Email, or add SUPABASE_SERVICE_ROLE_KEY to .env.local for instant email-free registration.",
-          };
-        }
-      } else {
-        return { ok: false, error: signUpError.message };
-      }
-    }
-
-    if (!createdUserId) {
-      // Supabase returns an empty identities array for existing emails when confirmation is enabled.
-      if (
-        signUpData.user &&
-        Array.isArray(signUpData.user.identities) &&
-        signUpData.user.identities.length === 0
-      ) {
-        return { ok: false, error: "EMAIL_ALREADY_EXISTS" };
-      }
-
-      if (!signUpData.user) {
-        return { ok: false, error: "Unable to create account. Please try again." };
-      }
-
-      createdUserId = signUpData.user.id;
-
-      if (!signUpData.session) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password: data.password,
-        });
-        if (signInError) {
-          const msg = signInError.message.toLowerCase();
-          if (msg.includes("email not confirmed")) {
-            return {
-              ok: false,
-              error:
-                "Account was created, but Supabase Auth requires email confirmation ('Confirm email' is enabled in Supabase Dashboard). Disable 'Confirm email' under Authentication → Providers → Email or configure SUPABASE_SERVICE_ROLE_KEY in .env.local for instant registration.",
-            };
-          }
-          return { ok: false, error: signInError.message };
-        }
-      }
     }
   }
 
-  // Verify authoritative profile role created by database trigger
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", createdUserId)
-    .maybeSingle();
-
-  const effectiveRole: UserRole = profile?.role ?? "student";
+  const effectiveRole: UserRole =
+    profileResult.data?.role ??
+    (data.accountType === "teacher" ? "teacher" : "student");
 
   await recordLoginActivity({
     userId: createdUserId,

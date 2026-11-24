@@ -62,14 +62,18 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
   }, []);
 
   useEffect(() => {
+    let ticking = false;
+
     function updateScrollState() {
+      ticking = false;
       const scrollY = window.scrollY;
-      setScrolled(scrollY > 24);
+      const nextScrolled = scrollY > 24;
+      setScrolled((prev) => (prev === nextScrolled ? prev : nextScrolled));
 
       if (pathname !== "/") return;
 
       if (scrollY < 140) {
-        setActiveAnchor("home");
+        setActiveAnchor((prev) => (prev === "home" ? prev : "home"));
         return;
       }
 
@@ -83,12 +87,19 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
         }
       }
 
-      setActiveAnchor(currentSection);
+      setActiveAnchor((prev) => (prev === currentSection ? prev : currentSection));
+    }
+
+    function onScroll() {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(updateScrollState);
+      }
     }
 
     updateScrollState();
-    window.addEventListener("scroll", updateScrollState, { passive: true });
-    return () => window.removeEventListener("scroll", updateScrollState);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, [pathname]);
 
   useEffect(() => {

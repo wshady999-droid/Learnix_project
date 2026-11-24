@@ -36,7 +36,6 @@ function isItemActive(pathname: string, activeItemId: string | undefined, item: 
 interface NavItemLinkProps {
   item: NavItem;
   active: boolean;
-  /** Render inside a compact icon rail (shows tooltip on hover/focus). */
   compact?: boolean;
   onSelect?: (item: NavItem) => void;
 }
@@ -101,12 +100,6 @@ interface AppSidebarProps {
   footerSlot?: React.ReactNode;
 }
 
-/**
- * Shared responsive sidebar:
- * - Tablet (`md` to `<lg`): always compact icon rail (`w-17`) with tooltips.
- * - Desktop (`lg+`): collapsible between full width (`w-64`) and compact icon rail (`w-17`).
- * - Mobile (`<md`): hidden (replaced by `MobileNavDrawer` + `MobileBottomNav`).
- */
 export function AppSidebar({
   sections,
   activeItemId,
@@ -271,7 +264,6 @@ interface MobileBottomNavProps {
   onSelectItem?: (item: NavItem) => void;
 }
 
-/** Fixed mobile bottom bar showing up to 4 primary items for one-handed reach. */
 export function MobileBottomNav({
   sections,
   activeItemId,
@@ -339,7 +331,7 @@ export function AppTopbar({
   activeItemId,
   onSelectItem,
   title = "Learnix Foundation",
-  subtitle = "Design System & Architecture",
+  subtitle,
   actions,
 }: AppTopbarProps) {
   return (
@@ -352,10 +344,12 @@ export function AppTopbar({
         />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+            <p className="truncate text-lg font-bold tracking-tight text-foreground sm:text-xl">
+              {title}
+            </p>
           </div>
           {subtitle ? (
-            <p className="hidden truncate text-xs text-muted-foreground sm:block">{subtitle}</p>
+            <p className="hidden truncate text-sm text-muted-foreground sm:block">{subtitle}</p>
           ) : null}
         </div>
       </div>

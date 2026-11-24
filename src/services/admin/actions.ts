@@ -1,14 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { serverStrongPasswordSchema } from "@/lib/auth/validation";
 import { getPublicEnv } from "@/lib/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseServerClient,
+  createSupabaseServiceRoleClient,
+} from "@/lib/supabase/server";
 import { requireRole } from "@/services/db/utils";
-import type { Database, Json, ServiceResult, UserRole } from "@/types";
+import type { Json, ServiceResult, UserRole } from "@/types";
 
 async function logAdminAudit(params: {
   actorId: string;
@@ -32,13 +34,7 @@ async function logAdminAudit(params: {
 }
 
 function getOptionalServiceRoleClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secretKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
-  if (!url || !secretKey) return null;
-  return createClient<Database>(url, secretKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return createSupabaseServiceRoleClient();
 }
 
 // -----------------------------------------------------------------------------
@@ -69,47 +65,29 @@ export async function adminCreateUserAccountAction(
   }
 
   const serviceClient = getOptionalServiceRoleClient();
-  const supabase = await createSupabaseServerClient();
-  let createdUserId: string | null = null;
-
-  if (serviceClient) {
-    const { data, error } = await serviceClient.auth.admin.createUser({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: parsed.data.fullName,
-        phone: parsed.data.phone || "",
-      },
-    });
-    if (error || !data.user) {
-      return { ok: false, error: error?.message ?? "Failed to create Auth account." };
-    }
-    createdUserId = data.user.id;
-  } else {
-    // Use isolated non-persisting client so the Admin's session cookies are not overwritten
-    const env = getPublicEnv();
-    const isolatedClient = createClient<Database>(
-      env.NEXT_PUBLIC_SUPABASE_URL!,
-      env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
-    );
-
-    const { data, error } = await isolatedClient.auth.signUp({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      options: {
-        data: {
-          full_name: parsed.data.fullName,
-          phone: parsed.data.phone || "",
-        },
-      },
-    });
-    if (error || !data.user) {
-      return { ok: false, error: error?.message ?? "Failed to register user account." };
-    }
-    createdUserId = data.user.id;
+  if (!serviceClient) {
+    return {
+      ok: false,
+      error:
+        "Server configuration incomplete: SUPABASE_SERVICE_ROLE_KEY is missing in .env.local. Paste your service_role key in .env.local and restart the server.",
+    };
   }
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await serviceClient.auth.admin.createUser({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: parsed.data.fullName,
+      phone: parsed.data.phone || "",
+    },
+  });
+  if (error || !data.user) {
+    return { ok: false, error: error?.message ?? "Failed to create Auth account." };
+  }
+  const createdUserId = data.user.id;
 
   // Update authoritative profile role, department, and level as Admin
   const { error: profileError } = await supabase

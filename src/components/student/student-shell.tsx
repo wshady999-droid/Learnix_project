@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -61,81 +61,84 @@ export function StudentShell({
   const authT = getAuthDictionary(locale);
   const [signingOut, setSigningOut] = useState(false);
 
-  const sections: readonly NavSection[] = [
-    {
-      id: "student-learning",
-      title: studentT.nav.groupLearning,
-      items: [
-        {
-          id: "student-overview",
-          label: studentT.nav.overview,
-          href: "/student",
-          icon: LayoutDashboard,
-          exact: true,
-          mobilePrimary: true,
-        },
-        {
-          id: "student-courses",
-          label: studentT.nav.courses,
-          href: "/student/courses",
-          icon: BookOpen,
-          mobilePrimary: true,
-        },
-        {
-          id: "student-exams",
-          label: studentT.nav.exams,
-          href: "/student/exams",
-          icon: ClipboardCheck,
-          mobilePrimary: true,
-        },
-      ],
-    },
-    {
-      id: "student-intelligence",
-      title: studentT.nav.groupIntelligence,
-      items: [
-        {
-          id: "student-ai-assistant",
-          label: studentT.nav.aiAssistant,
-          href: "/student/ai-assistant",
-          icon: Sparkles,
-          badge: "AI",
-          mobilePrimary: true,
-        },
-        {
-          id: "student-performance",
-          label: studentT.nav.performance,
-          href: "/student/performance",
-          icon: BarChart3,
-          mobilePrimary: true,
-        },
-      ],
-    },
-    {
-      id: "student-growth",
-      title: studentT.nav.groupGrowth,
-      items: [
-        {
-          id: "student-motivation",
-          label: studentT.nav.motivation,
-          href: "/student/motivation",
-          icon: Award,
-        },
-        {
-          id: "student-ratings",
-          label: studentT.nav.ratings,
-          href: "/student/ratings",
-          icon: Star,
-        },
-        {
-          id: "student-profile",
-          label: studentT.nav.profile,
-          href: "/student/profile",
-          icon: User,
-        },
-      ],
-    },
-  ];
+  const sections: readonly NavSection[] = useMemo(
+    () => [
+      {
+        id: "student-learning",
+        title: studentT.nav.groupLearning,
+        items: [
+          {
+            id: "student-overview",
+            label: studentT.nav.overview,
+            href: "/student",
+            icon: LayoutDashboard,
+            exact: true,
+            mobilePrimary: true,
+          },
+          {
+            id: "student-courses",
+            label: studentT.nav.courses,
+            href: "/student/courses",
+            icon: BookOpen,
+            mobilePrimary: true,
+          },
+          {
+            id: "student-exams",
+            label: studentT.nav.exams,
+            href: "/student/exams",
+            icon: ClipboardCheck,
+            mobilePrimary: true,
+          },
+        ],
+      },
+      {
+        id: "student-intelligence",
+        title: studentT.nav.groupIntelligence,
+        items: [
+          {
+            id: "student-ai-assistant",
+            label: studentT.nav.aiAssistant,
+            href: "/student/ai-assistant",
+            icon: Sparkles,
+            badge: "AI",
+            mobilePrimary: true,
+          },
+          {
+            id: "student-performance",
+            label: studentT.nav.performance,
+            href: "/student/performance",
+            icon: BarChart3,
+            mobilePrimary: true,
+          },
+        ],
+      },
+      {
+        id: "student-growth",
+        title: studentT.nav.groupGrowth,
+        items: [
+          {
+            id: "student-motivation",
+            label: studentT.nav.motivation,
+            href: "/student/motivation",
+            icon: Award,
+          },
+          {
+            id: "student-ratings",
+            label: studentT.nav.ratings,
+            href: "/student/ratings",
+            icon: Star,
+          },
+          {
+            id: "student-profile",
+            label: studentT.nav.profile,
+            href: "/student/profile",
+            icon: User,
+          },
+        ],
+      },
+    ],
+    [studentT.nav],
+  );
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -153,7 +156,6 @@ export function StudentShell({
           <AppTopbar
             sections={sections}
             title={`${studentT.overview.welcomePrefix} ${studentName}`}
-            subtitle={studentT.overview.subtitle}
             actions={
               <div className="flex items-center gap-2">
                 <GlobalSearchTrigger />
@@ -163,7 +165,6 @@ export function StudentShell({
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-2">
                       {studentAvatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={studentAvatarUrl}
                           alt={studentName}
