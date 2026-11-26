@@ -141,15 +141,30 @@ export function TeacherShell({
     router.refresh();
   }
 
+  // دالة الترجمة للـ 5 لغات
+  const getWelcomeMessage = (loc: string) => {
+    switch (loc) {
+      case "ar": return "أهلاً بعودتك،";
+      case "de": return "Willkommen zurück,";
+      case "it": return "Bentornato,";
+      case "fr": return "Bon retour,";
+      case "en":
+      default: return "Welcome back,";
+    }
+  };
+
   return (
     <SidebarProvider>
-      <div className="flex min-h-dvh w-full bg-background text-foreground">
+      <div className="relative flex min-h-dvh w-full bg-transparent text-foreground">
+        
+        <div className="fixed inset-0 z-[-1] bg-[url('/student-light.png')] bg-cover bg-center bg-no-repeat bg-fixed dark:bg-[url('/student-dark.png')]" />
+        
         <AppSidebar sections={sections} />
         <div className="flex min-w-0 flex-1 flex-col">
           <AppTopbar
             sections={sections}
-            title={teacherT.overview.title}
-            subtitle={teacherT.overview.subtitle}
+            // هنا استخدمنا الدالة عشان تطبع الجملة حسب اللغة
+            title={`${getWelcomeMessage(locale)} ${teacherName}`}
             actions={
               <div className="flex items-center gap-2">
                 <GlobalSearchTrigger />
@@ -157,7 +172,7 @@ export function TeacherShell({
                 <LanguageSelector />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="outline" size="sm" className="gap-2 bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
                       {teacherAvatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -166,7 +181,7 @@ export function TeacherShell({
                           className="size-5 rounded-full object-cover"
                         />
                       ) : (
-                        <User className="size-4 text-gold-foreground" aria-hidden="true" />
+                        <User className="size-4 text-emerald-500" aria-hidden="true" />
                       )}
                       <span className="hidden max-w-32 truncate sm:inline">
                         {teacherName}
@@ -176,7 +191,7 @@ export function TeacherShell({
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel className="space-y-0.5">
                       <p className="flex items-center gap-1.5 truncate text-xs font-semibold text-foreground">
-                        <Award className="size-3.5 text-gold-foreground" />
+                        <Award className="size-3.5 text-emerald-500" />
                         <span>{teacherName}</span>
                       </p>
                       <p className="truncate font-mono text-[11px] text-muted-foreground">

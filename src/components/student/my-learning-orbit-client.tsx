@@ -104,19 +104,20 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-[#C99A22]/40 bg-[#C99A22]/10 px-3 py-1 text-xs font-semibold text-[#C99A22]">
+          {/* التعديل هنا: غيرنا #C99A22 لـ #10b981 */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#10b981]/40 bg-[#10b981]/10 px-3 py-1 text-xs font-semibold text-[#10b981]">
             <BookOpen className="size-3.5" aria-hidden="true" />
             <span>My Enrolled Courses</span>
           </div>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
             My Enrolled Courses
           </h1>
-         
         </div>
 
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
           <Link href="/student/courses">
-            <BookOpen className="size-4 text-[#C99A22]" aria-hidden="true" />
+            {/* التعديل هنا */}
+            <BookOpen className="size-4 text-[#10b981]" aria-hidden="true" />
             <span>Explore Courses</span>
           </Link>
         </Button>
@@ -157,9 +158,10 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                   showTooltip={false}
                   displayOverlayContent={true}
                   overlayContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-black/90 via-black/40 to-transparent p-6 text-white">
+                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-black/80 via-black/20 to-transparent p-6 text-white backdrop-blur-[2px]">
                       <div className="flex justify-between items-start">
-                        <Badge className="border border-[#C99A22]/60 bg-[#11131F]/85 font-mono text-[10px] font-semibold text-[#C99A22] backdrop-blur-md">
+                        {/* التعديل هنا في الـ Badge */}
+                        <Badge className="border border-[#10b981]/60 bg-white/10 font-mono text-[10px] font-semibold text-[#10b981] backdrop-blur-md">
                           {course.code}
                         </Badge>
                         <Badge
@@ -167,7 +169,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                           className={
                             isCompleted
                               ? ""
-                              : "border-white/25 bg-black/65 text-white backdrop-blur-md"
+                              : "border-white/25 bg-white/10 text-white backdrop-blur-md"
                           }
                         >
                           {isCompleted && (
@@ -187,7 +189,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                     </div>
                   }
                   backContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-[#1C1E2A] p-6 text-white border border-[#353644] rounded-2xl">
+                    <div className="flex h-full w-full flex-col justify-between bg-white/20 p-6 text-foreground border border-white/20 rounded-2xl backdrop-blur-lg dark:bg-[#121a19] dark:border-[#353644]">
                       <div className="space-y-3">
                         <Badge variant="gold-subtle">
                           {course.category}
@@ -199,14 +201,16 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                           {course.description}
                         </p>
                       </div>
-                      <div className="space-y-4 border-t border-[#353644] pt-4">
+                      <div className="space-y-4 border-t border-white/20 pt-4 dark:border-[#353644]">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <Layers className="size-3.5 text-[#C99A22]" />
+                            {/* التعديل هنا */}
+                            <Layers className="size-3.5 text-[#10b981]" />
                             {course.chaptersCount} Chapters
                           </span>
                           <span className="flex items-center gap-1">
-                            <Clock className="size-3.5 text-[#C99A22]" />
+                            {/* التعديل هنا */}
+                            <Clock className="size-3.5 text-[#10b981]" />
                             {course.estimatedHours}h
                           </span>
                         </div>

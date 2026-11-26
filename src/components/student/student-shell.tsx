@@ -144,8 +144,14 @@ export function StudentShell({
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-dvh w-full bg-background text-foreground">
+      {/* الحاوية الرئيسية: شفافة عشان الصورة تبان */}
+      <div className="relative flex min-h-dvh w-full bg-transparent text-foreground">
+        
+        {/* الباكجراوند الثابت */}
+        <div className="fixed inset-0 z-[-1] bg-[url('/student-light.png')] bg-cover bg-center bg-no-repeat bg-fixed dark:bg-[url('/student-dark.png')]" />
+        
         <AppSidebar sections={sections} />
+        
         <div className="flex min-w-0 flex-1 flex-col">
           <AppTopbar
             sections={sections}
@@ -157,7 +163,7 @@ export function StudentShell({
                 <LanguageSelector />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="outline" size="sm" className="gap-2 bg-white/60 backdrop-blur-md dark:bg-black/40">
                       {studentAvatarUrl ? (
                         <img
                           src={studentAvatarUrl}
@@ -166,7 +172,7 @@ export function StudentShell({
                         />
                       ) : (
                         <GraduationCap
-                          className="size-4 text-gold-foreground"
+                          className="size-4 text-emerald-600 dark:text-emerald-400"
                           aria-hidden="true"
                         />
                       )}

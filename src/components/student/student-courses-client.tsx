@@ -108,7 +108,8 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.courses.searchCourseContentPlaceholder}
-            className="pl-9"
+            // التعديل هنا: خلفية شفافة لمربع البحث
+            className="pl-9 bg-white/20 backdrop-blur-md dark:bg-[#121a19]"
           />
         </div>
       </div>

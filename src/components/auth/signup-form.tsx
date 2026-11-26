@@ -11,26 +11,21 @@ import {
   GraduationCap,
   ImagePlus,
   ShieldAlert,
-  Sparkles,
   UserPlus,
 } from "lucide-react";
 
-import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { PasswordStrengthChecklist } from "@/components/auth/password-strength-checklist";
 import { useLocale } from "@/components/i18n/locale-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input, Textarea, fieldBase } from "@/components/ui/input";
+import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { getAuthDictionary } from "@/i18n/auth-dictionaries";
 import {
   COUNTRY_CALLING_CODES,
@@ -203,33 +198,30 @@ export function SignupForm() {
   }
 
   return (
-   <Card className="rounded-2xl border border-[#C99A22]/30 bg-[#C99A22]/5 backdrop-blur-sm shadow-2xl p-2 sm:p-4">
-      <CardHeader className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Badge variant="gold-subtle">
-            <Sparkles className="size-3.5" aria-hidden="true" />
-            <span>{authT.signup.badge}</span>
-          </Badge>
-        </div>
-        <CardTitle className="text-xl font-bold">{authT.signup.title}</CardTitle>
-        <CardDescription>{authT.signup.subtitle}</CardDescription>
+    // تصغير الـ padding الداخلي لـ p-4
+    <Card className="relative rounded-[1.5rem] border border-emerald-500/30 bg-white/95 dark:bg-[#0a1f1d]/95 backdrop-blur-xl shadow-2xl p-4 sm:p-5 text-slate-900 dark:text-white transition-colors duration-300">
+      
+      <CardHeader className="space-y-1 pb-2">
+        <CardTitle className="text-lg font-bold">{authT.signup.title}</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 rounded-lg border border-border bg-muted p-1">
+      <CardContent className="space-y-2.5">
+        
+        <div className="grid grid-cols-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#0f172a]/50 p-1">
           <button
             type="button"
             onClick={() => {
               setAccountType("student");
               setErrorMessage(null);
             }}
-            className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-medium transition-colors ${
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-all",
               accountType === "student"
-                ? "gold-sheen bg-gold-metallic font-semibold text-brand-charcoal shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+                ? "bg-emerald-500 text-white shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+            )}
           >
-            <GraduationCap className="size-4" aria-hidden="true" />
+            <GraduationCap className="size-3.5" aria-hidden="true" />
             <span>{authT.signup.studentTab}</span>
           </button>
           <button
@@ -238,27 +230,24 @@ export function SignupForm() {
               setAccountType("teacher");
               setErrorMessage(null);
             }}
-            className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-medium transition-colors ${
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-medium transition-all",
               accountType === "teacher"
-                ? "gold-sheen bg-gold-metallic font-semibold text-brand-charcoal shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+                ? "bg-emerald-500 text-white shadow-sm"
+                : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+            )}
           >
-            <BookOpen className="size-4" aria-hidden="true" />
+            <BookOpen className="size-3.5" aria-hidden="true" />
             <span>{authT.signup.teacherTab}</span>
           </button>
         </div>
 
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          {accountType === "student"
-            ? authT.signup.studentDescription
-            : authT.signup.teacherDescription}
-        </p>
-
-        <form onSubmit={handleSubmit} className="space-y-3" noValidate>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="signup-full-name">{authT.signup.fullNameLabel}</Label>
+        <form onSubmit={handleSubmit} className="space-y-2.5" noValidate>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-1">
+              <Label htmlFor="signup-full-name" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                {authT.signup.fullNameLabel}
+              </Label>
               <Input
                 id="signup-full-name"
                 name="fullName"
@@ -267,11 +256,14 @@ export function SignupForm() {
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder={authT.signup.fullNamePlaceholder}
                 required
+                className="rounded-lg border-slate-300 bg-slate-50 px-3 py-1.5 text-xs transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="signup-email">{authT.signup.emailLabel}</Label>
+            <div className="grid gap-1">
+              <Label htmlFor="signup-email" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                {authT.signup.emailLabel}
+              </Label>
               <Input
                 id="signup-email"
                 name="email"
@@ -281,29 +273,35 @@ export function SignupForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={authT.signup.emailPlaceholder}
                 required
+                className="rounded-lg border-slate-300 bg-slate-50 px-3 py-1.5 text-xs transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
               />
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[11.5rem_1fr]">
-            <div className="grid gap-2">
-              <Label htmlFor="signup-country">{authT.signup.countryCodeLabel}</Label>
+          <div className="grid gap-2 sm:grid-cols-[8rem_1fr]">
+            <div className="grid gap-1">
+              <Label htmlFor="signup-country" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                {authT.signup.countryCodeLabel}
+              </Label>
               <select
                 id="signup-country"
                 value={countryIso2}
                 onChange={(e) => setCountryIso2(e.target.value)}
-                className={cn(fieldBase, "h-10 py-2")}
+                className="rounded-lg border border-slate-300 bg-slate-50 px-2 py-1.5 text-xs transition-all focus:ring-2 focus:ring-emerald-500 focus:outline-none dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
               >
                 {COUNTRY_CALLING_CODES.map((c) => (
                   <option key={c.iso2} value={c.iso2}>
-                    {c.flag} {c.iso2} ({c.dialCode})
+                    {/* شيلنا c.flag من هنا */}
+                    {c.iso2} ({c.dialCode})
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="signup-phone">{authT.signup.phoneLabel}</Label>
+            <div className="grid gap-1">
+              <Label htmlFor="signup-phone" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                {authT.signup.phoneLabel}
+              </Label>
               <Input
                 id="signup-phone"
                 name="phone"
@@ -314,14 +312,15 @@ export function SignupForm() {
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder={authT.signup.phonePlaceholder}
                 required
+                className="rounded-lg border-slate-300 bg-slate-50 px-3 py-1.5 text-xs transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
               />
             </div>
           </div>
 
           {accountType === "teacher" ? (
-            <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
-              <div className="grid gap-2">
-                <Label htmlFor="signup-specialization">
+            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-2 dark:border-slate-700 dark:bg-[#0f172a]/30">
+              <div className="grid gap-1">
+                <Label htmlFor="signup-specialization" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
                   {authT.signup.specializationLabel}
                 </Label>
                 <Input
@@ -331,33 +330,35 @@ export function SignupForm() {
                   onChange={(e) => setSpecialization(e.target.value)}
                   placeholder={authT.signup.specializationPlaceholder}
                   required
+                  className="rounded-lg border-slate-300 bg-white px-3 py-1.5 text-xs transition-all dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
                 />
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="signup-qualifications">
+              <div className="grid gap-1">
+                <Label htmlFor="signup-qualifications" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
                   {authT.signup.qualificationsLabel}
                 </Label>
                 <Textarea
                   id="signup-qualifications"
                   name="qualifications"
-                  rows={3}
+                  rows={2}
                   value={qualifications}
                   onChange={(e) => setQualifications(e.target.value)}
                   placeholder={authT.signup.qualificationsPlaceholder}
                   required
+                  className="rounded-lg border-slate-300 bg-white px-3 py-1.5 text-xs transition-all dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
                 />
               </div>
             </div>
           ) : null}
 
-          <div className="grid gap-2">
+          <div className="grid gap-1">
             <div className="flex items-center justify-between">
-              <Label htmlFor="signup-avatar" className="flex items-center gap-1.5">
-                <ImagePlus className="size-4 text-gold-foreground" aria-hidden="true" />
+              <Label htmlFor="signup-avatar" className="flex items-center gap-1 text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                <ImagePlus className="size-3 text-emerald-500" aria-hidden="true" />
                 <span>{authT.signup.avatarLabel}</span>
               </Label>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[9px] text-slate-400">
                 {authT.common.optionalTag}
               </span>
             </div>
@@ -366,13 +367,16 @@ export function SignupForm() {
               type="file"
               accept="image/jpeg,image/png,image/webp,image/avif"
               onChange={handleAvatarChange}
+              className="rounded-lg border-slate-300 bg-slate-50 px-2 py-1 text-[10px] dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
             />
-            <p className="text-[11px] text-muted-foreground">{authT.signup.avatarHelp}</p>
+            <p className="text-[9px] text-slate-500 dark:text-slate-400">{authT.signup.avatarHelp}</p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="signup-password">{authT.signup.passwordLabel}</Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-1">
+              <Label htmlFor="signup-password" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                {authT.signup.passwordLabel}
+              </Label>
               <div className="relative">
                 <Input
                   id="signup-password"
@@ -382,28 +386,22 @@ export function SignupForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value.replace(/\s/g, ""))}
                   placeholder="••••••••"
-                  className="pe-10"
+                  className="rounded-lg border-slate-300 bg-slate-50 px-3 py-1.5 pe-8 text-xs transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={
-                    showPassword ? authT.common.hidePassword : authT.common.showPassword
-                  }
-                  className="absolute inset-y-0 end-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  aria-label={showPassword ? authT.common.hidePassword : authT.common.showPassword}
+                  className="absolute inset-y-0 end-0 flex items-center px-2 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-white"
                 >
-                  {showPassword ? (
-                    <EyeOff className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Eye className="size-4" aria-hidden="true" />
-                  )}
+                  {showPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
                 </button>
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="signup-confirm-password">
+            <div className="grid gap-1">
+              <Label htmlFor="signup-confirm-password" className="text-[11px] font-medium text-slate-700 dark:text-slate-200">
                 {authT.signup.confirmPasswordLabel}
               </Label>
               <div className="relative">
@@ -415,46 +413,36 @@ export function SignupForm() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value.replace(/\s/g, ""))}
                   placeholder="••••••••"
-                  className="pe-10"
+                  className="rounded-lg border-slate-300 bg-slate-50 px-3 py-1.5 pe-8 text-xs transition-all focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-slate-600/50 dark:bg-[#0f172a]/60 dark:text-white"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword((prev) => !prev)}
-                  aria-label={
-                    showConfirmPassword
-                      ? authT.common.hidePassword
-                      : authT.common.showPassword
-                  }
-                  className="absolute inset-y-0 end-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                  aria-label={showConfirmPassword ? authT.common.hidePassword : authT.common.showPassword}
+                  className="absolute inset-y-0 end-0 flex items-center px-2 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-white"
                 >
-                  {showConfirmPassword ? (
-                    <EyeOff className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Eye className="size-4" aria-hidden="true" />
-                  )}
+                  {showConfirmPassword ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
                 </button>
               </div>
             </div>
           </div>
 
-          <PasswordStrengthChecklist
-            password={password}
-            labels={authT.passwordRules}
-          />
+          <PasswordStrengthChecklist password={password} labels={authT.passwordRules} />
 
           {errorMessage ? (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive-subtle p-3 text-xs font-medium text-destructive"
-            >
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <div role="alert" className="flex items-start gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-[10px] font-medium text-red-600 dark:text-red-400">
+              <ShieldAlert className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
               <span>{errorMessage}</span>
             </div>
           ) : null}
 
-          <Button type="submit" variant="gold" fullWidth loading={submitting}>
-            <UserPlus className="size-4" aria-hidden="true" />
+          <Button 
+            type="submit" 
+            className="w-full rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-10 text-xs transition-all shadow-lg shadow-emerald-500/30"
+            loading={submitting}
+          >
+            <UserPlus className="size-3.5 me-1.5" aria-hidden="true" />
             <span>
               {submitting
                 ? authT.signup.submittingButton
@@ -464,24 +452,12 @@ export function SignupForm() {
             </span>
           </Button>
         </form>
-
-        {accountType === "student" ? (
-          <>
-            <div className="relative py-1">
-              <Separator />
-              <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2.5 text-[11px] text-muted-foreground">
-                {authT.common.orContinueWith}
-              </span>
-            </div>
-            <GoogleOAuthButton label={authT.common.googleButton} />
-          </>
-        ) : null}
       </CardContent>
 
-      <CardFooter className="justify-center border-t border-border/70 pt-4 text-xs text-muted-foreground">
+      <CardFooter className="justify-center pt-3 text-sm text-slate-600 dark:text-slate-400">
         <p>
           {authT.signup.hasAccountPrompt}{" "}
-          <Link href="/login" className="font-semibold text-gold-foreground hover:underline">
+          <Link href="/login" className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
             {authT.signup.loginLink}
           </Link>
         </p>

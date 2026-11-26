@@ -33,6 +33,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
+import { cn } from "@/lib/utils";
 import type { TeacherOverviewData } from "@/services/teacher/queries";
 
 const DAY_LABELS = [
@@ -100,23 +101,14 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {t.overview.title}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t.overview.subtitle}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="gold" size="sm">
-            <Link href="/teacher/courses">{t.courses.createCourse}</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/teacher/exams">{t.exams.createExam}</Link>
-          </Button>
-        </div>
+      {/* شيلنا العنوان والوصف وسيبنا الزراير بس */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button asChild variant="gold" size="sm">
+          <Link href="/teacher/courses">{t.courses.createCourse}</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
+          <Link href="/teacher/exams">{t.exams.createExam}</Link>
+        </Button>
       </div>
 
       {/* 7 KPI Metric Cards */}
@@ -126,22 +118,23 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
           return (
             <Card
               key={item.label}
-              className={
+              className={cn(
+                "group relative overflow-hidden bg-white/30 backdrop-blur-md transition-all duration-300 ease-in-out hover:-translate-y-1 hover:shadow-lg dark:bg-[#121a19] dark:backdrop-blur-none",
                 item.highlight
-                  ? "border-gold-primary/50 bg-gold-primary/5"
-                  : "border-border/80"
-              }
+                  ? "border-emerald-500/50 shadow-sm shadow-emerald-500/10"
+                  : "border-border/50"
+              )}
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">
+                  <p className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
                     {item.label}
                   </p>
                   <p className="mt-1 text-xl font-bold text-foreground">
                     {item.value}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gold-primary/15 p-2 text-gold-foreground">
+                <div className="rounded-full bg-emerald-100 p-2.5 text-emerald-600 transition-all duration-300 group-hover:scale-110 dark:bg-emerald-900/30 dark:text-emerald-400">
                   <Icon className="size-4" />
                 </div>
               </CardContent>
@@ -152,7 +145,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
 
       {/* Course Performance Chart + Notifications */}
       <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="lg:col-span-8">
+        <Card className="lg:col-span-8 border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.performanceChartTitle}
@@ -178,17 +171,17 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                     />
                     <XAxis dataKey="name" fontSize={12} />
                     <YAxis fontSize={12} />
-                    <Tooltip />
+                    <Tooltip cursor={{fill: 'rgba(16, 185, 129, 0.1)'}} />
                     <Bar
                       dataKey="students"
                       name={t.overview.enrolledStudents}
-                      fill="#202124"
+                      fill="#10b981"
                       radius={[6, 6, 0, 0]}
                     />
                     <Bar
                       dataKey="avgScore"
                       name={t.overview.averagePerformance}
-                      fill="#A88945"
+                      fill="#334155"
                       radius={[6, 6, 0, 0]}
                     />
                   </BarChart>
@@ -198,7 +191,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.notificationsSectionTitle}
@@ -219,13 +212,20 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                 {data.notifications.slice(0, 5).map((notif) => (
                   <div
                     key={notif.recipientId}
-                    className="rounded-lg border border-border/80 bg-card/60 p-3 text-xs"
+                    className="rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-md dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-foreground">
                         {notif.title}
                       </span>
-                      <Badge variant={notif.isRead ? "outline" : "gold"}>
+                      <Badge 
+                        className={cn(
+                          "px-2 py-0.5",
+                          notif.isRead 
+                            ? "bg-transparent text-foreground border-border" 
+                            : "bg-emerald-500 text-white border-transparent dark:text-white"
+                        )}
+                      >
                         {notif.category}
                       </Badge>
                     </div>
@@ -245,7 +245,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
 
       {/* Upcoming Classes, Upcoming Exams, Recent Submissions */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card>
+        <Card className="border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.scheduleSectionTitle}
@@ -266,7 +266,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                 {data.upcomingSchedules.slice(0, 6).map((slot) => (
                   <div
                     key={slot.id}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-3 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-md dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div>
                       <p className="font-semibold text-foreground">
@@ -278,7 +278,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                         {slot.end_time.slice(0, 5)}
                       </p>
                     </div>
-                    {slot.room && <Badge variant="outline">{slot.room}</Badge>}
+                    {slot.room && <Badge variant="outline" className="bg-transparent">{slot.room}</Badge>}
                   </div>
                 ))}
               </div>
@@ -286,7 +286,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.examsSectionTitle}
@@ -307,7 +307,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                 {data.upcomingExams.slice(0, 6).map((exam) => (
                   <div
                     key={exam.id}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-3 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-md dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -319,9 +319,12 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                       </p>
                     </div>
                     <Badge
-                      variant={
-                        exam.status === "published" ? "gold" : "outline"
-                      }
+                      className={cn(
+                        "px-2 py-0.5",
+                        exam.status === "published" 
+                          ? "bg-emerald-500 text-white border-transparent dark:text-white" 
+                          : "bg-transparent text-foreground border-border"
+                      )}
                     >
                       {exam.status}
                     </Badge>
@@ -332,7 +335,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.submissionsSectionTitle}
@@ -353,7 +356,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                 {data.recentSubmissions.slice(0, 6).map((sub) => (
                   <div
                     key={`${sub.kind}-${sub.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-3 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-md dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -363,7 +366,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
                         {sub.submittedAt.slice(0, 16).replace("T", " ")}
                       </p>
                     </div>
-                    <Badge variant="outline">{sub.scoreLabel}</Badge>
+                    <Badge variant="outline" className="bg-transparent">{sub.scoreLabel}</Badge>
                   </div>
                 ))}
               </div>

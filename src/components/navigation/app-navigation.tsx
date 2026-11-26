@@ -52,7 +52,7 @@ function NavItemLink({ item, active, compact = false, onSelect }: NavItemLinkPro
         "group relative flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
         "compact:justify-center compact:px-0",
         active
-          ? "gold-sheen bg-gold-metallic font-semibold text-brand-charcoal shadow-gold"
+          ? "gold-sheen bg-gold-metallic font-semibold text-primary-foreground shadow-gold"
           : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       )}
     >
@@ -61,7 +61,7 @@ function NavItemLink({ item, active, compact = false, onSelect }: NavItemLinkPro
         className={cn(
           "size-4 shrink-0 transition-colors",
           active
-            ? "text-brand-charcoal"
+            ? "text-primary-foreground"
             : "text-sidebar-muted-foreground group-hover:text-gold-foreground",
         )}
       />
@@ -71,7 +71,7 @@ function NavItemLink({ item, active, compact = false, onSelect }: NavItemLinkPro
           variant={active ? "neutral" : "gold-subtle"}
           className={cn(
             "ms-auto px-1.5 py-0 text-[10px] compact:hidden",
-            active && "bg-brand-charcoal/15 text-brand-charcoal",
+            active && "bg-primary-foreground/15 text-primary-foreground",
           )}
         >
           {item.badge}
@@ -108,20 +108,23 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { state, isCompact, toggle } = useSidebar();
+  
+  // التعديل هنا: بنجيب اسم القسم من الرابط
+  const currentRole = pathname.split("/")[1] || "student";
 
   return (
     <TooltipProvider delayDuration={120}>
       <aside
         aria-label="Primary sidebar"
         className={cn(
-          "sticky top-0 hidden h-dvh shrink-0 flex-col border-e border-sidebar-border bg-sidebar text-sidebar-foreground md:flex",
+          "sticky top-0 hidden h-dvh shrink-0 flex-col border-e border-sidebar-border bg-white/90 backdrop-blur-md text-sidebar-foreground dark:bg-[#0a1f1d] dark:backdrop-blur-none md:flex",
           "w-64 transition-[width] duration-200 ease-standard compact:w-17",
         )}
       >
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4 compact:justify-center compact:px-2">
           <Link
-            href="/"
-            aria-label="Learnix home"
+            href={`/${currentRole}`} // <-- التعديل هنا: يروح للداشبورد
+            aria-label="Go to dashboard"
             className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"
           >
             <BrandLogo hideWordmarkInCompact />
@@ -204,6 +207,9 @@ export function MobileNavDrawer({
 }: MobileNavDrawerProps) {
   const pathname = usePathname();
   const { mobileOpen, setMobileOpen } = useSidebar();
+  
+  // التعديل هنا: بنجيب اسم القسم من الرابط
+  const currentRole = pathname.split("/")[1] || "student";
 
   return (
     <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -211,18 +217,22 @@ export function MobileNavDrawer({
         <Button
           variant="outline"
           size="icon-sm"
-          className="md:hidden"
+          className="md:hidden bg-white/90 dark:bg-[#0a1f1d]"
           aria-label="Open navigation menu"
         >
           <Menu className="size-4" aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0">
+      <SheetContent side="left" className="w-72 p-0 bg-white/95 backdrop-blur-xl dark:bg-[#0a1f1d] dark:backdrop-blur-none">
         <SheetHeader className="border-b border-border px-4 py-3.5 text-start">
           <SheetTitle asChild>
-            <div>
+            <Link
+              href={`/${currentRole}`} // <-- التعديل هنا
+              aria-label="Go to dashboard"
+              className="inline-block"
+            >
               <BrandLogo />
-            </div>
+            </Link>
           </SheetTitle>
           <SheetDescription className="sr-only">
             Navigate across Learnix sections.
@@ -280,7 +290,7 @@ export function MobileBottomNav({
   return (
     <nav
       aria-label="Quick mobile navigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-white/90 backdrop-blur-md dark:bg-[#0a1f1d] dark:backdrop-blur-none md:hidden"
     >
       <ul className="grid h-16 grid-cols-4 items-center px-2" role="list">
         {primaryItems.map((item) => {
@@ -302,7 +312,7 @@ export function MobileBottomNav({
                 <span
                   className={cn(
                     "flex size-7 items-center justify-center rounded-full transition-all",
-                    active && "gold-sheen bg-gold-metallic text-brand-charcoal shadow-gold",
+                    active && "gold-sheen bg-gold-metallic text-primary-foreground shadow-gold",
                   )}
                 >
                   <Icon className="size-4" aria-hidden="true" />
@@ -335,7 +345,7 @@ export function AppTopbar({
   actions,
 }: AppTopbarProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-background/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-white/90 backdrop-blur-md px-4 dark:bg-[#0a1f1d] dark:backdrop-blur-none sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-3">
         <MobileNavDrawer
           sections={sections}

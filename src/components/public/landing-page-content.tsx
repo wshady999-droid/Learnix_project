@@ -193,10 +193,10 @@ export function LandingPageContent() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#FAF9F4] text-[#09251F] dark:bg-[#09251F] dark:text-[#FAF9F4]">
+    <div className="flex min-h-dvh flex-col bg-[#FAF9F4] text-[#0a1f1d] dark:bg-[#0a1f1d] dark:text-[#FAF9F4]">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-[#FFFFFF] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-[#09251F] focus:shadow-lg dark:focus:bg-[#12352D] dark:focus:text-[#FAF9F4]"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-[#FFFFFF] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-[#0a1f1d] focus:shadow-lg dark:focus:bg-[#12352D] dark:focus:text-[#FAF9F4]"
       >
         {t.common.skipToContent}
       </a>
@@ -207,7 +207,6 @@ export function LandingPageContent() {
         {/* 1. HERO SECTION */}
         <section className="relative flex min-h-screen w-full items-center overflow-hidden">
           
-          {/* الخلفية: الصورة تغطي الشاشة بالكامل */}
           <div className="absolute inset-0 z-0">
             <Image
               src={heroImageSrc}
@@ -217,58 +216,55 @@ export function LandingPageContent() {
               quality={100}
               className="object-cover object-center"
             />
-            {/* التدرج اللوني: فاتح في اللايت مود، داكن في الدارك مود */}
-            <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/70 to-transparent rtl:bg-gradient-to-l dark:from-[#09251F] dark:via-[#09251F]/80 dark:to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/70 to-transparent rtl:bg-gradient-to-l dark:from-[#0a1f1d] dark:via-[#0a1f1d]/80 dark:to-transparent" />
           </div>
 
-          {/* المحتوى - النص ملتصق باليسار مع مسافة أمان */}
           <div className="relative z-10 w-full px-8 sm:px-12 lg:px-20 xl:px-24 pt-20 pb-32">
             <div className="flex flex-col items-start gap-6 max-w-2xl">
               
-              {/* الشارة */}
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#20B89A]/30 bg-[#20B89A]/10 px-4 py-1.5 text-xs font-bold tracking-wider text-[#1a9e84] uppercase backdrop-blur-sm dark:text-[#00E5C0]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-bold tracking-wider text-emerald-600 uppercase backdrop-blur-sm dark:text-emerald-400">
                 <GraduationCap className="size-4" />
                 <span>{t.hero.eyebrow || "AI-Powered Learning"}</span>
               </div>
 
-              {/* العنوان */}
-              <h1 className="text-4xl font-extrabold tracking-tight text-[#09251F] sm:text-5xl lg:text-6xl dark:text-white">
+              <h1 className="text-4xl font-extrabold tracking-tight text-[#0a1f1d] sm:text-5xl lg:text-6xl dark:text-white">
                 {t.hero.headlineStart || "Elevate Understanding"} <br />
-                <span className="text-[#20B89A]">{t.hero.headlineHighlight || "with Learnix"}</span>
+                <span className="text-emerald-500">{t.hero.headlineHighlight || "with Learnix"}</span>
               </h1>
 
-              {/* الوصف */}
               <p className="max-w-lg text-lg text-gray-700 sm:text-xl dark:text-gray-300">
                 {t.hero.description || "Smart courses. Better learning."}
               </p>
 
-              {/* الأزرار */}
               <div className="flex flex-wrap items-center gap-4 pt-4">
                 <Link
                   href="/signup"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-[#20B89A] px-8 text-sm font-bold text-white transition-all hover:bg-[#1a9e84] hover:shadow-lg dark:bg-[#00E5C0] dark:text-[#09251F] dark:hover:bg-[#8FFFD2]"
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-emerald-500 px-8 text-sm font-bold text-white transition-all hover:bg-emerald-600 hover:shadow-lg dark:bg-emerald-400 dark:text-[#0a1f1d] dark:hover:bg-emerald-300"
                 >
                   {t.hero.primaryCta || "Get Started"}
                   <ArrowRight className="ml-2 size-4 rtl:ml-0 rtl:mr-2 rtl:rotate-180" />
                 </Link>
                 
-                <button className="group inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-semibold text-[#09251F] transition-colors hover:text-[#20B89A] dark:text-white dark:hover:text-[#00E5C0]">
-                  <span className="flex size-10 items-center justify-center rounded-full border border-[#20B89A] text-[#20B89A] mr-3 rtl:ml-3 rtl:mr-0 group-hover:bg-[#20B89A]/10 dark:border-[#00E5C0] dark:text-[#00E5C0]">
+                {/* زرار Explore Features */}
+                <Link 
+                  href="#features"
+                  className="group inline-flex h-12 items-center justify-center rounded-full px-6 text-sm font-semibold text-[#0a1f1d] transition-colors hover:text-emerald-500 dark:text-white dark:hover:text-emerald-400"
+                >
+                  <span className="flex size-10 items-center justify-center rounded-full border border-emerald-500 text-emerald-500 mr-3 rtl:ml-3 rtl:mr-0 group-hover:bg-emerald-500/10 dark:border-emerald-400 dark:text-emerald-400">
                     <Play className="size-4 fill-current ml-0.5 rtl:mr-0.5" />
                   </span>
                   {t.hero.secondaryCta || "Watch Demo"}
-                </button>
+                </Link>
               </div>
             </div>
           </div>
 
-          {/* شريط المميزات السفلي (Floating Bar) */}
           <div className="absolute bottom-8 left-0 right-0 z-20 px-4">
             <div className="mx-auto max-w-6xl">
-              <div className="grid grid-cols-2 gap-4 rounded-3xl border border-gray-200 bg-white/90 p-4 backdrop-blur-md md:grid-cols-4 shadow-xl dark:border-white/10 dark:bg-[#0F2E26]/80 dark:shadow-2xl">
+              <div className="grid grid-cols-2 gap-4 rounded-3xl border border-gray-200 bg-white/90 p-4 backdrop-blur-md md:grid-cols-4 shadow-xl dark:border-white/10 dark:bg-[#12352D]/80 dark:shadow-2xl">
                 {features.map((feature, idx) => (
                   <div key={idx} className="flex items-center justify-center gap-3 py-3 text-sm font-medium text-gray-700 border-r border-gray-200 last:border-0 rtl:border-l rtl:border-r-0 dark:text-gray-200 dark:border-white/5">
-                    <div className="flex size-10 items-center justify-center rounded-full bg-[#20B89A]/10 text-[#20B89A] dark:bg-[#00E5C0]/10 dark:text-[#00E5C0]">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 dark:bg-emerald-400/10 dark:text-emerald-400">
                       <feature.icon className="size-5" />
                     </div>
                     <span>{feature.label}</span>
@@ -283,20 +279,20 @@ export function LandingPageContent() {
         <section
           id="about"
           aria-labelledby="about-heading"
-          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] pt-20 pb-16 sm:pt-24 sm:pb-20 lg:pt-28 lg:pb-24 dark:border-[#1A453B] dark:bg-[#09251F]"
+          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] pt-20 pb-16 sm:pt-24 sm:pb-20 lg:pt-28 lg:pb-24 dark:border-[#1A453B] dark:bg-[#0a1f1d]"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-[#20B89A]" />
+              <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-emerald-500" />
               <Badge
                 variant="gold-subtle"
-                className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[#1a9e84] dark:text-[#8FFFD2]"
+                className="border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
               >
                 {t.about.eyebrow}
               </Badge>
               <h2
                 id="about-heading"
-                className="mt-3 text-2xl font-bold tracking-tight text-[#09251F] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
+                className="mt-3 text-2xl font-bold tracking-tight text-[#0a1f1d] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
               >
                 {t.about.title}
               </h2>
@@ -305,19 +301,19 @@ export function LandingPageContent() {
               </p>
             </div>
 
-            <Card className="mt-10 border-[#20B89A]/45 bg-white text-[#09251F] shadow-md dark:bg-[#12352D] dark:text-[#FAF9F4] dark:shadow-lg">
+            <Card className="mt-10 border-emerald-500/45 bg-white text-[#0a1f1d] shadow-md dark:border-emerald-500/20 dark:bg-white/5 dark:text-[#FAF9F4] dark:shadow-md dark:backdrop-blur-sm">
               <CardContent className="flex flex-col items-start justify-between gap-4 py-2 md:flex-row md:items-center">
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold tracking-wider text-[#1a9e84] uppercase dark:text-[#8FFFD2]">
+                  <p className="text-xs font-semibold tracking-wider text-emerald-600 uppercase dark:text-emerald-400">
                     {t.about.missionLabel}
                   </p>
-                  <p className="text-base font-medium text-[#09251F] sm:text-lg dark:text-[#FAF9F4]">
+                  <p className="text-base font-medium text-[#0a1f1d] sm:text-lg dark:text-[#FAF9F4]">
                     {t.about.missionText}
                   </p>
                 </div>
                 <Link
                   href="/signup"
-                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-[#20B89A] px-5 text-xs font-bold text-white transition-colors hover:bg-[#1a9e84] dark:bg-[#20B89A] dark:text-[#09251F] dark:hover:bg-[#8FFFD2]"
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-5 text-xs font-bold text-white transition-colors hover:bg-emerald-600 dark:bg-emerald-500 dark:text-[#0a1f1d] dark:hover:bg-emerald-400"
                 >
                   {t.hero.primaryCta}
                 </Link>
@@ -331,13 +327,13 @@ export function LandingPageContent() {
                 return (
                   <Card
                     key={pillar.id}
-                    className="border-gray-200 bg-white text-[#09251F] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#20B89A]/60 hover:shadow-md dark:border-[#1A453B] dark:bg-[#12352D]/80 dark:text-[#FAF9F4] dark:hover:bg-[#12352D]"
+                    className="border border-emerald-500/20 bg-white/5 text-[#FAF9F4] transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/60 hover:bg-white/10 hover:shadow-lg backdrop-blur-sm"
                   >
                     <CardHeader className="gap-3">
-                      <span className="inline-flex size-10 items-center justify-center rounded-lg border border-[#20B89A]/40 bg-[#20B89A]/15 text-[#20B89A] dark:bg-[#09251F]">
+                      <span className="inline-flex size-10 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-500 dark:bg-[#0a1f1d]">
                         <Icon className="size-5" aria-hidden="true" />
                       </span>
-                      <CardTitle className="text-base text-[#09251F] dark:text-[#FAF9F4]">
+                      <CardTitle className="text-base text-[#0a1f1d] dark:text-[#FAF9F4]">
                         {pillar.title}
                       </CardTitle>
                     </CardHeader>
@@ -353,20 +349,20 @@ export function LandingPageContent() {
           </div>
         </section>
 
-        {/* 3. FEATURES SECTION */}
+        {/* 3. FEATURES SECTION (تعديل اللايت مود) */}
         <section
           id="features"
           aria-labelledby="features-heading"
-          className="scroll-mt-20 border-b border-gray-200 bg-gray-50/60 py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#09251F]"
+          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#0a1f1d]"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <Badge className="border-transparent bg-[#20B89A] font-semibold text-white dark:text-[#09251F]">
+              <Badge className="border-transparent bg-emerald-500 font-semibold text-white dark:text-[#0a1f1d]">
                 {t.features.eyebrow}
               </Badge>
               <h2
                 id="features-heading"
-                className="mt-3 text-2xl font-bold tracking-tight text-[#09251F] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
+                className="mt-3 text-2xl font-bold tracking-tight text-[#0a1f1d] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
               >
                 {t.features.title}
               </h2>
@@ -383,26 +379,30 @@ export function LandingPageContent() {
                 return (
                   <Card
                     key={feature.id}
-                    className="group border-gray-200 bg-white text-[#09251F] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#20B89A]/65 hover:shadow-md dark:border-[#1A453B] dark:bg-[#12352D]/80 dark:text-[#FAF9F4] dark:hover:bg-[#12352D]"
+                    className="group relative overflow-hidden border border-gray-200 bg-white text-[#0a1f1d] shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-emerald-500/60 hover:shadow-md dark:border-emerald-500/30 dark:bg-gradient-to-br dark:from-[#12352D]/90 dark:to-[#0a1f1d] dark:text-[#FAF9F4] dark:hover:border-emerald-400/60 dark:hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] dark:backdrop-blur-md"
                   >
-                    <CardHeader className="gap-3">
+                    {/* إضاءة خلفية (تظهر بس في الدارك مود) */}
+                    <div className="absolute -right-10 -top-10 hidden size-32 rounded-full bg-emerald-500/10 blur-2xl transition-all duration-300 group-hover:bg-emerald-400/20 dark:block" />
+                    
+                    <CardHeader className="gap-3 relative z-10">
                       <div className="flex items-center justify-between">
-                        <span className="inline-flex size-11 items-center justify-center rounded-xl border border-[#20B89A]/40 bg-[#20B89A]/15 text-[#20B89A] transition-transform duration-200 group-hover:scale-105 dark:bg-[#09251F]">
+                        {/* الأيقونة: في اللايت مود خلفيتها خفيفة جداً وفي الدارك مود متدرجة */}
+                        <span className="inline-flex size-11 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-50 text-emerald-600 shadow-sm transition-transform duration-300 group-hover:scale-110 dark:border-emerald-400/30 dark:bg-gradient-to-br dark:from-emerald-500/20 dark:to-emerald-500/5 dark:text-emerald-400 dark:shadow-inner">
                           <Icon className="size-5" aria-hidden="true" />
                         </span>
                         <Badge
                           variant="gold-subtle"
-                          className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[#1a9e84] dark:text-[#8FFFD2]"
+                          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 transition-colors group-hover:bg-emerald-500/20 dark:text-emerald-400"
                         >
                           {feature.tag}
                         </Badge>
                       </div>
-                      <CardTitle className="text-lg text-[#09251F] dark:text-[#FAF9F4]">
+                      <CardTitle className="text-lg text-[#0a1f1d] transition-colors group-hover:text-emerald-600 dark:text-white dark:group-hover:text-emerald-300">
                         {feature.title}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-sm leading-relaxed text-gray-600 dark:text-[#7A9993]">
+                    <CardContent className="relative z-10">
+                      <p className="text-sm leading-relaxed text-gray-600 transition-colors group-hover:text-gray-800 dark:text-[#7A9993] dark:group-hover:text-gray-300">
                         {feature.description}
                       </p>
                     </CardContent>
@@ -417,20 +417,20 @@ export function LandingPageContent() {
         <section
           id="courses"
           aria-labelledby="courses-heading"
-          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#09251F]"
+          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#0a1f1d]"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
               <div className="max-w-2xl">
                 <Badge
                   variant="gold-subtle"
-                  className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[#1a9e84] dark:text-[#8FFFD2]"
+                  className="border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                 >
                   {t.coursesPreview.eyebrow}
                 </Badge>
                 <h2
                   id="courses-heading"
-                  className="mt-3 text-2xl font-bold tracking-tight text-[#09251F] sm:text-3xl dark:text-[#FAF9F4]"
+                  className="mt-3 text-2xl font-bold tracking-tight text-[#0a1f1d] sm:text-3xl dark:text-[#FAF9F4]"
                 >
                   {t.coursesPreview.title}
                 </h2>
@@ -439,14 +439,14 @@ export function LandingPageContent() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge className="border-transparent bg-[#20B89A] font-semibold text-white dark:text-[#09251F]">
+                <Badge className="border-transparent bg-emerald-500 font-semibold text-white dark:text-[#0a1f1d]">
                   {t.coursesPreview.allCategoriesTab}
                 </Badge>
               </div>
             </div>
 
             <p className="mt-4 flex items-center gap-2 text-xs text-gray-500 dark:text-[#7A9993]">
-              <Database className="size-3.5 text-[#20B89A]" aria-hidden="true" />
+              <Database className="size-3.5 text-emerald-500" aria-hidden="true" />
               <span>{t.coursesPreview.categoriesHint}</span>
             </p>
 
@@ -454,11 +454,11 @@ export function LandingPageContent() {
               <EmptyState
                 icon={BookOpen}
                 title={t.coursesPreview.emptyTitle}
-                className="border-gray-200 bg-white text-[#09251F] [&_h2]:!text-[#09251F] dark:border-[#1A453B] dark:bg-[#12352D]/60 dark:text-[#FAF9F4] dark:[&_h2]:!text-[#FAF9F4]"
+                className="border-gray-200 bg-white text-[#0a1f1d] [&_h2]:!text-[#0a1f1d] dark:border-[#1A453B] dark:bg-[#12352D]/60 dark:text-[#FAF9F4] dark:[&_h2]:!text-[#FAF9F4]"
                 description={
                   <div className="space-y-2 text-gray-600 dark:text-[#7A9993]">
                     <p>{t.coursesPreview.emptyDescription}</p>
-                    <p className="font-mono text-xs text-[#1a9e84] dark:text-[#8FFFD2]">
+                    <p className="font-mono text-xs text-emerald-600 dark:text-emerald-400">
                       {t.coursesPreview.emptyBackendNote}
                     </p>
                   </div>
@@ -467,13 +467,13 @@ export function LandingPageContent() {
                   <>
                     <Link
                       href="/signup"
-                      className="inline-flex h-9 items-center justify-center rounded-full bg-[#20B89A] px-4 text-xs font-bold text-white transition-colors hover:bg-[#1a9e84] dark:bg-[#20B89A] dark:text-[#09251F] dark:hover:bg-[#8FFFD2]"
+                      className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-500 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-600 dark:bg-emerald-500 dark:text-[#0a1f1d] dark:hover:bg-emerald-400"
                     >
                       {t.coursesPreview.emptyPrimaryCta}
                     </Link>
                     <Link
                       href="/#contact"
-                      className="inline-flex h-9 items-center justify-center rounded-full border border-gray-300 bg-[#FAF9F4] px-4 text-xs font-semibold text-[#09251F] transition-colors hover:border-[#20B89A] dark:border-[#1A453B] dark:bg-[#09251F] dark:text-[#FAF9F4]"
+                      className="inline-flex h-9 items-center justify-center rounded-full border border-gray-300 bg-[#FAF9F4] px-4 text-xs font-semibold text-[#0a1f1d] transition-colors hover:border-emerald-500 dark:border-[#1A453B] dark:bg-[#0a1f1d] dark:text-[#FAF9F4]"
                     >
                       {t.coursesPreview.emptySecondaryCta}
                     </Link>
@@ -488,18 +488,18 @@ export function LandingPageContent() {
         <section
           id="ai-learning"
           aria-labelledby="ai-heading"
-          className="scroll-mt-20 border-b border-gray-200 bg-gray-50/60 py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#09251F]"
+          className="scroll-mt-20 border-b border-gray-200 bg-gray-50/60 py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#0a1f1d]"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] rtl:lg:grid-cols-[0.95fr_1.05fr]">
               <div className="space-y-6">
-                <Badge className="border-transparent bg-[#20B89A] font-semibold text-white dark:text-[#09251F]">
+                <Badge className="border-transparent bg-emerald-500 font-semibold text-white dark:text-[#0a1f1d]">
                   <Sparkles aria-hidden="true" />
                   <span>{t.aiSection.eyebrow}</span>
                 </Badge>
                 <h2
                   id="ai-heading"
-                  className="text-2xl font-bold tracking-tight text-[#09251F] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
+                  className="text-2xl font-bold tracking-tight text-[#0a1f1d] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
                 >
                   {t.aiSection.title}
                 </h2>
@@ -511,13 +511,13 @@ export function LandingPageContent() {
                   {t.aiSection.capabilities.map((cap) => (
                     <li
                       key={cap.id}
-                      className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-xs transition-colors hover:border-[#20B89A]/60 dark:border-[#1A453B] dark:bg-[#12352D]/80"
+                      className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-xs transition-colors hover:border-emerald-500/60 dark:border-[#1A453B] dark:bg-[#12352D]/80"
                     >
-                      <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#20B89A] font-mono text-xs font-bold text-white dark:text-[#09251F]">
+                      <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500 font-mono text-xs font-bold text-white dark:text-[#0a1f1d]">
                         {cap.step}
                       </span>
                       <div className="space-y-1">
-                        <h3 className="text-base font-semibold text-[#09251F] dark:text-[#FAF9F4]">
+                        <h3 className="text-base font-semibold text-[#0a1f1d] dark:text-[#FAF9F4]">
                           {cap.title}
                         </h3>
                         <p className="text-sm leading-relaxed text-gray-600 dark:text-[#7A9993]">
@@ -529,40 +529,40 @@ export function LandingPageContent() {
                 </ol>
               </div>
 
-              <Card className="border-[#20B89A]/45 bg-white text-[#09251F] shadow-md dark:bg-[#12352D] dark:text-[#FAF9F4]">
-                <CardHeader className="border-b border-gray-200 dark:border-[#09251F]">
+              <Card className="border border-emerald-500/20 bg-white/5 text-[#FAF9F4] shadow-md backdrop-blur-sm">
+                <CardHeader className="border-b border-gray-200 dark:border-white/10">
                   <div className="flex items-center justify-between gap-2">
                     <Badge
                       variant="gold-subtle"
-                      className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[#1a9e84] dark:text-[#8FFFD2]"
+                      className="border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                     >
                       {t.aiSection.previewCard.headerBadge}
                     </Badge>
-                    <Bot className="size-4 text-[#20B89A]" aria-hidden="true" />
+                    <Bot className="size-4 text-emerald-500" aria-hidden="true" />
                   </div>
-                  <CardTitle className="text-lg text-[#09251F] dark:text-[#FAF9F4]">
+                  <CardTitle className="text-lg text-[#0a1f1d] dark:text-[#FAF9F4]">
                     {t.aiSection.previewCard.headerTitle}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-5">
-                  <div className="rounded-xl border border-gray-200 bg-[#FAF9F4] p-4 dark:border-[#1A453B] dark:bg-[#09251F]">
+                  <div className="rounded-xl border border-gray-200 bg-[#FAF9F4] p-4 dark:border-white/10 dark:bg-white/5">
                     <p className="text-xs font-semibold text-gray-500 dark:text-[#7A9993]">
                       {t.aiSection.previewCard.studentPromptLabel}
                     </p>
-                    <p className="mt-1.5 text-sm text-[#09251F] dark:text-[#FAF9F4]">
-                      “{t.aiSection.previewCard.studentPromptText}”
+                    <p className="mt-1.5 text-sm text-[#0a1f1d] dark:text-[#FAF9F4]">
+                      "{t.aiSection.previewCard.studentPromptText}"
                     </p>
                   </div>
 
-                  <div className="rounded-xl border border-[#20B89A]/45 bg-[#20B89A]/8 p-4 dark:bg-[#09251F]">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-[#1a9e84] dark:text-[#8FFFD2]">
-                      <Sparkles className="size-3.5 text-[#20B89A]" aria-hidden="true" />
+                  <div className="rounded-xl border border-emerald-500/45 bg-emerald-500/8 p-4 dark:bg-white/5">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      <Sparkles className="size-3.5 text-emerald-500" aria-hidden="true" />
                       <span>{t.aiSection.previewCard.aiResponseLabel}</span>
                     </div>
-                    <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#09251F] sm:text-sm dark:text-[#FAF9F4]">
+                    <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#0a1f1d] sm:text-sm dark:text-[#FAF9F4]">
                       <li>{t.aiSection.previewCard.aiResponsePoint1}</li>
                       <li>{t.aiSection.previewCard.aiResponsePoint2}</li>
-                      <li className="font-medium text-[#1a9e84] dark:text-[#8FFFD2]">
+                      <li className="font-medium text-emerald-600 dark:text-emerald-400">
                         {t.aiSection.previewCard.aiResponsePoint3}
                       </li>
                     </ul>
@@ -570,7 +570,7 @@ export function LandingPageContent() {
 
                   <p className="flex items-center gap-2 text-xs text-gray-500 dark:text-[#7A9993]">
                     <CheckCircle2
-                      className="size-3.5 shrink-0 text-[#20B89A]"
+                      className="size-3.5 shrink-0 text-emerald-500"
                       aria-hidden="true"
                     />
                     <span>{t.aiSection.previewCard.footerNote}</span>
@@ -585,19 +585,19 @@ export function LandingPageContent() {
         <section
           id="why-learnix"
           aria-labelledby="why-heading"
-          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#09251F]"
+          className="scroll-mt-20 border-b border-gray-200 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:border-[#1A453B] dark:bg-[#0a1f1d]"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
               <Badge
                 variant="gold-subtle"
-                className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[#1a9e84] dark:text-[#8FFFD2]"
+                className="border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
               >
                 {t.whyChoose.eyebrow}
               </Badge>
               <h2
                 id="why-heading"
-                className="mt-3 text-2xl font-bold tracking-tight text-[#09251F] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
+                className="mt-3 text-2xl font-bold tracking-tight text-[#0a1f1d] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
               >
                 {t.whyChoose.title}
               </h2>
@@ -614,14 +614,14 @@ export function LandingPageContent() {
                 return (
                   <Card
                     key={adv.id}
-                    className="border-gray-200 bg-white text-[#09251F] transition-all duration-200 hover:border-[#20B89A]/60 hover:shadow-sm dark:border-[#1A453B] dark:bg-[#12352D]/80 dark:text-[#FAF9F4] dark:hover:bg-[#12352D]"
+                    className="border border-emerald-500/20 bg-white/5 text-[#FAF9F4] transition-all duration-200 hover:border-emerald-500/60 hover:bg-white/10 hover:shadow-sm backdrop-blur-sm"
                   >
                     <CardHeader className="flex-row items-start gap-3.5 space-y-0">
-                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-[#20B89A]/40 bg-[#20B89A]/15 text-[#20B89A] dark:bg-[#09251F]">
+                      <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/15 text-emerald-500 dark:bg-[#0a1f1d]">
                         <Icon className="size-5" aria-hidden="true" />
                       </span>
                       <div className="space-y-1.5">
-                        <CardTitle className="text-base text-[#09251F] dark:text-[#FAF9F4]">
+                        <CardTitle className="text-base text-[#0a1f1d] dark:text-[#FAF9F4]">
                           {adv.title}
                         </CardTitle>
                         <CardDescription className="text-sm leading-relaxed text-gray-600 dark:text-[#7A9993]">
@@ -640,16 +640,16 @@ export function LandingPageContent() {
         <section
           id="contact"
           aria-labelledby="contact-heading"
-          className="scroll-mt-20 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:bg-[#09251F]"
+          className="scroll-mt-20 bg-[#FAF9F4] py-16 sm:py-20 lg:py-24 dark:bg-[#0a1f1d]"
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
-              <Badge className="border-transparent bg-[#20B89A] font-semibold text-white dark:text-[#09251F]">
+              <Badge className="border-transparent bg-emerald-500 font-semibold text-white dark:text-[#0a1f1d]">
                 {t.contact.eyebrow}
               </Badge>
               <h2
                 id="contact-heading"
-                className="mt-3 text-2xl font-bold tracking-tight text-[#09251F] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
+                className="mt-3 text-2xl font-bold tracking-tight text-[#0a1f1d] sm:text-3xl lg:text-4xl dark:text-[#FAF9F4]"
               >
                 {t.contact.title}
               </h2>
@@ -659,15 +659,15 @@ export function LandingPageContent() {
             </div>
 
             <div className="mt-12 grid gap-8 lg:grid-cols-[0.95fr_1.05fr] rtl:lg:grid-cols-[1.05fr_0.95fr]">
-              <Card className="border-gray-200 bg-white text-[#09251F] dark:border-[#1A453B] dark:bg-[#12352D]/80 dark:text-[#FAF9F4]">
+              <Card className="border border-emerald-500/20 bg-white/5 text-[#FAF9F4] backdrop-blur-sm">
                 <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="text-lg text-[#09251F] dark:text-[#FAF9F4]">
+                    <CardTitle className="text-lg text-[#0a1f1d] dark:text-[#FAF9F4]">
                       {t.contact.infoTitle}
                     </CardTitle>
                     <Badge
                       variant="gold-subtle"
-                      className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[#1a9e84] dark:text-[#8FFFD2]"
+                      className="border-emerald-500/40 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                     >
                       {t.common.placeholderTag}
                     </Badge>
@@ -677,20 +677,20 @@ export function LandingPageContent() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="rounded-xl border border-[#20B89A]/45 bg-[#20B89A]/10 p-3.5 text-xs text-[#1a9e84] dark:bg-[#09251F] dark:text-[#8FFFD2]">
+                  <div className="rounded-xl border border-emerald-500/45 bg-emerald-500/10 p-3.5 text-xs text-emerald-600 dark:bg-white/5 dark:text-emerald-400">
                     {t.contact.placeholderNotice}
                   </div>
 
-                  <Separator className="bg-gray-200 dark:bg-[#09251F]" />
+                  <Separator className="bg-gray-200 dark:bg-white/10" />
 
                   <dl className="space-y-4 text-sm">
                     <div className="flex items-start gap-3">
                       <Mail
-                        className="mt-0.5 size-4 shrink-0 text-[#20B89A]"
+                        className="mt-0.5 size-4 shrink-0 text-emerald-500"
                         aria-hidden="true"
                       />
                       <div>
-                        <dt className="font-semibold text-[#09251F] dark:text-[#FAF9F4]">
+                        <dt className="font-semibold text-[#0a1f1d] dark:text-[#FAF9F4]">
                           {t.contact.emailLabel}
                         </dt>
                         <dd className="mt-0.5 text-xs text-gray-500 dark:text-[#7A9993]">
@@ -701,11 +701,11 @@ export function LandingPageContent() {
 
                     <div className="flex items-start gap-3">
                       <Phone
-                        className="mt-0.5 size-4 shrink-0 text-[#20B89A]"
+                        className="mt-0.5 size-4 shrink-0 text-emerald-500"
                         aria-hidden="true"
                       />
                       <div>
-                        <dt className="font-semibold text-[#09251F] dark:text-[#FAF9F4]">
+                        <dt className="font-semibold text-[#0a1f1d] dark:text-[#FAF9F4]">
                           {t.contact.phoneLabel}
                         </dt>
                         <dd className="mt-0.5 text-xs text-gray-500 dark:text-[#7A9993]">
@@ -716,11 +716,11 @@ export function LandingPageContent() {
 
                     <div className="flex items-start gap-3">
                       <MapPin
-                        className="mt-0.5 size-4 shrink-0 text-[#20B89A]"
+                        className="mt-0.5 size-4 shrink-0 text-emerald-500"
                         aria-hidden="true"
                       />
                       <div>
-                        <dt className="font-semibold text-[#09251F] dark:text-[#FAF9F4]">
+                        <dt className="font-semibold text-[#0a1f1d] dark:text-[#FAF9F4]">
                           {t.contact.addressLabel}
                         </dt>
                         <dd className="mt-0.5 text-xs text-gray-500 dark:text-[#7A9993]">
@@ -731,11 +731,11 @@ export function LandingPageContent() {
 
                     <div className="flex items-start gap-3">
                       <Clock
-                        className="mt-0.5 size-4 shrink-0 text-[#20B89A]"
+                        className="mt-0.5 size-4 shrink-0 text-emerald-500"
                         aria-hidden="true"
                       />
                       <div>
-                        <dt className="font-semibold text-[#09251F] dark:text-[#FAF9F4]">
+                        <dt className="font-semibold text-[#0a1f1d] dark:text-[#FAF9F4]">
                           {t.contact.hoursLabel}
                         </dt>
                         <dd className="mt-0.5 text-xs text-gray-500 dark:text-[#7A9993]">
@@ -747,9 +747,9 @@ export function LandingPageContent() {
                 </CardContent>
               </Card>
 
-              <Card className="border-[#20B89A]/45 bg-white text-[#09251F] dark:bg-[#12352D] dark:text-[#FAF9F4]">
+              <Card className="border border-emerald-500/20 bg-white/5 text-[#FAF9F4] backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-[#09251F] dark:text-[#FAF9F4]">
+                  <CardTitle className="text-lg text-[#0a1f1d] dark:text-[#FAF9F4]">
                     {t.contact.eyebrow}
                   </CardTitle>
                   <CardDescription className="text-gray-600 dark:text-[#7A9993]">
@@ -763,7 +763,7 @@ export function LandingPageContent() {
                         onSubmitContact,
                         onInvalidContact,
                       )}
-                      className="space-y-4 [&_input]:border-gray-300 [&_input]:bg-white [&_input]:text-[#09251F] [&_input]:placeholder:text-gray-400 [&_label]:text-[#09251F] [&_textarea]:border-gray-300 [&_textarea]:bg-white [&_textarea]:text-[#09251F] [&_textarea]:placeholder:text-gray-400 dark:[&_input]:border-[#1A453B] dark:[&_input]:bg-[#09251F] dark:[&_input]:text-[#FAF9F4] dark:[&_input]:placeholder:text-[#7A9993] dark:[&_label]:text-[#FAF9F4] dark:[&_textarea]:border-[#1A453B] dark:[&_textarea]:bg-[#09251F] dark:[&_textarea]:text-[#FAF9F4] dark:[&_textarea]:placeholder:text-[#7A9993]"
+                      className="space-y-4 [&_input]:border-gray-300 [&_input]:bg-white [&_input]:text-[#0a1f1d] [&_input]:placeholder:text-gray-400 [&_label]:text-[#0a1f1d] [&_textarea]:border-gray-300 [&_textarea]:bg-white [&_textarea]:text-[#0a1f1d] [&_textarea]:placeholder:text-gray-400 dark:[&_input]:border-white/10 dark:[&_input]:bg-white/5 dark:[&_input]:text-[#FAF9F4] dark:[&_input]:placeholder:text-[#7A9993] dark:[&_label]:text-[#FAF9F4] dark:[&_textarea]:border-white/10 dark:[&_textarea]:bg-white/5 dark:[&_textarea]:text-[#FAF9F4] dark:[&_textarea]:placeholder:text-[#7A9993]"
                       noValidate
                     >
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -845,14 +845,14 @@ export function LandingPageContent() {
                           type="button"
                           variant="ghost"
                           onClick={() => form.reset()}
-                          className="text-gray-500 hover:bg-gray-100 hover:text-[#09251F] dark:text-[#7A9993] dark:hover:bg-[#09251F] dark:hover:text-[#FAF9F4]"
+                          className="text-gray-500 hover:bg-gray-100 hover:text-[#0a1f1d] dark:text-[#7A9993] dark:hover:bg-white/10 dark:hover:text-[#FAF9F4]"
                         >
                           {t.contact.form.resetButton}
                         </Button>
                         <Button
                           type="submit"
                           loading={form.formState.isSubmitting}
-                          className="rounded-full bg-[#20B89A] px-6 font-bold text-white hover:bg-[#1a9e84] dark:bg-[#20B89A] dark:text-[#09251F] dark:hover:bg-[#8FFFD2]"
+                          className="rounded-full bg-emerald-500 px-6 font-bold text-white hover:bg-emerald-600 dark:bg-emerald-500 dark:text-[#0a1f1d] dark:hover:bg-emerald-400"
                         >
                           <Send className="size-4 rtl:rotate-180" aria-hidden="true" />
                           <span>

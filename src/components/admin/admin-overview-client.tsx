@@ -45,6 +45,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getAdminDictionary } from "@/i18n/admin-dictionaries";
+import { cn } from "@/lib/utils";
 import type { AdminOverviewData } from "@/services/admin/queries";
 
 interface AdminOverviewClientProps {
@@ -115,31 +116,21 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
   ];
 
   const completionPieData = [
-    { name: adminT.common.active, value: data.activeEnrollments, color: "var(--chart-1)" },
-    { name: "Completed", value: data.completedEnrollments, color: "var(--chart-3)" },
-    { name: "Dropped", value: data.droppedEnrollments, color: "var(--chart-4)" },
+    { name: adminT.common.active, value: data.activeEnrollments, color: "#10b981" },
+    { name: "Completed", value: data.completedEnrollments, color: "#34d399" },
+    { name: "Dropped", value: data.droppedEnrollments, color: "#64748b" },
   ];
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {adminT.overview.title}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {adminT.overview.subtitle}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="gold" size="sm">
-            <Link href="/admin/users">{adminT.nav.users}</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/analytics">{adminT.nav.analytics}</Link>
-          </Button>
-        </div>
+      {/* شلنا العنوان والوصف وسيبنا الزراير بس */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button asChild variant="gold" size="sm">
+          <Link href="/admin/users">{adminT.nav.users}</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
+          <Link href="/admin/analytics">{adminT.nav.analytics}</Link>
+        </Button>
       </div>
 
       {/* 8 Live KPI Cards */}
@@ -149,8 +140,10 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
           return (
             <Link key={kpi.label} href={kpi.href} className="group block">
               <Card
-                variant={"highlight" in kpi && kpi.highlight ? "premium" : "default"}
-                className="h-full transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-gold-border group-hover:shadow-md"
+                className={cn(
+                  "h-full transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-emerald-500/50 group-hover:shadow-md bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none border-border/50",
+                  "highlight" in kpi && kpi.highlight && "border-emerald-500/50 shadow-sm shadow-emerald-500/10"
+                )}
               >
                 <CardContent className="flex items-center justify-between gap-4 pt-1">
                   <div className="space-y-1">
@@ -161,7 +154,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                       {kpi.value}
                     </p>
                   </div>
-                  <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-gold-border bg-gold-subtle text-gold-foreground">
+                  <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 transition-all duration-300 group-hover:scale-110">
                     <Icon className="size-5" aria-hidden="true" />
                   </span>
                 </CardContent>
@@ -173,7 +166,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
 
       {/* Analytics Charts */}
       <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
-        <Card>
+        <Card className="border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {adminT.overview.activityChartTitle}
@@ -189,7 +182,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                   data={platformBarData}
                   margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(115,115,115,0.2)" />
                   <XAxis
                     dataKey="name"
                     stroke="var(--muted-foreground)"
@@ -203,6 +196,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                     allowDecimals={false}
                   />
                   <RechartsTooltip
+                    cursor={{fill: 'rgba(16, 185, 129, 0.1)'}}
                     contentStyle={{
                       backgroundColor: "var(--popover)",
                       borderColor: "var(--border)",
@@ -213,7 +207,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                   />
                   <Bar
                     dataKey="count"
-                    fill="var(--chart-1)"
+                    fill="#10b981"
                     radius={[6, 6, 0, 0]}
                   />
                 </BarChart>
@@ -222,7 +216,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {adminT.overview.completionChartTitle}
@@ -277,7 +271,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
       </div>
 
       {/* Recent Audit Events */}
-      <Card>
+      <Card className="border-border/50 bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base">
@@ -287,7 +281,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
               {adminT.overview.recentAuditDescription}
             </CardDescription>
           </div>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
             <Link href="/admin/security">{adminT.nav.security}</Link>
           </Button>
         </CardHeader>
@@ -301,7 +295,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="border-border/50">
                   <TableHead>{adminT.security.actionCol}</TableHead>
                   <TableHead>{adminT.security.entityCol}</TableHead>
                   <TableHead>{adminT.security.ipDeviceCol}</TableHead>
@@ -312,9 +306,9 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
               </TableHeader>
               <TableBody>
                 {data.recentAuditLogs.map((log) => (
-                  <TableRow key={log.id}>
+                  <TableRow key={log.id} className="border-border/50">
                     <TableCell>
-                      <Badge variant="gold-subtle" className="font-mono">
+                      <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 font-mono">
                         {log.action}
                       </Badge>
                     </TableCell>

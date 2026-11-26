@@ -5,11 +5,6 @@
 /* Class-based dark mode, toggled on <html> by the theme provider. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/*
- * `compact:` — the sidebar is shown as an icon rail.
- * Always on tablet (md → lg); on laptop/desktop (lg+) only when the user collapsed it.
- * Driven by `data-sidebar-state` on <html>, set before paint to avoid layout flashes.
- */
 @custom-variant compact {
   @media (width >= 48rem) and (width < 64rem) {
     @slot;
@@ -98,22 +93,18 @@
   --ease-standard: var(--ease-standard);
 }
 
-/* Responsive breakpoints: sm 640 · md 768 (tablet) · lg 1024 (laptop) · xl 1280 · 2xl 1536 (desktop) · 3xl 1920 (large desktop) */
 @theme {
   --breakpoint-3xl: 120rem;
 }
 
-/* ---------- Metallic gold utilities ---------- */
-
-/* Metallic gold surface. Pair with `gold-sheen` for the light reflection. */
+/* ---------- Metallic gold utilities (Now Emerald) ---------- */
 @utility bg-gold-metallic {
-  background-image: var(--gradient-gold);
+  background-image: var(--gradient-gold); /* This now points to the emerald gradient in tokens.css */
   background-size: 200% 100%;
   background-position: 0% 50%;
   transition: background-position var(--duration-slow) var(--ease-standard);
 }
 
-/* Gold gradient text – for short display headings or highlights only. */
 @utility text-gold-metallic {
   background-image: var(--gradient-gold);
   background-clip: text;
@@ -121,10 +112,6 @@
   color: transparent;
 }
 
-/*
- * Thin metallic gold border. The inner surface defaults to `--card` and can be
- * changed via the `--gold-fill` custom property (e.g. `hover:[--gold-fill:var(--gold-subtle)]`).
- */
 @utility border-gold-metallic {
   border: 1px solid transparent;
   background:
@@ -132,10 +119,6 @@
     var(--gradient-gold) border-box;
 }
 
-/*
- * Light reflection + hover sweep. Requires the element to have
- * `relative` + `overflow-hidden` (or `isolate`) — applied here directly.
- */
 @utility gold-sheen {
   position: relative;
   isolation: isolate;
@@ -187,6 +170,7 @@
   }
 
   ::selection {
+    /* التعديل هنا: غيرنا لون التحديد للأخضر */
     background-color: color-mix(in oklab, var(--brand-gold-highlight) 45%, transparent);
   }
 
@@ -194,7 +178,6 @@
     @apply outline-2 outline-offset-2 outline-ring;
   }
 
-  /* Smooth, controlled color transitions when switching themes. */
   html.theme-transition,
   html.theme-transition * {
     transition:
@@ -217,33 +200,18 @@
 
 /* ---------- Auth full-screen background & floating dialog motion ---------- */
 @keyframes auth-bg-fade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes auth-bg-float {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1.03);
-  }
-  50% {
-    transform: translate3d(0, -12px, 0) rotate(0.6deg) scale(1.03);
-  }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.03); }
+  50% { transform: translate3d(0, -12px, 0) rotate(0.6deg) scale(1.03); }
 }
 
 @keyframes auth-card-enter {
-  from {
-    opacity: 0;
-    transform: translate3d(var(--auth-slide-x, 12px), 8px, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+  from { opacity: 0; transform: translate3d(var(--auth-slide-x, 12px), 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 @utility animate-auth-bg-fade {

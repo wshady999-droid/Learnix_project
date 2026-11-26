@@ -109,6 +109,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
 
   return (
     <div className="space-y-8">
+      {/* 1. كروت الإحصائيات العلوية */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {kpiCards.map((item) => {
           const Icon = item.icon;
@@ -116,10 +117,11 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
             <Card
               key={item.label}
               className={cn(
-                "group transition-all duration-300 ease-in-out hover:-translate-y-1 hover:scale-[1.03] hover:shadow-lg hover:border-gold-primary/60 cursor-pointer",
+                // التعديل هنا: شفافية 15% مع بلور قوي جداً (lg)
+                "group relative overflow-hidden bg-white/15 backdrop-blur-lg transition-all duration-300 ease-in-out hover:-translate-y-1 hover:shadow-lg dark:bg-[#121a19] dark:backdrop-blur-none cursor-pointer",
                 item.highlight
-                  ? "border-gold-primary/50 bg-gold-primary/5 hover:bg-gold-primary/10"
-                  : "border-border/80 hover:bg-muted/30"
+                  ? "border-emerald-500/50 shadow-sm shadow-emerald-500/10"
+                  : "border-border/50"
               )}
             >
               <CardContent className="flex items-center justify-between p-4">
@@ -127,12 +129,12 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                   <p className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
                     {item.label}
                   </p>
-                  <p className="mt-1 text-xl font-bold text-foreground transition-colors group-hover:text-gold-primary">
+                  <p className="mt-1 text-xl font-bold text-foreground">
                     {item.value}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gold-primary/15 p-2 text-gold-foreground transition-all duration-300 group-hover:scale-110 group-hover:bg-gold-primary group-hover:text-brand-charcoal">
-                  <Icon className="size-4" />
+                <div className="rounded-full bg-emerald-100 p-2.5 text-emerald-600 transition-all duration-300 group-hover:scale-110 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <Icon className="size-5" />
                 </div>
               </CardContent>
             </Card>
@@ -140,7 +142,8 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
         })}
       </div>
 
-      <Card>
+      {/* 2. الكورسات النشطة */}
+      <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-base">
@@ -150,7 +153,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
               {t.overview.enrolledCoursesSectionDescription}
             </CardDescription>
           </div>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="bg-transparent border-emerald-500/30 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20">
             <Link href="/student/courses">{t.nav.courses}</Link>
           </Button>
         </CardHeader>
@@ -169,17 +172,19 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {data.enrolledCourses.slice(0, 6).map((course) => (
-                <Card key={course.id} className="border-border/80">
+                // الكارت الصغير شفافية 20%
+                <Card key={course.id} className="border-border/50 bg-white/20 shadow-sm backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none">
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
-                      <Badge variant="outline" className="font-mono text-xs">
+                      <Badge variant="outline" className="font-mono text-xs bg-transparent">
                         {course.code}
                       </Badge>
-                      <Badge
-                        variant={
-                          course.progressPercent >= 100 ? "gold" : "outline"
-                        }
-                      >
+                      <Badge className={cn(
+                        "px-2 py-0.5", 
+                        course.progressPercent >= 100 
+                          ? "bg-emerald-500 text-white dark:text-white border-transparent" 
+                          : "bg-transparent text-foreground border-border"
+                      )}>
                         {course.progressPercent}%
                       </Badge>
                     </div>
@@ -191,9 +196,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pb-3">
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/50">
                       <div
-                        className="h-full bg-gold-metallic transition-all"
+                        className="h-full bg-emerald-500 transition-all dark:bg-emerald-400"
                         style={{
                           width: `${Math.min(100, course.progressPercent)}%`,
                         }}
@@ -205,7 +210,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                       asChild
                       variant="outline"
                       size="sm"
-                      className="w-full"
+                      className="w-full border-emerald-500/50 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
                     >
                       <Link href={`/student/courses?courseId=${course.id}`}>
                         {t.common.continueLearning}
@@ -219,8 +224,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
         </CardContent>
       </Card>
 
+      {/* 3. الرسم البياني والإشعارات */}
       <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="lg:col-span-8">
+        <Card className="lg:col-span-8 border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.studyChartTitle}
@@ -246,17 +252,17 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                     />
                     <XAxis dataKey="name" fontSize={12} />
                     <YAxis fontSize={12} domain={[0, 100]} />
-                    <Tooltip />
+                    <Tooltip cursor={{fill: 'rgba(16, 185, 129, 0.1)'}} />
                     <Bar
                       dataKey="progress"
                       name={t.overview.completionProgress}
-                      fill="#A88945"
+                      fill="#10b981"
                       radius={[6, 6, 0, 0]}
                     />
                     <Bar
                       dataKey="examScore"
                       name={t.overview.recentGrades}
-                      fill="#202124"
+                      fill="#334155"
                       radius={[6, 6, 0, 0]}
                     />
                   </BarChart>
@@ -266,7 +272,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">
@@ -279,6 +285,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 size="sm"
                 disabled={isPending}
                 onClick={handleMarkAllRead}
+                className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
               >
                 <CheckCheck className="size-3.5" />
                 <span>{t.overview.markAllReadButton}</span>
@@ -297,13 +304,18 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 {data.notifications.slice(0, 5).map((notif) => (
                   <div
                     key={notif.recipientId}
-                    className="rounded-lg border border-border/80 bg-card/60 p-3 text-xs"
+                    className="rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-foreground">
                         {notif.title}
                       </span>
-                      <Badge variant={notif.isRead ? "outline" : "gold"}>
+                      <Badge className={cn(
+                        "px-2 py-0.5",
+                        notif.isRead 
+                          ? "bg-transparent text-foreground border-border" 
+                          : "bg-emerald-500 text-white dark:text-white border-transparent"
+                      )}>
                         {notif.category}
                       </Badge>
                     </div>
@@ -318,8 +330,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
         </Card>
       </div>
 
+      {/* 4. الامتحانات والواجبات والدرجات */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card>
+        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.upcomingExamsTitle}
@@ -337,7 +350,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 {data.upcomingExams.map((exam) => (
                   <div
                     key={exam.id}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-3 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -347,7 +360,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         {exam.courseTitle} • {exam.duration_minutes}m
                       </p>
                     </div>
-                    <Badge variant="gold">{Number(exam.total_points)} pts</Badge>
+                    <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400">
+                      {Number(exam.total_points)} pts
+                    </Badge>
                   </div>
                 ))}
               </div>
@@ -355,7 +370,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.upcomingAssignmentsTitle}
@@ -373,7 +388,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 {data.upcomingAssignments.map((asg) => (
                   <div
                     key={asg.id}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-3 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -384,7 +399,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         {asg.due_at ? ` • Due ${asg.due_at.slice(0, 10)}` : ""}
                       </p>
                     </div>
-                    <Badge variant="outline">{Number(asg.max_points)} pts</Badge>
+                    <Badge variant="outline" className="bg-transparent">
+                      {Number(asg.max_points)} pts
+                    </Badge>
                   </div>
                 ))}
               </div>
@@ -392,7 +409,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
           <CardHeader>
             <CardTitle className="text-base">
               {t.overview.recentGradesTitle}
@@ -410,7 +427,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 {data.recentGrades.map((grade) => (
                   <div
                     key={grade.id}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-3 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -420,7 +437,12 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         {grade.courseTitle}
                       </p>
                     </div>
-                    <Badge variant={grade.passed ? "gold" : "destructive"}>
+                    <Badge className={cn(
+                      "px-2 py-0.5",
+                      grade.passed 
+                        ? "bg-emerald-500 text-white dark:text-white border-transparent" 
+                        : "bg-destructive text-destructive-foreground border-transparent"
+                    )}>
                       {Number(grade.score_percent).toFixed(1)}%
                     </Badge>
                   </div>

@@ -152,15 +152,30 @@ export function AdminShell({
     router.refresh();
   }
 
+  // دالة الترجمة للـ 5 لغات مع اللقب
+  const getWelcomeMessage = (loc: string) => {
+    switch (loc) {
+      case "ar": return "أهلاً بعودتك، بشمنهدس";
+      case "de": return "Willkommen zurück, Ing."; 
+      case "it": return "Bentornato, Ing.";        
+      case "fr": return "Bon retour, Ing.";        
+      case "en":
+      default: return "Welcome back, Eng.";        
+    }
+  };
+
   return (
     <SidebarProvider>
-      <div className="flex min-h-dvh w-full bg-background text-foreground">
+      <div className="relative flex min-h-dvh w-full bg-transparent text-foreground">
+        
+        {/* الباكجراوند الثابت */}
+        <div className="fixed inset-0 z-[-1] bg-[url('/student-light.png')] bg-cover bg-center bg-no-repeat bg-fixed dark:bg-[url('/student-dark.png')]" />
+        
         <AppSidebar sections={sections} />
         <div className="flex min-w-0 flex-1 flex-col">
           <AppTopbar
             sections={sections}
-            title={adminT.overview.title}
-            subtitle={adminT.overview.subtitle}
+            title={`${getWelcomeMessage(locale)} ${adminName}`}
             actions={
               <div className="flex items-center gap-2">
                 <GlobalSearchTrigger />
@@ -168,7 +183,7 @@ export function AdminShell({
                 <LanguageSelector />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="outline" size="sm" className="gap-2 bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
                       {adminAvatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -177,7 +192,7 @@ export function AdminShell({
                           className="size-5 rounded-full object-cover"
                         />
                       ) : (
-                        <User className="size-4 text-gold-foreground" aria-hidden="true" />
+                        <User className="size-4 text-emerald-500" aria-hidden="true" />
                       )}
                       <span className="hidden max-w-32 truncate sm:inline">
                         {adminName}

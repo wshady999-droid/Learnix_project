@@ -9,7 +9,6 @@ import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { BrandLogo } from "@/components/shared/brand-logo";
 import { ThemeSwitcher } from "@/components/theme/theme-switcher";
-import { useTheme } from "@/components/theme/theme-provider";
 import { cn } from "@/lib/utils";
 
 interface AuthPageLayoutProps {
@@ -17,83 +16,130 @@ interface AuthPageLayoutProps {
   maxWidthClass?: string;
 }
 
+type TextContent = { welcome: string; welcomeHighlight: string; sub: string };
+
+const TEXTS: Record<string, TextContent> = {
+  ar: { welcome: "مرحباً", welcomeHighlight: "بعودتك!", sub: "استمر في التعلم واكتشف المزيد من المعرفة." },
+  en: { welcome: "Welcome", welcomeHighlight: "Back!", sub: "Keep learning and explore more knowledge." },
+  de: { welcome: "Willkommen", welcomeHighlight: "zurück!", sub: "Lerne weiter und entdecke mehr Wissen." },
+  fr: { welcome: "Bon", welcomeHighlight: "retour !", sub: "Continuez à apprendre et à explorer." },
+  it: { welcome: "Bentornato", welcomeHighlight: "", sub: "Continua a imparare ed esplora." },
+};
+
 export function AuthPageLayout({ children, maxWidthClass }: AuthPageLayoutProps) {
   const { t, dir, isRtl, locale } = useLocale();
-  const { resolvedTheme } = useTheme();
   const pathname = usePathname();
 
-  const resolvedMaxWidth =
-    maxWidthClass ?? (pathname?.startsWith("/signup") ? "max-w-6xl" : "max-w-md");
-
+  // كبرنا العرض لـ 520px عشان الحقول تبقى أعرض
+const resolvedMaxWidth =
+    maxWidthClass ?? (pathname?.startsWith("/signup") ? "max-w-[550px]" : "max-w-[440px]");
   const cardMotionStyle = {
     "--auth-slide-x": isRtl ? "-14px" : "14px",
   } as CSSProperties;
 
-  const isArabic = locale === "ar";
-  const imagePrefix = isArabic ? "A" : "E";
-  const activeBgImage = `/images/auth/${imagePrefix}-${resolvedTheme === "dark" ? "dark" : "light"}.jpeg`;
+  const imageLang = locale === "ar" ? "ar" : "en";
+  const text = (TEXTS[locale] ?? TEXTS["en"]) as TextContent;
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-x-clip text-foreground bg-[#F8F8F7] dark:bg-[#000000]">
+      
       <div className="fixed inset-0 z-0 h-full w-full overflow-hidden">
-        <div className="animate-auth-bg-float absolute inset-0 h-full w-full">
+        <div className="absolute inset-0 h-full w-full">
           <Image
-            key={activeBgImage}
-            src={activeBgImage}
-            alt="Learnix Auth Background"
+            src={`/images/auth/${imageLang}-light-login.png`}
+            alt="Learnix Auth Light Background"
             fill
             priority
             sizes="100vw"
-            quality={80}
-            className="object-cover object-center"
+            quality={90}
+            className="object-cover object-center block dark:hidden"
+          />
+          <Image
+            src={`/images/auth/${imageLang}-dark-login.png`}
+            alt="Learnix Auth Dark Background"
+            fill
+            priority
+            sizes="100vw"
+            quality={90}
+            className="object-cover object-center hidden dark:block"
           />
         </div>
       </div>
 
-      <header className="sticky top-0 z-30 w-full border-b border-black/10 dark:border-white/10">
-        <div className="flex h-20 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
+      <header className="absolute top-0 z-30 w-full bg-transparent" dir="ltr">
+        <div className="flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <span aria-hidden="true" className="hidden h-7 w-1 rounded-full bg-[#C99A22] sm:inline-block" />
+            <span aria-hidden="true" className="hidden h-6 w-1 rounded-full bg-emerald-500 sm:inline-block" />
             <Link
               href="/"
               aria-label={t.brand.fullName}
-              className="flex items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-[#C99A22] [&_span]:!text-[#202124] dark:[&_span]:!text-[#F5F5F5]"
+              className="flex items-center gap-3 rounded-md focus-visible:outline-none"
             >
               <BrandLogo />
             </Link>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <div className="[&_button]:border-[#E5E3DF] [&_button]:bg-white/85 [&_button]:text-[#202124] [&_button:hover]:border-[#C99A22] [&_button:hover]:bg-white [&_svg]:!text-[#C99A22] dark:[&_button]:border-[#252630] dark:[&_button]:bg-[#11131F]/80 dark:[&_button]:text-[#F5F5F5] dark:[&_button:hover]:border-[#C99A22] dark:[&_button:hover]:bg-[#252630] [&_button]:px-6 [&_button]:h-10">
+          <div className="flex items-center gap-2">
+            <div className="rounded-xl border border-slate-300/50 bg-white/50 backdrop-blur-md shadow-sm transition-all hover:bg-white dark:border-white/10 dark:bg-black/20 dark:hover:bg-black/40 [&_button]:border-none [&_button]:bg-transparent [&_button]:text-slate-800 dark:[&_button]:text-white [&_button]:px-3 [&_button]:h-9 [&_svg]:!text-slate-800 dark:[&_svg]:!text-white">
               <LanguageSelector />
             </div>
-            <div className="[&_button]:border-[#E5E3DF] [&_button]:bg-white/85 [&_button]:text-[#202124] [&_button:hover]:border-[#C99A22] [&_button:hover]:bg-white [&_svg]:!text-[#C99A22] dark:[&_button]:border-[#252630] dark:[&_button]:bg-[#11131F]/80 dark:[&_button]:text-[#F5F5F5] dark:[&_button:hover]:border-[#C99A22] dark:[&_button:hover]:bg-[#252630] [&_button]:px-6 [&_button]:h-10">
+            <div className="rounded-xl border border-slate-300/50 bg-white/50 backdrop-blur-md shadow-sm transition-all hover:bg-white dark:border-white/10 dark:bg-black/20 dark:hover:bg-black/40 [&_button]:border-none [&_button]:bg-transparent [&_button]:text-slate-800 dark:[&_button]:text-white [&_button]:px-3 [&_button]:h-9 [&_svg]:!text-slate-800 dark:[&_svg]:!text-white">
               <ThemeSwitcher />
             </div>
           </div>
         </div>
       </header>
 
+      {/* 
+        هنا التعديل: شيلنا pt-16 وخلينا pt-4، وضفنا max-h-[calc(100vh-4rem)] و overflow-y-auto
+        عشان لو الشاشة صغيرة، اليوزر يقدر يعمل سكرول جوه الفورم نفسه.
+      */}
       <main
         dir="ltr"
-        className="relative z-10 mx-auto flex w-full max-w-[90rem] flex-1 items-center px-4 py-4 sm:px-6 sm:py-6 lg:px-10"
+        className="relative z-10 mx-auto flex w-full max-w-[95rem] flex-1 items-center px-4 pt-16 pb-4 sm:px-6 lg:px-12"
       >
-        <div
-          dir={dir}
-          className={cn(
-            "auth-dialog-position w-full md:w-[58%] lg:w-1/2",
-            isRtl ? "md:translate-x-0 lg:translate-x-0" : "md:translate-x-[100%] lg:translate-x-[120%]",
-          )}
-        >
-          <div className={cn("mx-auto w-full", resolvedMaxWidth)}>
+        <div className="w-full flex flex-col md:flex-row items-center justify-between gap-8 min-h-[calc(100dvh-5rem)]">
+          
+          <div 
+            dir={dir}
+            className={cn(
+              "hidden md:flex flex-col justify-center flex-1 max-w-xl",
+              isRtl ? "order-2 items-end text-right pe-12" : "order-1 items-start text-left ps-12"
+            )}
+          >
+            <h1 className="text-5xl lg:text-7xl font-bold leading-tight drop-shadow-sm w-full text-slate-900 dark:text-white">
+              {text.welcome}{" "}
+              {text.welcomeHighlight && (
+                <span className="text-emerald-500 dark:text-emerald-400 drop-shadow-sm">
+                  {text.welcomeHighlight}
+                </span>
+              )}
+            </h1>
+            <p className="mt-5 text-lg lg:text-xl font-medium drop-shadow-sm w-full text-slate-700 dark:text-slate-200">
+              {text.sub}
+            </p>
+          </div>
+
+          <div 
+            dir={dir}
+            className={cn(
+              "w-full flex justify-center",
+              isRtl ? "order-1 md:justify-start" : "order-2 md:justify-end",
+              resolvedMaxWidth
+            )}
+          >
             <div
               key={pathname}
               style={cardMotionStyle}
-              className="animate-auth-card-enter rounded-2xl bg-white/80 backdrop-blur-md p-4 shadow-2xl border border-black/5 dark:bg-[#11131F] dark:border-[#252630] sm:p-6"
+              className="animate-auth-card-enter relative group w-full"
             >
-              {children}
+              <div className="absolute -inset-1 rounded-[2rem] bg-gradient-to-r from-emerald-500 to-teal-500 opacity-20 dark:opacity-30 blur-2xl transition duration-1000 group-hover:opacity-40"></div>
+              <div className="relative">
+                {children}
+              </div>
             </div>
           </div>
+
         </div>
       </main>
     </div>

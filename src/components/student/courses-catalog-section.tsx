@@ -172,14 +172,14 @@ export function CoursesCatalogSection({
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-200",
                   isActive
-                    ? "border-[#C99A22] bg-[#C99A22] text-[#11131F] shadow-[0_4px_14px_rgba(201,154,34,0.35)]"
-                    : "border-border bg-card/80 text-muted-foreground hover:border-[#C99A22]/60 hover:text-foreground",
+                    ? "border-[#10b981] bg-[#10b981] text-white shadow-[0_4px_14px_rgba(16,185,129,0.35)]" // التعديل هنا: غيرنا الذهبي للأخضر
+                    : "border-border bg-white/20 backdrop-blur-md text-muted-foreground hover:border-[#10b981]/60 hover:text-foreground dark:bg-[#121a19]",
                 )}
               >
                 <Tag
                   className={cn(
                     "size-3.5",
-                    isActive ? "text-[#11131F]" : "text-[#C99A22]",
+                    isActive ? "text-white" : "text-[#10b981]", // التعديل هنا
                   )}
                   aria-hidden="true"
                 />
@@ -196,7 +196,7 @@ export function CoursesCatalogSection({
               value={activeSearch}
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search courses or teachers..."
-              className="pl-9"
+              className="pl-9 bg-white/20 backdrop-blur-md dark:bg-[#121a19]"
             />
           </div>
         )}
@@ -211,7 +211,7 @@ export function CoursesCatalogSection({
           {Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}
-              className="flex h-[380px] flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-5 shadow-sm"
+              className="flex h-[380px] flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-white/20 backdrop-blur-md dark:bg-[#121a19] p-5 shadow-sm"
             >
               <div className="flex items-center justify-between">
                 <Skeleton className="h-6 w-28 rounded-full" />
@@ -246,17 +246,17 @@ export function CoursesCatalogSection({
             variant="outline"
             size="sm"
             onClick={() => void refetch()}
-            className="mt-1 gap-2 border-[#C99A22]/60"
+            className="mt-1 gap-2 border-[#10b981]/60"
           >
-            <RefreshCw className="size-3.5 text-[#C99A22]" />
+            <RefreshCw className="size-3.5 text-[#10b981]" />
             <span>Retry</span>
           </Button>
         </div>
       )}
 
       {!loading && !error && filteredCourses.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-card/60 p-12 text-center">
-          <span className="inline-flex size-12 items-center justify-center rounded-full border border-[#C99A22]/40 bg-[#C99A22]/15 text-[#C99A22]">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-white/20 backdrop-blur-md dark:bg-[#121a19] p-12 text-center">
+          <span className="inline-flex size-12 items-center justify-center rounded-full border border-[#10b981]/40 bg-[#10b981]/15 text-[#10b981]">
             <BookOpen className="size-6" aria-hidden="true" />
           </span>
           <div className="space-y-1">
@@ -319,7 +319,7 @@ export function CoursesCatalogSection({
                   overlayContent={
                     <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-[#090A10]/95 via-[#090A10]/55 to-black/30 p-5 text-white">
                       <div className="flex items-center justify-between gap-2">
-                        <Badge className="border border-[#C99A22]/60 bg-[#11131F]/85 px-3 py-1 text-[11px] font-semibold text-[#C99A22] backdrop-blur-md">
+                        <Badge className="border border-[#10b981]/60 bg-[#11131F]/85 px-3 py-1 text-[11px] font-semibold text-[#10b981] backdrop-blur-md">
                           <Tag className="mr-1 size-3" aria-hidden="true" />
                           {course.category}
                         </Badge>
@@ -327,7 +327,7 @@ export function CoursesCatalogSection({
                       <div className="space-y-3">
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="rounded bg-[#C99A22]/20 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#E5B842] uppercase">
+                            <span className="rounded bg-[#10b981]/20 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#34d399] uppercase">
                               {course.code}
                             </span>
                             {isEnrolled && (
@@ -348,10 +348,10 @@ export function CoursesCatalogSection({
                               <img
                                 src={course.teacher.avatar_url}
                                 alt={teacherName}
-                                className="size-6 shrink-0 rounded-full border border-[#C99A22]/60 object-cover"
+                                className="size-6 shrink-0 rounded-full border border-[#10b981]/60 object-cover"
                               />
                             ) : (
-                              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[#C99A22]/50 bg-[#C99A22]/20 text-[#C99A22]">
+                              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[#10b981]/50 bg-[#10b981]/20 text-[#10b981]">
                                 <User className="size-3.5" aria-hidden="true" />
                               </span>
                             )}
@@ -359,7 +359,7 @@ export function CoursesCatalogSection({
                               {teacherName}
                             </span>
                           </div>
-                          <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-[#E5B842]">
+                          <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-[#34d399]">
                             <Clock className="size-3" aria-hidden="true" />
                             {course.duration}
                           </span>
@@ -368,32 +368,32 @@ export function CoursesCatalogSection({
                     </div>
                   }
                   backContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-b from-[#FFFFFF] via-[#F8F8F7] to-[#F0EFEC] p-6 text-[#202124] dark:from-[#17181A] dark:via-[#141622] dark:to-[#11131F] dark:text-[#F5F5F5]">
+                    <div className="flex h-full w-full flex-col justify-between bg-white/20 p-6 text-foreground backdrop-blur-md border border-white/20 dark:bg-[#121a19] dark:border-[#353644]">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <Badge
                             variant="gold-subtle"
-                            className="border-[#C99A22]/40 bg-[#C99A22]/15 text-[#997214] dark:text-[#C99A22]"
+                            className="border-[#10b981]/40 bg-[#10b981]/15 text-[#047857] dark:text-[#10b981]"
                           >
                             <Sparkles className="mr-1 size-3" aria-hidden="true" />
                             {course.category}
                           </Badge>
-                          <span className="rounded-full border border-[#C99A22]/45 bg-[#C99A22]/15 px-3 py-0.5 font-mono text-xs font-bold text-[#997214] dark:text-[#E5B842]">
+                          <span className="rounded-full border border-[#10b981]/45 bg-[#10b981]/15 px-3 py-0.5 font-mono text-xs font-bold text-[#047857] dark:text-[#34d399]">
                             {priceLabel}
                           </span>
                         </div>
-                        <h3 className="line-clamp-2 text-base font-bold text-[#202124] dark:text-[#F5F5F5]">
+                        <h3 className="line-clamp-2 text-base font-bold text-foreground">
                           {course.title}
                         </h3>
-                        <p className="line-clamp-5 text-xs leading-relaxed text-[#52525B] dark:text-[#A1A1AA]">
+                        <p className="line-clamp-5 text-xs leading-relaxed text-muted-foreground">
                           {course.description}
                         </p>
                       </div>
-                      <div className="space-y-4 border-t border-[#E5E3DF] pt-3.5 dark:border-[#252630]">
-                        <div className="flex items-center justify-between text-xs text-[#52525B] dark:text-[#A1A1AA]">
+                      <div className="space-y-4 border-t border-white/20 pt-3.5 dark:border-[#252630]">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1.5 font-medium">
                             <User
-                              className="size-3.5 text-[#C99A22]"
+                              className="size-3.5 text-[#10b981]"
                               aria-hidden="true"
                             />
                             <span className="max-w-36 truncate">
@@ -402,7 +402,7 @@ export function CoursesCatalogSection({
                           </span>
                           <span className="inline-flex items-center gap-1.5 font-mono">
                             <Clock
-                              className="size-3.5 text-[#C99A22]"
+                              className="size-3.5 text-[#10b981]"
                               aria-hidden="true"
                             />
                             <span>{course.duration}</span>

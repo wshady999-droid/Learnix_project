@@ -1,42 +1,32 @@
-/*
- * Learnix design tokens.
- *
- * Layer 1 (brand):    raw, immutable brand colors. Never change per theme.
- * Layer 2 (semantic): role-based tokens (background, primary, border…) that
- *                     map brand colors to UI roles and DO change per theme.
- * Layer 3 (Tailwind): exposed to utilities in globals.css via `@theme inline`.
- *
- * Components must consume semantic tokens only (e.g. `bg-card`, `text-muted-foreground`),
- * never raw hex values. See docs/design-tokens.md.
- */
-
 :root {
   /* ---------- Layer 1: Brand palette ---------- */
-  --brand-background: #f8f8f7;
+  --brand-background: #FAF9F4; /* خلفية فاتحة */
   --brand-white: #ffffff;
-  --brand-charcoal: #202124;
-  --brand-gold: #a88945;
-  --brand-gold-highlight: #e5cc83;
-  --brand-gold-shadow: #806127;
-  --brand-grey: #737373;
+  --brand-charcoal: #0a1f1d; /* النص الغامق */
+  
+  /* الألوان الجديدة (أخضر/تركواز) */
+  --brand-emerald: #10b981; 
+  --brand-emerald-highlight: #34d399;
+  --brand-emerald-shadow: #047857;
+  --brand-grey: #64748b;
 
-  /* Metallic gold */
+  /* Metallic Emerald (بدل الذهبي) */
   --gradient-gold: linear-gradient(
     110deg,
-    #806127 0%,
-    #a88945 25%,
-    #e5cc83 48%,
-    #a88945 72%,
-    #806127 100%
+    #047857 0%,
+    #10b981 25%,
+    #34d399 48%,
+    #10b981 72%,
+    #047857 100%
   );
-  /* Soft top-down light reflection layered over the metallic surface. */
+  
   --gradient-gold-reflection: linear-gradient(
     180deg,
     rgb(255 255 255 / 0.32) 0%,
     rgb(255 255 255 / 0.08) 45%,
     rgb(255 255 255 / 0) 55%
   );
-  /* Narrow diagonal light sweep used on hover. */
+  
   --gradient-gold-sheen: linear-gradient(
     110deg,
     transparent 30%,
@@ -48,13 +38,13 @@
   --background: var(--brand-background);
   --foreground: var(--brand-charcoal);
 
-  --card: var(--brand-white);
+  --card: rgb(255 255 255 / 0.7); /* خلفية زجاجية */
   --card-foreground: var(--brand-charcoal);
   --popover: var(--brand-white);
   --popover-foreground: var(--brand-charcoal);
 
-  --primary: var(--brand-gold);
-  --primary-foreground: var(--brand-charcoal);
+  --primary: var(--brand-emerald);
+  --primary-foreground: var(--brand-white);
 
   --secondary: #efeeeb;
   --secondary-foreground: var(--brand-charcoal);
@@ -62,21 +52,20 @@
   --muted: #f0efec;
   --muted-foreground: var(--brand-grey);
 
-  --accent: #f4efe2;
-  --accent-foreground: var(--brand-charcoal);
+  --accent: #e6f7f1;
+  --accent-foreground: var(--brand-emerald);
 
-  /* Gold used as text/icon on neutral surfaces (AA compliant). */
-  --gold-foreground: var(--brand-gold-shadow);
-  --gold-subtle: #f6f0e0;
-  --gold-border: #dccb9c;
+  --gold-foreground: var(--brand-emerald);
+  --gold-subtle: #e6f7f1;
+  --gold-border: #a7f3d0;
 
   --destructive: #b42318;
   --destructive-foreground: var(--brand-white);
   --destructive-subtle: #fdecea;
 
-  --success: #2f7a4b;
+  --success: var(--brand-emerald);
   --success-foreground: var(--brand-white);
-  --success-subtle: #e8f3ec;
+  --success-subtle: #e6f7f1;
 
   --warning: #a15c07;
   --warning-foreground: var(--brand-white);
@@ -88,24 +77,24 @@
 
   --border: #e5e3df;
   --input: #dcdad5;
-  --ring: var(--brand-gold);
+  --ring: var(--brand-emerald);
 
   --overlay: rgb(32 33 36 / 0.45);
 
   /* Sidebar */
-  --sidebar: var(--brand-white);
+  --sidebar: rgb(255 255 255 / 0.8); /* خلفية السايدبار شفافة شوية */
   --sidebar-foreground: var(--brand-charcoal);
   --sidebar-muted-foreground: var(--brand-grey);
-  --sidebar-accent: #f3f2ef;
-  --sidebar-accent-foreground: var(--brand-charcoal);
-  --sidebar-border: #ebe9e5;
+  --sidebar-accent: #e6f7f1;
+  --sidebar-accent-foreground: var(--brand-emerald);
+  --sidebar-border: #e5e3df;
 
-  /* Charts (Recharts) */
-  --chart-1: var(--brand-gold);
+  /* Charts */
+  --chart-1: var(--brand-emerald);
   --chart-2: var(--brand-charcoal);
-  --chart-3: var(--brand-gold-highlight);
+  --chart-3: var(--brand-emerald-highlight);
   --chart-4: var(--brand-grey);
-  --chart-5: var(--brand-gold-shadow);
+  --chart-5: var(--brand-emerald-shadow);
 
   /* Elevation */
   --shadow-xs: 0 1px 2px 0 rgb(32 33 36 / 0.05);
@@ -113,9 +102,9 @@
   --shadow-md: 0 6px 16px -6px rgb(32 33 36 / 0.12), 0 2px 4px -2px rgb(32 33 36 / 0.06);
   --shadow-lg: 0 16px 40px -12px rgb(32 33 36 / 0.18);
   --shadow-gold:
-    inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 16px -8px rgb(128 97 39 / 0.65);
+    inset 0 1px 0 rgb(255 255 255 / 0.35), 0 6px 16px -8px rgb(16 185 129 / 0.4);
   --shadow-gold-hover:
-    inset 0 1px 0 rgb(255 255 255 / 0.4), 0 10px 22px -10px rgb(128 97 39 / 0.75);
+    inset 0 1px 0 rgb(255 255 255 / 0.4), 0 10px 22px -10px rgb(16 185 129 / 0.6);
 
   /* Shape */
   --radius: 0.625rem;
@@ -135,37 +124,37 @@
 
 /* ---------- Layer 2: Semantic tokens (dark) ---------- */
 .dark {
-  --background: #17181a;
-  --foreground: #f1f0ed;
+  --background: #0a1f1d; /* خلفية دارك */
+  --foreground: #FAF9F4;
 
-  --card: var(--brand-charcoal);
-  --card-foreground: #f1f0ed;
-  --popover: #26272b;
-  --popover-foreground: #f1f0ed;
+  --card: rgb(18 53 45 / 0.7); /* خلفية زجاجية دارك */
+  --card-foreground: #FAF9F4;
+  --popover: #12352D;
+  --popover-foreground: #FAF9F4;
 
-  --primary: var(--brand-gold);
-  --primary-foreground: var(--brand-charcoal);
+  --primary: var(--brand-emerald);
+  --primary-foreground: var(--brand-white);
 
-  --secondary: #2b2c30;
-  --secondary-foreground: #f1f0ed;
+  --secondary: #12352D;
+  --secondary-foreground: #FAF9F4;
 
-  --muted: #26272b;
-  --muted-foreground: #a3a3a3;
+  --muted: #1A453B;
+  --muted-foreground: #7A9993;
 
-  --accent: #2c2a24;
-  --accent-foreground: #f1f0ed;
+  --accent: #1A453B;
+  --accent-foreground: var(--brand-emerald);
 
-  --gold-foreground: var(--brand-gold-highlight);
-  --gold-subtle: #2a261c;
-  --gold-border: #5c4a24;
+  --gold-foreground: var(--brand-emerald-highlight);
+  --gold-subtle: rgb(16 185 129 / 0.1);
+  --gold-border: rgb(16 185 129 / 0.3);
 
   --destructive: #e5534b;
   --destructive-foreground: #17181a;
   --destructive-subtle: #3a1f1d;
 
-  --success: #57b37a;
-  --success-foreground: #17181a;
-  --success-subtle: #1c2e23;
+  --success: var(--brand-emerald);
+  --success-foreground: var(--brand-white);
+  --success-subtle: rgb(16 185 129 / 0.2);
 
   --warning: #e0a04a;
   --warning-foreground: #17181a;
@@ -175,33 +164,33 @@
   --info-foreground: #17181a;
   --info-subtle: #1c2733;
 
-  --border: #313236;
-  --input: #3a3b40;
-  --ring: var(--brand-gold-highlight);
+  --border: #1A453B;
+  --input: #1A453B;
+  --ring: var(--brand-emerald);
 
   --overlay: rgb(0 0 0 / 0.6);
 
-  --sidebar: #1c1d20;
-  --sidebar-foreground: #f1f0ed;
-  --sidebar-muted-foreground: #a3a3a3;
-  --sidebar-accent: #2a2b2f;
-  --sidebar-accent-foreground: #f1f0ed;
-  --sidebar-border: #2a2b2f;
+  --sidebar: rgb(10 31 29 / 0.8); /* خلفية السايدبار دارك */
+  --sidebar-foreground: #FAF9F4;
+  --sidebar-muted-foreground: #7A9993;
+  --sidebar-accent: #1A453B;
+  --sidebar-accent-foreground: #FAF9F4;
+  --sidebar-border: #1A453B;
 
-  --chart-1: var(--brand-gold);
-  --chart-2: #f1f0ed;
-  --chart-3: var(--brand-gold-highlight);
-  --chart-4: #a3a3a3;
-  --chart-5: #c7a964;
+  --chart-1: var(--brand-emerald);
+  --chart-2: #FAF9F4;
+  --chart-3: var(--brand-emerald-highlight);
+  --chart-4: #7A9993;
+  --chart-5: #34d399;
 
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.35), 0 1px 2px -1px rgb(0 0 0 / 0.3);
   --shadow-md: 0 6px 16px -6px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   --shadow-lg: 0 16px 40px -12px rgb(0 0 0 / 0.6);
   --shadow-gold:
-    inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 18px -8px rgb(229 204 131 / 0.28);
+    inset 0 1px 0 rgb(255 255 255 / 0.28), 0 6px 18px -8px rgb(16 185 129 / 0.3);
   --shadow-gold-hover:
-    inset 0 1px 0 rgb(255 255 255 / 0.32), 0 10px 24px -10px rgb(229 204 131 / 0.38);
+    inset 0 1px 0 rgb(255 255 255 / 0.32), 0 10px 24px -10px rgb(16 185 129 / 0.4);
 
   color-scheme: dark;
 }

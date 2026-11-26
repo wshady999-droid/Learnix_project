@@ -1,9 +1,8 @@
 "use client";
 
-import { createContext, use, useCallback, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"; 
 
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { createPreferenceStore } from "@/lib/preference-store";
 import {
   DEFAULT_THEME,
   isTheme,
@@ -14,12 +13,6 @@ import {
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 const TRANSITION_MS = 260;
-
-const themeStore = createPreferenceStore<Theme>({
-  key: THEME_STORAGE_KEY,
-  fallback: DEFAULT_THEME,
-  validate: isTheme,
-});
 
 function resolveTheme(theme: Theme, prefersDark: boolean): ResolvedTheme {
   if (theme === "system") return prefersDark ? "dark" : "light";
@@ -33,9 +26,7 @@ function applyTheme(resolved: ResolvedTheme) {
 }
 
 interface ThemeContextValue {
-  /** User preference (may be "system"). `"system"` during SSR/hydration. */
   theme: Theme;
-  /** The theme actually applied. */
   resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
 }
@@ -43,40 +34,42 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const theme = useSyncExternalStore(
-    themeStore.subscribe,
-    themeStore.getSnapshot,
-    themeStore.getServerSnapshot,
-  );
   const prefersDark = useMediaQuery(DARK_QUERY);
-  const resolvedTheme = resolveTheme(theme, prefersDark);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>("light");
 
-  // The boot script applies the theme before paint. This effect keeps <html> in sync
-  // afterwards (preference / OS changes, dev Strict Mode remounts). It reads the stores
-  // directly so the hydration pass (server snapshot) never applies a stale theme.
-  useLayoutEffect(() => {
-    applyTheme(
-      resolveTheme(themeStore.getSnapshot(), window.matchMedia(DARK_QUERY).matches),
-    );
-  }, [theme, prefersDark]);
+  const syncTheme = useCallback(() => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setResolvedTheme(isDark ? "dark" : "light");
+  }, []);
+
+  useEffect(() => {
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [syncTheme]);
 
   const setTheme = useCallback((next: Theme) => {
     const root = document.documentElement;
     root.classList.add("theme-transition");
-    themeStore.set(next);
+    
+    const newResolved = resolveTheme(next, window.matchMedia(DARK_QUERY).matches);
+    setResolvedTheme(newResolved);
+    applyTheme(newResolved);
+
     window.setTimeout(() => root.classList.remove("theme-transition"), TRANSITION_MS);
   }, []);
 
   const value = useMemo(
-    () => ({ theme, resolvedTheme, setTheme }),
-    [theme, resolvedTheme, setTheme],
+    () => ({ theme: "system" as Theme, resolvedTheme, setTheme }),
+    [resolvedTheme, setTheme],
   );
 
-  return <ThemeContext value={value}>{children}</ThemeContext>;
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
-  const context = use(ThemeContext);
+  const context = useContext(ThemeContext);
   if (!context) throw new Error("useTheme must be used within <ThemeProvider>.");
   return context;
 }
