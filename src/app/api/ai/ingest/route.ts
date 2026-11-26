@@ -54,6 +54,9 @@ export async function POST(request: Request) {
 
   const allowedTypes = [
     "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "text/plain",
     "text/markdown",
     "text/csv",
@@ -62,13 +65,17 @@ export async function POST(request: Request) {
   if (
     !allowedTypes.includes(file.type) &&
     !lowerName.endsWith(".pdf") &&
+    !lowerName.endsWith(".docx") &&
+    !lowerName.endsWith(".pptx") &&
+    !lowerName.endsWith(".xlsx") &&
     !lowerName.endsWith(".txt") &&
     !lowerName.endsWith(".md")
   ) {
     return NextResponse.json(
       {
         ok: false,
-        error: "Only PDF, TXT, and Markdown educational files are supported.",
+        error:
+          "Only PDF, DOCX, PPTX, XLSX, TXT, and Markdown educational files are supported.",
       },
       { status: 400 },
     );

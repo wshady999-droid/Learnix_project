@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Award,
+  BookOpen,
   Camera,
   ClipboardCheck,
   Clock,
@@ -20,7 +21,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -45,6 +45,60 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
   const [activeTab, setActiveTab] = useState<"available" | "history">(
     "available",
   );
+
+  const courseExamGroups = useMemo(() => {
+    const enrolledList =
+      data.enrolledCourses && data.enrolledCourses.length > 0
+        ? data.enrolledCourses
+        : Array.from(
+          new Map(
+            data.exams.map((e) => [
+              e.course_id,
+              {
+                id: e.course_id,
+                code: e.courseCode,
+                title: e.courseTitle,
+              },
+            ]),
+          ).values(),
+        );
+
+    return enrolledList.map((course) => {
+      const courseExams = data.exams.filter((e) => e.course_id === course.id);
+      const completedExamsCount = courseExams.filter(
+        (e) => !e.activeAttemptId && e.attemptsUsed > 0,
+      ).length;
+      const inProgressExamsCount = courseExams.filter((e) =>
+        Boolean(e.activeAttemptId),
+      ).length;
+
+      return {
+        course,
+        exams: courseExams,
+        totalExams: courseExams.length,
+        completedExamsCount,
+        inProgressExamsCount,
+      };
+    });
+  }, [data.enrolledCourses, data.exams]);
+
+  function getExamStatusBadge(exam: StudentExamsCenterData["exams"][number]) {
+    if (exam.activeAttemptId) {
+      return <Badge variant="gold">In Progress</Badge>;
+    }
+    if (exam.latestResult) {
+      return (
+        <Badge variant={exam.latestResult.passed ? "gold" : "destructive"}>
+          {exam.latestResult.passed ? "Passed" : "Completed"} (
+          {Number(exam.latestResult.score_percent).toFixed(1)}%)
+        </Badge>
+      );
+    }
+    if (exam.attemptsUsed > 0) {
+      return <Badge variant="outline">Submitted</Badge>;
+    }
+    return <Badge variant="outline">Available</Badge>;
+  }
 
   return (
     <div className="space-y-8">
@@ -76,133 +130,178 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
 
       {activeTab === "available" && (
         <div>
-          {data.exams.length === 0 ? (
+          {courseExamGroups.length === 0 ? (
             <EmptyState
               icon={ClipboardCheck}
               title={t.common.noRecordsTitle}
-              description="Published examinations for your enrolled courses will appear here."
+              description="Enroll in a course to access assigned examinations."
             />
           ) : (
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {data.exams.map((exam) => {
-                const canStartNew = exam.attemptsUsed < exam.max_attempts;
-                return (
-                  <Card
-                    key={exam.id}
-                    className={
-                      exam.activeAttemptId
-                        ? "border-gold-primary/70 shadow-md"
-                        : "border-border/80"
-                    }
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {exam.courseCode}
-                        </Badge>
-                        <div className="flex items-center gap-1.5">
-                          {exam.strict_proctoring && (
-                            <Badge variant="gold">
-                              <ShieldCheck className="mr-1 size-3" />
-                              {t.exams.proctoredBadge}
+            <div className="flex flex-col gap-6">
+              {courseExamGroups.map((group) => (
+                <Card key={group.course.id} className="w-full border-border/80 bg-card">
+                  <CardHeader className="border-b border-border/60 pb-3 pt-4 px-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold-primary/15 text-gold-foreground">
+                          <BookOpen className="size-4" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className="font-mono text-[10px]"
+                            >
+                              {group.course.code}
                             </Badge>
-                          )}
-                          {exam.camera_monitoring_enabled && (
-                            <Badge variant="outline">
-                              <Camera className="mr-1 size-3 text-gold-foreground" />
-                              Camera
-                            </Badge>
-                          )}
+                            <CardTitle className="text-lg">
+                              {group.course.title}
+                            </CardTitle>
+                          </div>
+                          <CardDescription className="mt-0.5 text-xs">
+                            {group.totalExams}{" "}
+                            {group.totalExams === 1
+                              ? "Available Exam"
+                              : "Available Exams"}{" "}
+                            • {group.completedExamsCount} Completed
+                          </CardDescription>
                         </div>
                       </div>
-                      <CardTitle className="mt-2 text-base">
-                        {exam.title}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2 text-xs">
-                        {exam.description || exam.courseTitle}
-                      </CardDescription>
-                    </CardHeader>
+                      <Badge
+                        variant={group.totalExams > 0 ? "gold" : "outline"}
+                      >
+                        {group.totalExams}{" "}
+                        {group.totalExams === 1 ? "Exam" : "Exams"}
+                      </Badge>
+                    </div>
+                  </CardHeader>
 
-                    <CardContent className="space-y-3 text-xs text-muted-foreground">
-                      <div className="grid grid-cols-3 gap-2 rounded-lg border border-border/70 bg-muted/40 p-2.5 text-center">
-                        <div>
-                          <p className="font-semibold text-foreground">
-                            {exam.questionCount}
-                          </p>
-                          <p className="text-[11px]">Questions</p>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground">
-                            {exam.duration_minutes}m
-                          </p>
-                          <p className="text-[11px]">{t.exams.durationLabel}</p>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground">
-                            {Number(exam.total_points)}
-                          </p>
-                          <p className="text-[11px]">{t.exams.marksLabel}</p>
-                        </div>
+                  <CardContent className="p-5">
+                    {group.exams.length === 0 ? (
+                      <p className="py-4 text-center text-xs text-muted-foreground">
+                        No published examinations available for this course yet.
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        {group.exams.map((exam) => {
+                          const canStartNew =
+                            exam.attemptsUsed < exam.max_attempts;
+                          return (
+                            <div
+                              key={exam.id}
+                              className={
+                                exam.activeAttemptId
+                                  ? "flex w-full flex-col items-center justify-between gap-4 rounded-xl border border-gold-primary/70 bg-background p-4 shadow-sm md:flex-row"
+                                  : "flex w-full flex-col items-center justify-between gap-4 rounded-xl border border-border/80 bg-background p-4 shadow-sm md:flex-row"
+                              }
+                            >
+                              <div className="w-full space-y-1.5 md:w-1/3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {getExamStatusBadge(exam)}
+                                  {exam.strict_proctoring && (
+                                    <Badge variant="gold" className="text-[10px] px-1.5 py-0.5">
+                                      <ShieldCheck className="mr-1 size-3" />
+                                      {t.exams.proctoredBadge}
+                                    </Badge>
+                                  )}
+                                  {exam.camera_monitoring_enabled && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
+                                      <Camera className="mr-1 size-3 text-gold-foreground" />
+                                      Camera
+                                    </Badge>
+                                  )}
+                                </div>
+                                <CardTitle className="text-base">
+                                  {exam.title}
+                                </CardTitle>
+                                {exam.description && (
+                                  <p className="line-clamp-1 text-xs text-muted-foreground">
+                                    {exam.description}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex w-full flex-1 items-center justify-evenly gap-2 border-y border-border/50 py-3 md:border-x md:border-y-0 md:py-0">
+                                <div className="text-center">
+                                  <p className="font-semibold text-foreground text-sm">
+                                    {exam.questionCount}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">Qs</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="font-semibold text-foreground text-sm">
+                                    {exam.duration_minutes}m
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">Dur</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="font-semibold text-foreground text-sm">
+                                    {Number(exam.total_points)}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">Marks</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="font-semibold text-foreground text-sm">
+                                    {Number(exam.passing_score)}%
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">Pass</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="font-semibold text-foreground text-sm">
+                                    {exam.attemptsUsed} / {exam.max_attempts}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">Att</p>
+                                </div>
+                              </div>
+
+        
+                              <div className="w-full md:w-auto shrink-0">
+                                {exam.activeAttemptId ? (
+                                  <Button
+                                    asChild
+                                    variant="gold"
+                                    size="sm"
+                                    className="w-full md:w-auto"
+                                  >
+                                    <Link href={`/student/exams/${exam.id}`}>
+                                      <PlayCircle className="mr-2 size-4" />
+                                      <span>{t.exams.resumeExamButton}</span>
+                                    </Link>
+                                  </Button>
+                                ) : canStartNew ? (
+                                  <Button
+                                    asChild
+                                    variant="gold"
+                                    size="sm"
+                                    className="w-full md:w-auto"
+                                  >
+                                    <Link href={`/student/exams/${exam.id}`}>
+                                      <PlayCircle className="mr-2 size-4" />
+                                      <span>{t.exams.startExamButton}</span>
+                                    </Link>
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    asChild
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full md:w-auto"
+                                  >
+                                    <Link href={`/student/exams/${exam.id}`}>
+                                      <Award className="mr-2 size-4" />
+                                      <span>{t.exams.viewResultButton}</span>
+                                    </Link>
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span>
-                          {t.exams.attemptsUsedLabel}:{" "}
-                          <strong className="text-foreground">
-                            {exam.attemptsUsed} / {exam.max_attempts}
-                          </strong>
-                        </span>
-                        <span>
-                          {t.exams.passingScoreLabel}:{" "}
-                          <strong className="text-foreground">
-                            {Number(exam.passing_score)}%
-                          </strong>
-                        </span>
-                      </div>
-
-                      {(exam.available_from || exam.available_until) && (
-                        <p className="flex items-center gap-1.5 font-mono text-[11px]">
-                          <Clock className="size-3.5 text-gold-foreground" />
-                          <span>
-                            {exam.available_from
-                              ? exam.available_from.slice(0, 16).replace("T", " ")
-                              : "Open"}{" "}
-                            →{" "}
-                            {exam.available_until
-                              ? exam.available_until.slice(0, 16).replace("T", " ")
-                              : "No deadline"}
-                          </span>
-                        </p>
-                      )}
-                    </CardContent>
-
-                    <CardFooter className="border-t border-border/60 pt-3">
-                      {exam.activeAttemptId ? (
-                        <Button asChild variant="gold" size="sm" className="w-full">
-                          <Link href={`/student/exams/${exam.id}`}>
-                            <PlayCircle className="size-4" />
-                            <span>{t.exams.resumeExamButton}</span>
-                          </Link>
-                        </Button>
-                      ) : canStartNew ? (
-                        <Button asChild variant="gold" size="sm" className="w-full">
-                          <Link href={`/student/exams/${exam.id}`}>
-                            <PlayCircle className="size-4" />
-                            <span>{t.exams.startExamButton}</span>
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button asChild variant="outline" size="sm" className="w-full">
-                          <Link href={`/student/exams/${exam.id}`}>
-                            <Award className="size-4" />
-                            <span>{t.exams.viewResultButton}</span>
-                          </Link>
-                        </Button>
-                      )}
-                    </CardFooter>
-                  </Card>
-                );
-              })}
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </div>

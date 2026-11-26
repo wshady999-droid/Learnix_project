@@ -765,6 +765,11 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
 export interface StudentExamsCenterData {
   studentId: string;
   studentName: string;
+  enrolledCourses: Array<{
+    id: string;
+    code: string;
+    title: string;
+  }>;
   exams: Array<
     TableRow<"exams"> & {
       courseTitle: string;
@@ -894,6 +899,7 @@ export async function getStudentExamsCenterData(): Promise<
     data: {
       studentId,
       studentName,
+      enrolledCourses: courses,
       exams: enrichedExams,
       attempts: enrichedAttempts,
     },

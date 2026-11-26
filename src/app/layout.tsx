@@ -60,16 +60,16 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-  params,
 }: {
   children: React.ReactNode;
-  params?: { locale?: string };
 }) {
-  // جلب اللغة الحالية (تأكد من طريقة جلبها في مشروعك)
-  const locale = params?.locale || "en"; 
-  
+  // The root layout has no dynamic [locale] segment (Next.js passes params as Promise<{}>), so the
+  // document locale was always resolved to "en" here; the client LocaleProvider applies the user's
+  // actual locale/direction at runtime. Behavior is unchanged; only the invalid `params` type was removed.
+  const locale = "en";
+
   // الشرط: العربية فقط هي RTL
-  const dir = locale === "ar" ? "rtl" : "ltr";
+  const dir = (locale as string) === "ar" ? "rtl" : "ltr";
 
   return (
     <html

@@ -210,17 +210,17 @@ export interface StudentDictionary {
 
 const en: StudentDictionary = {
   nav: {
-    groupLearning: "My Learning",
-    groupIntelligence: "AI & Analytics",
-    groupGrowth: "Motivation & Account",
-    overview: "Student Overview",
-    courses: "My Courses & Lessons",
-    exams: "Online Examinations",
+    groupLearning: "LEARNING",
+    groupIntelligence: "AI & PROGRESS",
+    groupGrowth: "ACCOUNT",
+    overview: "Overview",
+    courses: "Explore Courses",
+    exams: "Exams",
     aiAssistant: "AI Study Assistant",
-    performance: "Performance Dashboard",
+    performance: "Performance",
     motivation: "Motivation & Certificates",
     ratings: "Course & Teacher Ratings",
-    profile: "Student Profile",
+    profile: "Profile",
   },
   common: {
     searchPlaceholder: "Search courses, chapters, or lessons...",
