@@ -58,14 +58,26 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params?: { locale?: string };
+}) {
+  // جلب اللغة الحالية (تأكد من طريقة جلبها في مشروعك)
+  const locale = params?.locale || "en"; 
+  
+  // الشرط: العربية فقط هي RTL
+  const dir = locale === "ar" ? "rtl" : "ltr";
+
   return (
     <html
-      lang="en"
-      dir="ltr"
+      lang={locale}
+      dir={dir}
       data-sidebar-state="expanded"
       suppressHydrationWarning
-      className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased`}
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full antialiased dark`}
     >
       <head>
         <PreferencesScript />

@@ -39,19 +39,19 @@ export function PublicFooter() {
   ] as const;
 
   return (
-    <footer className="border-t border-[#E5E3DF] bg-[#FFFFFF] text-[#202124] dark:border-[#252630] dark:bg-[#17181A] dark:text-[#F5F5F5]">
+    <footer className="border-t border-[#1A453B] bg-[#09251F] text-[#FAF9F4]">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.35fr_0.85fr_0.9fr_1.3fr]">
           {/* Column 1: About Learnix */}
           <div className="flex flex-col gap-4">
-            <div className="[&_span]:!text-[#202124] dark:[&_span]:!text-[#F5F5F5]">
+            <div className="[&_span]:!text-white">
               <BrandLogo />
             </div>
-            <p className="max-w-sm text-sm leading-relaxed text-[#737373] dark:text-[#A1A1AA]">
+            <p className="max-w-sm text-sm leading-relaxed text-[#B8CECA]">
               {t.footer.aboutDescription}
             </p>
             <div className="space-y-2 pt-1">
-              <p className="text-xs font-semibold tracking-wider text-[#737373] uppercase dark:text-[#A1A1AA]">
+              <p className="text-xs font-semibold tracking-wider text-[#7A9993] uppercase">
                 {t.footer.socialLabel}
               </p>
               <div className="flex flex-wrap items-center gap-2">
@@ -64,7 +64,7 @@ export function PublicFooter() {
                         description: t.footer.socialPlaceholderToast,
                       })
                     }
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E3DF] bg-[#F8F8F7] px-2.5 py-1.5 text-xs font-medium text-[#737373] transition-colors hover:border-[#C99A22] hover:bg-[#C99A22]/10 hover:text-[#997214] dark:border-[#252630] dark:bg-[#11131F] dark:text-[#A1A1AA] dark:hover:bg-[#252630] dark:hover:text-[#C99A22]"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#1A453B] bg-[#12352D] px-2.5 py-1.5 text-xs font-medium text-[#B8CECA] transition-colors hover:border-[#20B89A] hover:bg-[#20B89A]/10 hover:text-[#8FFFD2]"
                   >
                     <Share2 className="size-3" aria-hidden="true" />
                     <span>{social.name}</span>
@@ -76,7 +76,7 @@ export function PublicFooter() {
 
           {/* Column 2: Useful links */}
           <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold tracking-wider text-[#202124] uppercase dark:text-[#F5F5F5]">
+            <h2 className="text-xs font-semibold tracking-wider text-white uppercase">
               {t.footer.usefulLinksTitle}
             </h2>
             <ul className="flex flex-col gap-2 text-sm">
@@ -84,7 +84,7 @@ export function PublicFooter() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="text-[#737373] transition-colors hover:text-[#C99A22] dark:text-[#A1A1AA] dark:hover:text-[#C99A22]"
+                    className="text-[#B8CECA] transition-colors hover:text-[#00E5C0]"
                   >
                     {item.label}
                   </Link>
@@ -95,7 +95,7 @@ export function PublicFooter() {
 
           {/* Column 3: Legal & Account */}
           <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold tracking-wider text-[#202124] uppercase dark:text-[#F5F5F5]">
+            <h2 className="text-xs font-semibold tracking-wider text-white uppercase">
               {t.footer.legalLinksTitle}
             </h2>
             <ul className="flex flex-col gap-2 text-sm">
@@ -103,7 +103,7 @@ export function PublicFooter() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="text-[#737373] transition-colors hover:text-[#C99A22] dark:text-[#A1A1AA] dark:hover:text-[#C99A22]"
+                    className="text-[#B8CECA] transition-colors hover:text-[#00E5C0]"
                   >
                     {item.label}
                   </Link>
@@ -112,45 +112,45 @@ export function PublicFooter() {
             </ul>
           </div>
 
-          {/* Column 4: Contact Information (Clearly labeled owner placeholders) */}
+          {/* Column 4: Contact Information */}
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xs font-semibold tracking-wider text-[#202124] uppercase dark:text-[#F5F5F5]">
+              <h2 className="text-xs font-semibold tracking-wider text-white uppercase">
                 {t.footer.contactTitle}
               </h2>
               <Badge
                 variant="gold-subtle"
-                className="border-[#C99A22]/40 bg-[#C99A22]/15 text-[10px] text-[#997214] dark:text-[#C99A22]"
+                className="border-[#20B89A]/40 bg-[#20B89A]/15 text-[10px] text-[#8FFFD2]"
               >
                 {t.common.placeholderTag}
               </Badge>
             </div>
-            <ul className="flex flex-col gap-2.5 text-xs text-[#737373] dark:text-[#A1A1AA]">
+            <ul className="flex flex-col gap-2.5 text-xs text-[#B8CECA]">
               <li className="flex items-start gap-2">
-                <Mail className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
+                <Mail className="mt-0.5 size-3.5 shrink-0 text-[#00E5C0]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.emailLabel}: </span>
+                  <span className="font-semibold text-white">{t.contact.emailLabel}: </span>
                   <span>{t.contact.emailPlaceholderValue}</span>
                 </div>
               </li>
               <li className="flex items-start gap-2">
-                <Phone className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
+                <Phone className="mt-0.5 size-3.5 shrink-0 text-[#00E5C0]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.phoneLabel}: </span>
+                  <span className="font-semibold text-white">{t.contact.phoneLabel}: </span>
                   <span>{t.contact.phonePlaceholderValue}</span>
                 </div>
               </li>
               <li className="flex items-start gap-2">
-                <MapPin className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
+                <MapPin className="mt-0.5 size-3.5 shrink-0 text-[#00E5C0]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.addressLabel}: </span>
+                  <span className="font-semibold text-white">{t.contact.addressLabel}: </span>
                   <span>{t.contact.addressPlaceholderValue}</span>
                 </div>
               </li>
               <li className="flex items-start gap-2">
-                <Clock className="mt-0.5 size-3.5 shrink-0 text-[#C99A22]" aria-hidden="true" />
+                <Clock className="mt-0.5 size-3.5 shrink-0 text-[#00E5C0]" aria-hidden="true" />
                 <div>
-                  <span className="font-semibold text-[#202124] dark:text-[#F5F5F5]">{t.contact.hoursLabel}: </span>
+                  <span className="font-semibold text-white">{t.contact.hoursLabel}: </span>
                   <span>{t.contact.hoursPlaceholderValue}</span>
                 </div>
               </li>
@@ -158,20 +158,20 @@ export function PublicFooter() {
           </div>
         </div>
 
-        <Separator className="my-8 bg-[#E5E3DF] dark:bg-[#252630]" />
+        <Separator className="my-8 bg-[#1A453B]" />
 
-        <div className="flex flex-col items-center justify-between gap-4 text-xs text-[#737373] sm:flex-row dark:text-[#A1A1AA]">
+        <div className="flex flex-col items-center justify-between gap-4 text-xs text-[#B8CECA] sm:flex-row">
           <p>
             © {currentYear} {t.footer.copyright}
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/privacy" className="transition-colors hover:text-[#C99A22]">
+            <Link href="/privacy" className="transition-colors hover:text-[#00E5C0]">
               {t.footer.privacyPolicy}
             </Link>
-            <Link href="/terms" className="transition-colors hover:text-[#C99A22]">
+            <Link href="/terms" className="transition-colors hover:text-[#00E5C0]">
               {t.footer.termsOfService}
             </Link>
-            <span className="inline-flex items-center gap-1 text-[#997214] dark:text-[#C99A22]">
+            <span className="inline-flex items-center gap-1 text-[#8FFFD2]">
               <Globe className="size-3.5" aria-hidden="true" />
               <span>EN · AR · DE · IT · FR</span>
             </span>

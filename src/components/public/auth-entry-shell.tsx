@@ -36,13 +36,13 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <header className="border-b border-border/80 bg-background/85 backdrop-blur-md">
+    <div className="flex min-h-dvh flex-col bg-[#09251F] text-[#FAF9F4]">
+      <header className="border-b border-[#1A453B] bg-[#09251F]/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link
             href="/"
             aria-label={t.brand.fullName}
-            className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"
+            className="rounded-md focus-visible:outline-2 focus-visible:outline-[#20B89A]"
           >
             <BrandLogo />
           </Link>
@@ -55,7 +55,7 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
 
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-12 sm:px-6">
         <div className="mb-6">
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="text-[#B8CECA] hover:text-white hover:bg-[#12352D]">
             <Link href="/">
               <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
               <span>{t.authEntries.backToLanding}</span>
@@ -63,20 +63,20 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
           </Button>
         </div>
 
-        <Card variant="premium" className="shadow-md">
+        <Card className="border-[#1A453B] bg-[#12352D] shadow-xl">
           <CardHeader className="space-y-2">
             <div className="flex items-center justify-between">
-              <Badge variant="gold-subtle">
+              <Badge variant="outline" className="border-[#20B89A] text-[#00E5C0]">
                 <Sparkles className="size-3" aria-hidden="true" />
                 <span>{t.authEntries.part4Badge}</span>
               </Badge>
             </div>
-            <CardTitle className="text-xl font-bold">
+            <CardTitle className="text-xl font-bold text-white">
               {mode === "login" && t.authEntries.login.title}
               {mode === "signup" && t.authEntries.signup.title}
               {mode === "forgot-password" && t.authEntries.forgotPassword.title}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[#B8CECA]">
               {mode === "login" && t.authEntries.login.subtitle}
               {mode === "signup" && t.authEntries.signup.subtitle}
               {mode === "forgot-password" && t.authEntries.forgotPassword.subtitle}
@@ -84,26 +84,27 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="rounded-xl border border-gold-border/80 bg-gold-subtle/50 p-3 text-xs leading-relaxed text-gold-foreground">
+            <div className="rounded-xl border border-[#20B89A]/30 bg-[#20B89A]/10 p-3 text-xs leading-relaxed text-[#8FFFD2]">
               {t.authEntries.part4Notice}
             </div>
 
             <form onSubmit={handlePart4Pending} className="space-y-4">
               {mode === "signup" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="auth-full-name">{t.authEntries.signup.fullNameLabel}</Label>
+                  <Label htmlFor="auth-full-name" className="text-white">{t.authEntries.signup.fullNameLabel}</Label>
                   <Input
                     id="auth-full-name"
                     name="fullName"
                     autoComplete="name"
                     placeholder={t.contact.form.fullNamePlaceholder}
                     required
+                    className="border-[#1A453B] bg-[#09251F] text-white placeholder:text-[#7A9993]"
                   />
                 </div>
               ) : null}
 
               <div className="grid gap-2">
-                <Label htmlFor="auth-email">
+                <Label htmlFor="auth-email" className="text-white">
                   {mode === "login" && t.authEntries.login.emailLabel}
                   {mode === "signup" && t.authEntries.signup.emailLabel}
                   {mode === "forgot-password" && t.authEntries.forgotPassword.emailLabel}
@@ -115,13 +116,14 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
                   autoComplete="email"
                   placeholder={t.contact.form.emailPlaceholder}
                   required
+                  className="border-[#1A453B] bg-[#09251F] text-white placeholder:text-[#7A9993]"
                 />
               </div>
 
               {mode !== "forgot-password" ? (
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="auth-password">
+                    <Label htmlFor="auth-password" className="text-white">
                       {mode === "login"
                         ? t.authEntries.login.passwordLabel
                         : t.authEntries.signup.passwordLabel}
@@ -129,7 +131,7 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
                     {mode === "login" ? (
                       <Link
                         href="/forgot-password"
-                        className="text-xs font-medium text-gold-foreground hover:underline"
+                        className="text-xs font-medium text-[#00E5C0] hover:underline"
                       >
                         {t.authEntries.login.forgotPasswordLink}
                       </Link>
@@ -142,11 +144,12 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
                     autoComplete={mode === "login" ? "current-password" : "new-password"}
                     placeholder="••••••••"
                     required
+                    className="border-[#1A453B] bg-[#09251F] text-white placeholder:text-[#7A9993]"
                   />
                 </div>
               ) : null}
 
-              <Button type="submit" variant="gold" fullWidth>
+              <Button type="submit" className="w-full bg-[#00E5C0] text-[#09251F] hover:bg-[#8FFFD2]">
                 {mode === "login" && (
                   <>
                     <LogIn className="size-4" aria-hidden="true" />
@@ -169,11 +172,11 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
             </form>
           </CardContent>
 
-          <CardFooter className="justify-center border-t border-border/70 pt-4 text-xs text-muted-foreground">
+          <CardFooter className="justify-center border-t border-[#1A453B] pt-4 text-xs text-[#B8CECA]">
             {mode === "login" ? (
               <p>
                 {t.authEntries.login.noAccountPrompt}{" "}
-                <Link href="/signup" className="font-semibold text-gold-foreground hover:underline">
+                <Link href="/signup" className="font-semibold text-[#00E5C0] hover:underline">
                   {t.authEntries.login.createAccountLink}
                 </Link>
               </p>
@@ -181,7 +184,7 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
             {mode === "signup" ? (
               <p>
                 {t.authEntries.signup.hasAccountPrompt}{" "}
-                <Link href="/login" className="font-semibold text-gold-foreground hover:underline">
+                <Link href="/login" className="font-semibold text-[#00E5C0] hover:underline">
                   {t.authEntries.signup.loginLink}
                 </Link>
               </p>
@@ -189,7 +192,7 @@ export function AuthEntryShell({ mode }: AuthEntryShellProps) {
             {mode === "forgot-password" ? (
               <p>
                 {t.authEntries.forgotPassword.rememberedPrompt}{" "}
-                <Link href="/login" className="font-semibold text-gold-foreground hover:underline">
+                <Link href="/login" className="font-semibold text-[#00E5C0] hover:underline">
                   {t.authEntries.forgotPassword.backToLoginLink}
                 </Link>
               </p>

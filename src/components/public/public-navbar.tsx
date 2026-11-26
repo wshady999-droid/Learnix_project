@@ -136,35 +136,39 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
     { id: "contact", label: t.nav.contact, href: "/#contact" },
   ] as const;
 
+  // التعديل الجديد: شفاف تماماً في الأعلى، ويصبح له خلفية عند التمرير
+  const headerClasses = cn(
+    "z-40 w-full transition-all duration-300",
+    overlayHero ? "fixed top-0 inset-x-0" : "sticky top-0",
+    overlayHero
+      ? scrolled
+        // عند التمرير: خلفية مع ضبابية
+        ? "border-b border-gray-200 bg-white/90 backdrop-blur-md shadow-sm dark:border-[#1A453B] dark:bg-[#09251F]/95 dark:shadow-lg" 
+        // في الأعلى: شفاف تماماً (بدون خلفية ولا حواف)
+        : "border-b border-transparent bg-transparent" 
+      // للصفحات الأخرى غير الرئيسية
+      : "border-b border-gray-200 bg-white/90 backdrop-blur-md dark:border-[#1A453B] dark:bg-[#09251F]/95",
+  );
+
   return (
-    <header
-      className={cn(
-        "z-40 w-full transition-all duration-300",
-        overlayHero ? "fixed top-0 inset-x-0" : "sticky top-0",
-        overlayHero
-          ? scrolled
-            ? "border-b border-[#E5E3DF] bg-[#F8F8F7]/95 backdrop-blur-md shadow-lg dark:border-[#252630] dark:bg-[#17181A]/95"
-            : "border-b border-black/10 bg-transparent backdrop-blur-none dark:border-white/10 dark:bg-transparent"
-          : "border-b border-[#E5E3DF] bg-[#F8F8F7]/95 backdrop-blur-md dark:border-[#252630] dark:bg-[#17181A]/95",
-      )}
-    >
+    <header className={headerClasses}>
       <div className="flex h-20 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <span
             aria-hidden="true"
-            className="hidden h-7 w-1 rounded-full bg-[#C99A22] sm:inline-block"
+            className="hidden h-7 w-1 rounded-full bg-[#20B89A] sm:inline-block"
           />
           <Link
             href="/#home"
             onClick={(e) => handleNavClick(e, "home")}
             aria-label={t.brand.fullName}
-            className="flex items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-[#C99A22] [&_span]:!text-[#202124] dark:[&_span]:!text-[#F5F5F5]"
+            className="flex items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-[#20B89A]"
           >
-            <BrandLogo />
+            <BrandLogo className="text-[#09251F] dark:text-white" />
           </Link>
           <span
             aria-hidden="true"
-            className="hidden h-6 w-px bg-black/15 dark:bg-white/15 lg:inline-block"
+            className="hidden h-6 w-px bg-gray-300 dark:bg-white/15 lg:inline-block"
           />
         </div>
 
@@ -182,15 +186,15 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
                 className={cn(
                   "relative px-6 py-2 text-sm font-medium transition-colors duration-200",
                   isActive
-                    ? "font-semibold text-[#202124] dark:text-[#F5F5F5]"
-                    : "text-[#52525B] hover:text-[#202124] dark:text-[#A1A1AA] dark:hover:text-[#F5F5F5]",
+                    ? "font-semibold text-[#09251F] dark:text-white"
+                    : "text-gray-600 hover:text-[#09251F] dark:text-[#B8CECA] dark:hover:text-white",
                 )}
               >
                 <span>{item.label}</span>
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "absolute inset-x-6 -bottom-0.5 h-0.5 rounded-full bg-[#C99A22] transition-all duration-200",
+                    "absolute inset-x-6 -bottom-0.5 h-0.5 rounded-full bg-[#20B89A] transition-all duration-200",
                     isActive ? "opacity-100 scale-x-100" : "opacity-0 scale-x-0",
                   )}
                 />
@@ -200,23 +204,23 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
         </nav>
 
         <div className="flex items-center gap-2.5">
-          <div className="[&_button]:border-[#E5E3DF] [&_button]:bg-white/85 [&_button]:text-[#202124] [&_button:hover]:border-[#C99A22] [&_button:hover]:bg-white [&_svg]:!text-[#C99A22] dark:[&_button]:border-[#252630] dark:[&_button]:bg-[#11131F]/80 dark:[&_button]:text-[#F5F5F5] dark:[&_button:hover]:border-[#C99A22] dark:[&_button:hover]:bg-[#252630]">
+          <div className="[&_button]:border-gray-300 [&_button]:bg-gray-50 [&_button]:text-gray-700 [&_button:hover]:border-[#20B89A] [&_button:hover]:bg-gray-100 [&_svg]:!text-[#20B89A] dark:[&_button]:border-[#1A453B] dark:[&_button]:bg-[#12352D]/80 dark:[&_button]:text-white">
             <LanguageSelector />
           </div>
-          <div className="[&_button]:border-[#E5E3DF] [&_button]:bg-white/85 [&_button]:text-[#202124] [&_button:hover]:border-[#C99A22] [&_button:hover]:bg-white [&_svg]:!text-[#C99A22] dark:[&_button]:border-[#252630] dark:[&_button]:bg-[#11131F]/80 dark:[&_button]:text-[#F5F5F5] dark:[&_button:hover]:border-[#C99A22] dark:[&_button:hover]:bg-[#252630]">
+          <div className="[&_button]:border-gray-300 [&_button]:bg-gray-50 [&_button]:text-gray-700 [&_button:hover]:border-[#20B89A] [&_button:hover]:bg-gray-100 [&_svg]:!text-[#20B89A] dark:[&_button]:border-[#1A453B] dark:[&_button]:bg-[#12352D]/80 dark:[&_button]:text-white">
             <ThemeSwitcher />
           </div>
 
           <div className="hidden items-center gap-2.5 sm:flex">
             <Link
               href="/login"
-              className="inline-flex h-10 items-center justify-center rounded-full border border-[#C99A22]/70 bg-white/85 px-6 text-xs font-semibold text-[#202124] transition-all duration-200 hover:border-[#C99A22] hover:bg-[#C99A22]/15 hover:text-[#202124] dark:bg-[#11131F]/70 dark:text-[#F5F5F5] dark:hover:text-[#F5F5F5]"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-gray-300 bg-white/80 px-6 text-xs font-semibold text-[#09251F] transition-all duration-200 hover:border-[#20B89A] hover:bg-gray-50 dark:border-[#20B89A]/50 dark:bg-transparent dark:text-white dark:hover:border-[#20B89A] dark:hover:bg-[#20B89A]/10"
             >
               {t.nav.login}
             </Link>
             <Link
               href="/signup"
-              className="inline-flex h-10 items-center justify-center rounded-full bg-[#C99A22] px-6 text-xs font-semibold text-[#11131F] shadow-[0_4px_14px_rgba(201,154,34,0.35)] transition-all duration-200 hover:bg-[#d8a92b] hover:shadow-[0_6px_20px_rgba(201,154,34,0.5)]"
+              className="inline-flex h-10 items-center justify-center rounded-full bg-[#20B89A] px-6 text-xs font-semibold text-white shadow-[0_4px_14px_rgba(32,184,154,0.35)] transition-all duration-200 hover:bg-[#1a9e84] hover:shadow-[0_6px_20px_rgba(32,184,154,0.5)] dark:bg-[#00E5C0] dark:text-[#09251F] dark:hover:bg-[#8FFFD2]"
             >
               {t.nav.createAccount}
             </Link>
@@ -227,19 +231,19 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
               <Button
                 variant="outline"
                 size="icon-sm"
-                className="border-[#E5E3DF] bg-white/85 text-[#202124] hover:border-[#C99A22] hover:bg-white md:hidden dark:border-[#252630] dark:bg-[#11131F]/80 dark:text-[#F5F5F5] dark:hover:bg-[#252630]"
+                className="border-gray-300 bg-white/80 text-gray-700 hover:border-[#20B89A] hover:bg-gray-50 md:hidden dark:border-[#1A453B] dark:bg-[#12352D]/80 dark:text-white dark:hover:bg-[#12352D]"
                 aria-label={t.nav.openMenuAria}
               >
-                <Menu className="size-4 text-[#C99A22]" aria-hidden="true" />
+                <Menu className="size-4 text-[#20B89A]" aria-hidden="true" />
               </Button>
             </SheetTrigger>
             <SheetContent
               side={isRtl ? "right" : "left"}
-              className="w-80 border-[#E5E3DF] bg-[#F8F8F7] p-0 text-[#202124] dark:border-[#252630] dark:bg-[#17181A] dark:text-[#F5F5F5]"
+              className="w-80 border-gray-200 bg-white p-0 text-[#09251F] dark:border-[#1A453B] dark:bg-[#09251F] dark:text-white"
             >
-              <SheetHeader className="border-b border-[#E5E3DF] px-5 py-4 text-start dark:border-[#252630]">
+              <SheetHeader className="border-b border-gray-200 px-5 py-4 text-start dark:border-[#1A453B]">
                 <SheetTitle asChild>
-                  <div className="[&_span]:!text-[#202124] dark:[&_span]:!text-[#F5F5F5]">
+                  <div className="[&_span]:!text-[#09251F] dark:[&_span]:!text-white">
                     <BrandLogo />
                   </div>
                 </SheetTitle>
@@ -265,8 +269,8 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
                       className={cn(
                         "flex h-10 items-center rounded-lg px-3.5 text-sm font-medium transition-colors",
                         isActive
-                          ? "bg-[#C99A22] font-semibold text-[#11131F]"
-                          : "text-[#737373] hover:bg-[#EFEEEB] hover:text-[#202124] dark:text-[#A1A1AA] dark:hover:bg-[#252630] dark:hover:text-[#F5F5F5]",
+                          ? "bg-[#20B89A] font-semibold text-white"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-[#09251F] dark:text-[#B8CECA] dark:hover:bg-[#12352D] dark:hover:text-white",
                       )}
                     >
                       {item.label}
@@ -275,19 +279,19 @@ export function PublicNavbar({ overlayHero = false }: PublicNavbarProps) {
                 })}
               </nav>
 
-              <div className="flex flex-col gap-2.5 border-t border-[#E5E3DF] p-4 dark:border-[#252630]">
+              <div className="flex flex-col gap-2.5 border-t border-gray-200 p-4 dark:border-[#1A453B]">
                 <Link
                   href="/login"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-[#C99A22]/70 bg-white px-4 text-sm font-semibold text-[#202124] transition-colors hover:bg-[#EFEEEB] dark:bg-[#11131F] dark:text-[#F5F5F5] dark:hover:bg-[#252630]"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-gray-300 bg-white px-4 text-sm font-semibold text-[#09251F] transition-colors hover:bg-gray-50 dark:border-[#20B89A]/50 dark:bg-transparent dark:text-white dark:hover:bg-[#12352D]"
                 >
-                  <LogIn className="size-4 text-[#C99A22]" aria-hidden="true" />
+                  <LogIn className="size-4 text-[#20B89A]" aria-hidden="true" />
                   {t.nav.login}
                 </Link>
                 <Link
                   href="/signup"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#C99A22] px-4 text-sm font-semibold text-[#11131F] transition-colors hover:bg-[#d8a92b]"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-[#20B89A] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#1a9e84] dark:bg-[#00E5C0] dark:text-[#09251F] dark:hover:bg-[#8FFFD2]"
                 >
                   <UserPlus className="size-4" aria-hidden="true" />
                   {t.nav.createAccount}

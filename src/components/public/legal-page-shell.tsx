@@ -22,12 +22,12 @@ export function LegalPageShell({ kind }: LegalPageShellProps) {
   const sections = kind === "privacy" ? t.legal.privacySections : t.legal.termsSections;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+    <div className="flex min-h-dvh flex-col bg-[#09251F] text-[#FAF9F4]">
       <PublicNavbar />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-12 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <Button asChild variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm" className="text-[#B8CECA] hover:text-white hover:bg-[#12352D]">
             <Link href="/">
               <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
               <span>{t.common.backToHome}</span>
@@ -36,28 +36,28 @@ export function LegalPageShell({ kind }: LegalPageShellProps) {
         </div>
 
         <div className="space-y-3">
-          <Badge variant="gold-subtle">
+          <Badge variant="outline" className="border-[#20B89A] text-[#00E5C0]">
             <FileText className="size-3.5" aria-hidden="true" />
             <span>{t.legal.placeholderBadge}</span>
           </Badge>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
             {title}
           </h1>
-          <p className="text-sm text-muted-foreground sm:text-base">{subtitle}</p>
+          <p className="text-sm text-[#B8CECA] sm:text-base">{subtitle}</p>
         </div>
 
-        <div className="mt-6 rounded-xl border border-gold-border bg-gold-subtle/50 p-4 text-xs leading-relaxed text-gold-foreground">
+        <div className="mt-6 rounded-xl border border-[#20B89A]/30 bg-[#20B89A]/10 p-4 text-xs leading-relaxed text-[#8FFFD2]">
           {t.legal.placeholderNotice}
         </div>
 
         <div className="mt-8 space-y-4">
           {sections.map((section) => (
-            <Card key={section.title}>
+            <Card key={section.title} className="border-[#1A453B] bg-[#12352D]">
               <CardHeader>
-                <CardTitle className="text-base">{section.title}</CardTitle>
+                <CardTitle className="text-base text-white">{section.title}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm leading-relaxed text-muted-foreground">{section.body}</p>
+                <p className="text-sm leading-relaxed text-[#B8CECA]">{section.body}</p>
               </CardContent>
             </Card>
           ))}
