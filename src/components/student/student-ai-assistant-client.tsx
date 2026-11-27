@@ -109,7 +109,6 @@ interface ChatTurn {
   attachments?: MessageAttachmentDisplay[];
 }
 
-// Minimal Web Speech API type declarations for browser speech recognition
 interface BrowserSpeechRecognitionEvent {
   resultIndex: number;
   results: {
@@ -131,6 +130,18 @@ interface BrowserSpeechRecognitionInstance {
   stop: () => void;
   abort: () => void;
 }
+
+const DARK_GLASS_SHELL =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]";
+
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/60 backdrop-blur-md transition-all duration-200 hover:border-emerald-400/40 hover:bg-[#131822]/75";
+
+const DARK_GLASS_COMPOSER =
+  "rounded-2xl border border-white/15 bg-[#131720]/80 p-2.5 backdrop-blur-xl shadow-[0_8px_28px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-200 focus-within:border-emerald-400/50 focus-within:bg-[#151B26]/90 focus-within:shadow-[0_10px_32px_rgba(16,185,129,0.14),inset_0_1px_0_rgba(110,231,183,0.16)]";
+
+const DARK_GLASS_PILL =
+  "border-white/12 bg-[#0F1115]/65 text-foreground hover:border-emerald-400/40 hover:bg-[#18202C]/80";
 
 const SUGGESTION_CARDS: ReadonlyArray<{
   title: string;
@@ -208,7 +219,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
       return (
         <code
           key={idx}
-          className="rounded bg-background/80 px-1.5 py-0.5 font-mono text-[12px] text-gold-foreground"
+          className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[12px] text-emerald-300"
         >
           {token.slice(1, -1)}
         </code>
@@ -243,10 +254,10 @@ function FormattedMarkdownContent({ content }: { content: string }) {
             <div
               key={segIdx}
               dir="ltr"
-              className="overflow-hidden rounded-xl border border-border/80 bg-background/90"
+              className="overflow-hidden rounded-xl border border-white/10 bg-[#0A0C10]/85"
             >
               {lang && (
-                <div className="border-b border-border/60 bg-muted/40 px-3 py-1 font-mono text-[11px] text-muted-foreground uppercase">
+                <div className="border-b border-white/10 bg-white/5 px-3 py-1 font-mono text-[11px] text-muted-foreground uppercase">
                   {lang}
                 </div>
               )}
@@ -377,7 +388,6 @@ export function StudentAiAssistantClient({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Optional course selection: defaults to "" ("General AI Assistant")
   const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [mode, setMode] = useState<StudentAiMode>("chat");
   const [promptInput, setPromptInput] = useState("");
@@ -388,7 +398,6 @@ export function StudentAiAssistantClient({
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Live ChatGPT-Style Voice Recording State
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [waveformLevels, setWaveformLevels] = useState<number[]>(
@@ -396,13 +405,11 @@ export function StudentAiAssistantClient({
   );
   const [liveSpeechPreview, setLiveSpeechPreview] = useState("");
 
-  // Active conversation state
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null);
   const [localTurns, setLocalTurns] = useState<ChatTurn[]>([]);
 
-  // Hidden file inputs for Document, Image, and Audio attachments
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
@@ -410,7 +417,6 @@ export function StudentAiAssistantClient({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // MediaRecorder & Web Audio API references for live voice recording
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -448,7 +454,6 @@ export function StudentAiAssistantClient({
     }
   }, [localTurns.length, sending]);
 
-  // Clean up microphone & Web Audio resources when unmounting
   const releaseMicrophoneResources = useCallback(() => {
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current);
@@ -609,9 +614,6 @@ export function StudentAiAssistantClient({
     });
   }
 
-  // ---------------------------------------------------------------------------
-  // LIVE VOICE RECORDING (CHATGPT-STYLE: SEND OR CANCEL WHILE RECORDING)
-  // ---------------------------------------------------------------------------
   async function handleStartRecording() {
     if (
       isRecordingSessionActiveRef.current ||
@@ -652,7 +654,6 @@ export function StudentAiAssistantClient({
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
 
-      // Pick best supported audio mimeType
       const candidateMimeTypes = [
         "audio/webm;codecs=opus",
         "audio/webm",
@@ -673,9 +674,8 @@ export function StudentAiAssistantClient({
       };
 
       mediaRecorderRef.current = recorder;
-      recorder.start(150); // Collect timeslices every 150ms for responsive finalization
+      recorder.start(150);
 
-      // Set up real-time Web Audio API frequency analyser for live waveform visualization
       try {
         const AudioCtx =
           window.AudioContext ||
@@ -712,10 +712,9 @@ export function StudentAiAssistantClient({
           animationFrameRef.current = requestAnimationFrame(updateWaveform);
         }
       } catch {
-        // Fallback if AudioContext is blocked
+        // Fallback
       }
 
-      // Optional parallel browser speech recognition to enhance instant bilingual transcription
       try {
         const SpeechRecConstructor =
           (window as unknown as Record<string, unknown>).SpeechRecognition ||
@@ -739,15 +738,11 @@ export function StudentAiAssistantClient({
               setLiveSpeechPreview(cleaned);
             }
           };
-          recognition.onerror = () => {
-            // Non-blocking
-          };
+          recognition.onerror = () => {};
           recognition.start();
           speechRecognitionRef.current = recognition;
         }
-      } catch {
-        // Non-blocking
-      }
+      } catch {}
 
       setRecordingSeconds(0);
       setRecordingState("recording");
@@ -767,16 +762,13 @@ export function StudentAiAssistantClient({
   }
 
   function handleCancelRecording() {
-    // Immediately stop recording and discard all collected audio chunks without uploading
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== "inactive") {
       recorder.ondataavailable = null;
       recorder.onstop = null;
       try {
         recorder.stop();
-      } catch {
-        // Ignore
-      }
+      } catch {}
     }
     audioChunksRef.current = [];
     speechTranscriptRef.current = "";
@@ -788,11 +780,7 @@ export function StudentAiAssistantClient({
 
   async function handleSendWhileRecording() {
     const recorder = mediaRecorderRef.current;
-    if (
-      !recorder ||
-      recordingState !== "recording" ||
-      sending
-    ) {
+    if (!recorder || recordingState !== "recording" || sending) {
       return;
     }
 
@@ -801,7 +789,6 @@ export function StudentAiAssistantClient({
     try {
       const mimeType = recorder.mimeType || "audio/webm";
 
-      // Wait for MediaRecorder to flush final chunk and stop cleanly
       const finalizedBlob = await new Promise<Blob>((resolve, reject) => {
         const handleStop = () => {
           const blob = new Blob(audioChunksRef.current, { type: mimeType });
@@ -866,9 +853,6 @@ export function StudentAiAssistantClient({
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // UNIFIED MULTIMODAL MESSAGE SUBMISSION (TEXT + ATTACHMENTS + VOICE)
-  // ---------------------------------------------------------------------------
   async function submitChatTurn(options?: {
     overridePrompt?: string;
     overrideMode?: StudentAiMode;
@@ -1025,11 +1009,16 @@ export function StudentAiAssistantClient({
   }
 
   return (
-    <div className="flex h-[calc(100dvh-7.5rem)] min-h-[560px] w-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/60 shadow-sm backdrop-blur-sm">
+    <div
+      className={cn(
+        "flex h-[calc(100dvh-7.5rem)] min-h-[560px] w-full flex-col overflow-hidden rounded-2xl border",
+        DARK_GLASS_SHELL,
+      )}
+    >
       {/* A. Chat Header */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-card/90 px-4 py-3 sm:px-6">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-[#0F1115]/60 px-4 py-3 backdrop-blur-md sm:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-gold-primary/15 text-gold-foreground shadow-2xs">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/15 text-emerald-400 shadow-2xs">
             <Sparkles className="size-4" aria-hidden="true" />
           </div>
           <div>
@@ -1038,8 +1027,8 @@ export function StudentAiAssistantClient({
                 AI Study Assistant
               </h1>
               <Badge
-                variant="gold-subtle"
-                className="hidden text-[10px] sm:inline-flex"
+                variant="outline"
+                className="hidden border-emerald-400/30 bg-emerald-500/10 text-[10px] text-emerald-300 sm:inline-flex"
               >
                 {selectedCourse ? "Grounded Course RAG" : "Personal AI Tutor"}
               </Badge>
@@ -1065,13 +1054,18 @@ export function StudentAiAssistantClient({
 
           <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
             <SheetTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
-                <History className="size-3.5 text-gold-foreground" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={DARK_GLASS_PILL}
+              >
+                <History className="size-3.5 text-emerald-400" />
                 <span className="hidden sm:inline">History</span>
                 {history.conversations.length > 0 && (
                   <Badge
                     variant="outline"
-                    className="ms-0.5 px-1.5 py-0 text-[10px]"
+                    className="ms-0.5 border-white/15 bg-white/5 px-1.5 py-0 text-[10px]"
                   >
                     {history.conversations.length}
                   </Badge>
@@ -1080,12 +1074,12 @@ export function StudentAiAssistantClient({
             </SheetTrigger>
             <SheetContent
               side="right"
-              className="flex w-80 flex-col p-0 sm:max-w-sm"
+              className="flex w-80 flex-col border-white/10 bg-[#0F1115]/95 p-0 backdrop-blur-xl sm:max-w-sm"
             >
-              <SheetHeader className="border-b border-border/80 px-5 py-4 text-start">
+              <SheetHeader className="border-b border-white/10 px-5 py-4 text-start">
                 <div className="flex items-center justify-between pe-6">
                   <SheetTitle className="flex items-center gap-2 text-base">
-                    <History className="size-4 text-gold-foreground" />
+                    <History className="size-4 text-emerald-400" />
                     <span>Conversation History</span>
                   </SheetTitle>
                 </div>
@@ -1094,7 +1088,7 @@ export function StudentAiAssistantClient({
                 </SheetDescription>
               </SheetHeader>
 
-              <div className="border-b border-border/60 px-4 py-2.5">
+              <div className="border-b border-white/10 px-4 py-2.5">
                 <Button
                   type="button"
                   variant="gold"
@@ -1124,8 +1118,8 @@ export function StudentAiAssistantClient({
                         className={cn(
                           "w-full rounded-xl border p-3 text-start text-xs transition-colors",
                           isActive
-                            ? "border-gold-primary bg-gold-primary/10 font-medium text-foreground"
-                            : "border-border/70 bg-background/60 text-muted-foreground hover:border-gold-border hover:bg-accent/60 hover:text-foreground",
+                            ? "border-emerald-400/50 bg-emerald-500/15 font-medium text-foreground"
+                            : "border-white/10 bg-[#0F1115]/60 text-muted-foreground hover:border-emerald-400/35 hover:bg-[#161B24]/80 hover:text-foreground",
                         )}
                       >
                         <p
@@ -1152,7 +1146,7 @@ export function StudentAiAssistantClient({
 
       {/* Active Official Exam Lock Banner */}
       {history.hasActiveOfficialExam && (
-        <div className="flex shrink-0 items-center gap-3 border-b border-destructive/50 bg-destructive/10 px-4 py-2.5 text-xs text-foreground sm:px-6">
+        <div className="flex shrink-0 items-center gap-3 border-b border-destructive/50 bg-destructive/15 px-4 py-2.5 text-xs text-foreground sm:px-6">
           <Lock className="size-4 shrink-0 text-destructive" />
           <p>
             <strong>Official Exam Lock Active:</strong> You currently have an
@@ -1168,7 +1162,7 @@ export function StudentAiAssistantClient({
           {localTurns.length === 0 ? (
             /* B. Welcome Screen */
             <div className="my-auto flex flex-col items-center justify-center py-8 text-center">
-              <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-gold-primary/40 bg-gold-primary/10 text-gold-foreground shadow-sm">
+              <div className="mb-4 flex size-14 items-center justify-center rounded-2xl border border-emerald-400/35 bg-emerald-500/15 text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.16)]">
                 <Sparkles className="size-7" aria-hidden="true" />
               </div>
 
@@ -1196,12 +1190,13 @@ export function StudentAiAssistantClient({
                         })
                       }
                       className={cn(
-                        "group flex items-start gap-3.5 rounded-xl border border-border/80 bg-background/70 p-4 text-start transition-all hover:border-gold-primary/60 hover:bg-accent/50 disabled:pointer-events-none disabled:opacity-50",
+                        "group flex items-start gap-3.5 rounded-xl border p-4 text-start disabled:pointer-events-none disabled:opacity-50",
+                        DARK_GLASS_CARD,
                         index === SUGGESTION_CARDS.length - 1 &&
                           "sm:col-span-2",
                       )}
                     >
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-gold-primary/15 text-gold-foreground transition-colors group-hover:bg-gold-primary/25">
+                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-500/15 text-emerald-400 transition-colors group-hover:bg-emerald-500/25">
                         <Icon className="size-4" aria-hidden="true" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1231,7 +1226,7 @@ export function StudentAiAssistantClient({
                     )}
                   >
                     {!isUser && (
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-gold-primary/40 bg-gold-primary/15 text-gold-foreground">
+                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 text-emerald-400">
                         <Sparkles className="size-4" aria-hidden="true" />
                       </div>
                     )}
@@ -1240,11 +1235,10 @@ export function StudentAiAssistantClient({
                       className={cn(
                         "max-w-[88%] rounded-2xl px-4 py-3.5 sm:max-w-[82%]",
                         isUser
-                          ? "space-y-2.5 bg-secondary text-sm text-foreground shadow-2xs"
-                          : "w-full space-y-3 border border-border/80 bg-background/80 text-foreground shadow-2xs",
+                          ? "space-y-2.5 border border-emerald-400/25 bg-emerald-950/60 text-sm text-foreground shadow-2xs backdrop-blur-md"
+                          : "w-full space-y-3 border border-white/10 bg-[#131720]/75 text-foreground shadow-2xs backdrop-blur-md",
                       )}
                     >
-                      {/* Render attached images, audio players, or document badges in user messages */}
                       {turn.attachments && turn.attachments.length > 0 && (
                         <div className="space-y-2">
                           {turn.attachments.map((att, idx) => {
@@ -1252,7 +1246,7 @@ export function StudentAiAssistantClient({
                               return (
                                 <div
                                   key={idx}
-                                  className="overflow-hidden rounded-xl border border-border/70 bg-background/60"
+                                  className="overflow-hidden rounded-xl border border-white/10 bg-[#0F1115]/70"
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
@@ -1274,11 +1268,11 @@ export function StudentAiAssistantClient({
                               return (
                                 <div
                                   key={idx}
-                                  className="space-y-1.5 rounded-xl border border-border/70 bg-background/70 p-2.5"
+                                  className="space-y-1.5 rounded-xl border border-white/10 bg-[#0F1115]/70 p-2.5"
                                 >
                                   <div className="flex items-center justify-between gap-2 text-xs">
                                     <span className="flex items-center gap-1.5 truncate font-medium text-foreground">
-                                      <FileAudio className="size-3.5 shrink-0 text-gold-foreground" />
+                                      <FileAudio className="size-3.5 shrink-0 text-emerald-400" />
                                       <span className="truncate">
                                         {att.isVoiceRecording
                                           ? "Voice Recording"
@@ -1303,10 +1297,10 @@ export function StudentAiAssistantClient({
                             return (
                               <div
                                 key={idx}
-                                className="flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs"
+                                className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#0F1115]/70 px-3 py-2 text-xs"
                               >
                                 <span className="flex items-center gap-2 truncate font-medium text-foreground">
-                                  <FileText className="size-3.5 shrink-0 text-gold-foreground" />
+                                  <FileText className="size-3.5 shrink-0 text-emerald-400" />
                                   <span className="truncate">
                                     {att.fileName}
                                   </span>
@@ -1334,8 +1328,8 @@ export function StudentAiAssistantClient({
                       {!isUser &&
                         turn.citations &&
                         turn.citations.length > 0 && (
-                          <div className="space-y-1.5 border-t border-border/60 pt-2.5">
-                            <p className="text-[11px] font-semibold text-gold-foreground">
+                          <div className="space-y-1.5 border-t border-white/10 pt-2.5">
+                            <p className="text-[11px] font-semibold text-emerald-400">
                               Cited Sources:
                             </p>
                             <div className="flex flex-wrap gap-1.5">
@@ -1343,9 +1337,9 @@ export function StudentAiAssistantClient({
                                 <Badge
                                   key={idx}
                                   variant="outline"
-                                  className="text-[10px]"
+                                  className="border-white/15 bg-[#0F1115]/60 text-[10px]"
                                 >
-                                  <FileText className="mr-1 size-2.5 text-gold-foreground" />
+                                  <FileText className="mr-1 size-2.5 text-emerald-400" />
                                   {cit.sourceTitle}
                                 </Badge>
                               ))}
@@ -1386,7 +1380,7 @@ export function StudentAiAssistantClient({
                     </div>
 
                     {isUser && (
-                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground">
+                      <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-[#131720]/80 text-muted-foreground">
                         <User className="size-4" aria-hidden="true" />
                       </div>
                     )}
@@ -1396,10 +1390,10 @@ export function StudentAiAssistantClient({
 
               {sending && (
                 <div className="flex items-start gap-3.5">
-                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-gold-primary/40 bg-gold-primary/15 text-gold-foreground">
+                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-500/15 text-emerald-400">
                     <Loader2 className="size-4 animate-spin" />
                   </div>
-                  <div className="rounded-2xl border border-border/80 bg-background/80 px-4 py-3 text-xs text-muted-foreground">
+                  <div className="rounded-2xl border border-white/10 bg-[#131720]/75 px-4 py-3 text-xs text-muted-foreground backdrop-blur-md">
                     {recordingState === "processing"
                       ? "Transcribing voice & generating response..."
                       : selectedCourse
@@ -1415,11 +1409,11 @@ export function StudentAiAssistantClient({
         </div>
       </div>
 
-      {/* D. Bottom Chat Input Area (Normal, Recording, Processing, Error states) */}
-      <div className="shrink-0 border-t border-border/70 bg-card/90 px-4 py-3 sm:px-6">
+      {/* D. Bottom Chat Input Area */}
+      <div className="shrink-0 border-t border-white/10 bg-[#0F1115]/65 px-4 py-3 backdrop-blur-xl sm:px-6">
         <div className="mx-auto w-full max-w-3xl space-y-2.5">
           {errorBanner && (
-            <div className="flex items-center justify-between gap-2 rounded-xl border border-destructive/50 bg-destructive/10 px-3.5 py-2 text-xs text-destructive">
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-destructive/50 bg-destructive/15 px-3.5 py-2 text-xs text-destructive">
               <div className="flex items-center gap-2">
                 <AlertCircle className="size-4 shrink-0" />
                 <span>{errorBanner}</span>
@@ -1438,7 +1432,6 @@ export function StudentAiAssistantClient({
             </div>
           )}
 
-          {/* Indexed Course Documents Indicator */}
           {courseDocs.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[11px] text-muted-foreground">
@@ -1448,16 +1441,15 @@ export function StudentAiAssistantClient({
                 <Badge
                   key={doc.sourceTitle}
                   variant="outline"
-                  className="max-w-48 truncate text-[10px]"
+                  className="max-w-48 truncate border-white/15 bg-[#0F1115]/60 text-[10px]"
                 >
-                  <FileText className="mr-1 size-2.5 shrink-0 text-gold-foreground" />
+                  <FileText className="mr-1 size-2.5 shrink-0 text-emerald-400" />
                   <span className="truncate">{doc.sourceTitle}</span>
                 </Badge>
               ))}
             </div>
           )}
 
-          {/* Hidden Multimodal File Inputs */}
           <input
             ref={docInputRef}
             type="file"
@@ -1495,31 +1487,30 @@ export function StudentAiAssistantClient({
             }}
           />
 
-          {/* Staged Attachments Preview Tray (Before Sending) */}
           {stagedAttachments.length > 0 && recordingState === "idle" && (
-            <div className="flex flex-wrap gap-2.5 rounded-xl border border-border/80 bg-background/70 p-2.5">
+            <div className="flex flex-wrap gap-2.5 rounded-xl border border-white/10 bg-[#131720]/75 p-2.5 backdrop-blur-md">
               {stagedAttachments.map((att) => (
                 <div
                   key={att.id}
-                  className="relative flex items-center gap-2.5 rounded-lg border border-border bg-card p-2 pe-7 text-xs shadow-2xs"
+                  className="relative flex items-center gap-2.5 rounded-lg border border-white/10 bg-[#0F1115]/80 p-2 pe-7 text-xs shadow-2xs"
                 >
                   {att.kind === "image" && att.previewUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={att.previewUrl}
                       alt={att.fileName}
-                      className="size-11 shrink-0 rounded-md border border-border object-cover"
+                      className="size-11 shrink-0 rounded-md border border-white/10 object-cover"
                     />
                   ) : att.kind === "audio" ? (
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-gold-primary/15 text-gold-foreground">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400">
                       <FileAudio className="size-5" />
                     </div>
                   ) : att.fileName.toLowerCase().endsWith(".xlsx") ? (
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-gold-primary/15 text-gold-foreground">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400">
                       <FileSpreadsheet className="size-5" />
                     </div>
                   ) : (
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-gold-primary/15 text-gold-foreground">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400">
                       <FileText className="size-5" />
                     </div>
                   )}
@@ -1531,7 +1522,7 @@ export function StudentAiAssistantClient({
                     <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       <Badge
                         variant="outline"
-                        className="px-1 py-0 text-[9px] uppercase"
+                        className="border-white/15 px-1 py-0 text-[9px] uppercase"
                       >
                         {att.kind}
                       </Badge>
@@ -1559,11 +1550,9 @@ export function StudentAiAssistantClient({
             </div>
           )}
 
-          {/* LIVE RECORDING MODE INTERFACE (Send & Cancel visible WHILE recording is active) */}
           {recordingState === "recording" || recordingState === "sending" ? (
-            <div className="rounded-2xl border-2 border-gold-primary bg-background/95 p-3.5 shadow-gold">
+            <div className="rounded-2xl border border-emerald-400/50 bg-[#131720]/90 p-3.5 shadow-[0_10px_32px_rgba(16,185,129,0.18)] backdrop-blur-xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                {/* Left: Recording Indicator & Duration Timer */}
                 <div className="flex items-center gap-2.5">
                   <span className="relative flex size-3">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-destructive opacity-75" />
@@ -1574,12 +1563,11 @@ export function StudentAiAssistantClient({
                       ? "Finalizing Audio..."
                       : "Recording Live"}
                   </span>
-                  <span className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs font-bold text-gold-foreground">
+                  <span className="rounded-md border border-white/10 bg-[#0F1115]/80 px-2 py-0.5 font-mono text-xs font-bold text-emerald-400">
                     {formatDurationClock(recordingSeconds)}
                   </span>
                 </div>
 
-                {/* Center: Real-time Microphone Audio-Level Waveform */}
                 <div
                   aria-label="Live microphone audio waveform"
                   className="flex h-9 flex-1 items-center justify-center gap-1 overflow-hidden px-2"
@@ -1588,12 +1576,11 @@ export function StudentAiAssistantClient({
                     <span
                       key={idx}
                       style={{ height: `${lvl}%` }}
-                      className="w-1 shrink-0 rounded-full bg-gold-primary transition-[height] duration-75"
+                      className="w-1 shrink-0 rounded-full bg-emerald-400 transition-[height] duration-75"
                     />
                   ))}
                 </div>
 
-                {/* Right: Cancel & Send Buttons (Both active WHILE recording) */}
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
@@ -1601,7 +1588,7 @@ export function StudentAiAssistantClient({
                     size="sm"
                     disabled={recordingState === "sending"}
                     onClick={handleCancelRecording}
-                    className="h-8 gap-1.5 rounded-xl border-destructive/50 text-destructive hover:bg-destructive/10"
+                    className="h-8 gap-1.5 rounded-xl border-destructive/50 bg-[#0F1115]/70 text-destructive hover:bg-destructive/15"
                   >
                     <X className="size-3.5" />
                     <span>Cancel</span>
@@ -1628,9 +1615,9 @@ export function StudentAiAssistantClient({
               {liveSpeechPreview && (
                 <p
                   dir="auto"
-                  className="mt-2 truncate border-t border-border/50 pt-1.5 text-xs text-muted-foreground"
+                  className="mt-2 truncate border-t border-white/10 pt-1.5 text-xs text-muted-foreground"
                 >
-                  <span className="font-semibold text-gold-foreground">
+                  <span className="font-semibold text-emerald-400">
                     Live Speech:{" "}
                   </span>
                   {liveSpeechPreview}
@@ -1638,8 +1625,8 @@ export function StudentAiAssistantClient({
               )}
             </div>
           ) : (
-            /* NORMAL / PROCESSING COMPOSER CONTAINER */
-            <div className="rounded-2xl border border-border bg-background/90 p-2.5 shadow-xs transition-colors focus-within:border-gold-primary/70">
+            /* Distinct Midnight-Slate Glass Composer Container */
+            <div className={DARK_GLASS_COMPOSER}>
               <textarea
                 ref={textareaRef}
                 rows={2}
@@ -1657,10 +1644,8 @@ export function StudentAiAssistantClient({
                 className="max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground/80 disabled:cursor-not-allowed disabled:opacity-60"
               />
 
-              {/* Composer Toolbar: Attachment Menu + Optional Course Selector + Microphone + Send */}
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2">
+              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {/* 1. Compact Attachment Menu (Upload Document, Upload Image, Upload Audio) */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -1668,21 +1653,27 @@ export function StudentAiAssistantClient({
                         variant="outline"
                         size="sm"
                         disabled={sending || history.hasActiveOfficialExam}
-                        className="h-8 gap-1.5 rounded-xl px-2.5 text-xs"
+                        className={cn(
+                          "h-8 gap-1.5 rounded-xl px-2.5 text-xs",
+                          DARK_GLASS_PILL,
+                        )}
                         aria-label="Attach files"
                       >
-                        <Paperclip className="size-3.5 text-gold-foreground" />
+                        <Paperclip className="size-3.5 text-emerald-400" />
                         <span className="hidden sm:inline">Attach</span>
                         <ChevronDown className="size-3 opacity-60" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuContent
+                      align="start"
+                      className="w-56 border-white/10 bg-[#0F1115]/95 backdrop-blur-xl"
+                    >
                       <DropdownMenuLabel>Attach Study File</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => docInputRef.current?.click()}
                       >
-                        <FileText className="size-4 text-gold-foreground" />
+                        <FileText className="size-4 text-emerald-400" />
                         <div className="flex flex-col">
                           <span className="text-xs font-medium">
                             Upload Document
@@ -1695,7 +1686,7 @@ export function StudentAiAssistantClient({
                       <DropdownMenuItem
                         onClick={() => imageInputRef.current?.click()}
                       >
-                        <ImageIcon className="size-4 text-gold-foreground" />
+                        <ImageIcon className="size-4 text-emerald-400" />
                         <div className="flex flex-col">
                           <span className="text-xs font-medium">
                             Upload Image
@@ -1708,7 +1699,7 @@ export function StudentAiAssistantClient({
                       <DropdownMenuItem
                         onClick={() => audioInputRef.current?.click()}
                       >
-                        <FileAudio className="size-4 text-gold-foreground" />
+                        <FileAudio className="size-4 text-emerald-400" />
                         <div className="flex flex-col">
                           <span className="text-xs font-medium">
                             Upload Audio
@@ -1721,7 +1712,6 @@ export function StudentAiAssistantClient({
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* 2. Optional Course Selection Dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -1729,12 +1719,15 @@ export function StudentAiAssistantClient({
                         variant="outline"
                         size="sm"
                         disabled={sending}
-                        className="h-8 max-w-52 gap-1.5 rounded-xl px-2.5 text-xs sm:max-w-64"
+                        className={cn(
+                          "h-8 max-w-52 gap-1.5 rounded-xl px-2.5 text-xs sm:max-w-64",
+                          DARK_GLASS_PILL,
+                        )}
                       >
                         {selectedCourse ? (
-                          <BookOpen className="size-3.5 shrink-0 text-gold-foreground" />
+                          <BookOpen className="size-3.5 shrink-0 text-emerald-400" />
                         ) : (
-                          <Sparkles className="size-3.5 shrink-0 text-gold-foreground" />
+                          <Sparkles className="size-3.5 shrink-0 text-emerald-400" />
                         )}
                         <span className="truncate">
                           {selectedCourse
@@ -1744,7 +1737,10 @@ export function StudentAiAssistantClient({
                         <ChevronDown className="size-3 shrink-0 opacity-60" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuContent
+                      align="start"
+                      className="w-72 border-white/10 bg-[#0F1115]/95 backdrop-blur-xl"
+                    >
                       <DropdownMenuLabel>
                         Optional Course Context
                       </DropdownMenuLabel>
@@ -1776,7 +1772,6 @@ export function StudentAiAssistantClient({
                   </DropdownMenu>
                 </div>
 
-                {/* Right Controls: Live Voice Microphone Button + Send Button */}
                 <div className="flex items-center gap-1.5">
                   <Button
                     type="button"
@@ -1786,9 +1781,12 @@ export function StudentAiAssistantClient({
                     onClick={() => void handleStartRecording()}
                     title="Record voice message"
                     aria-label="Record voice message"
-                    className="h-8 gap-1.5 rounded-xl px-2.5 text-xs"
+                    className={cn(
+                      "h-8 gap-1.5 rounded-xl px-2.5 text-xs",
+                      DARK_GLASS_PILL,
+                    )}
                   >
-                    <Mic className="size-3.5 text-gold-foreground" />
+                    <Mic className="size-3.5 text-emerald-400" />
                     <span className="hidden sm:inline">Voice</span>
                   </Button>
 

@@ -61,6 +61,15 @@ interface ProfileSettingsClientProps {
   embedded?: boolean;
 }
 
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
+const DARK_GLASS_INNER =
+  "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
+
+const DARK_GLASS_FIELD =
+  "border-white/10 bg-[#0F1115]/55 text-foreground backdrop-blur-md focus-visible:border-emerald-400/50";
+
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
@@ -338,17 +347,17 @@ export function ProfileSettingsClient({
         </div>
 
         {/* 1. Personal Information & Avatar */}
-        <Card variant="premium">
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <UserCheck className="size-5 text-gold-foreground" aria-hidden="true" />
+              <UserCheck className="size-5 text-[#C99A22]" aria-hidden="true" />
               <span>{authT.profile.personalInfoTitle}</span>
             </CardTitle>
             <CardDescription>{authT.profile.personalInfoDescription}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 pt-5">
             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-              <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-gold-border bg-gold-subtle text-xl font-bold text-gold-foreground">
+              <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#C99A22]/50 bg-[#0F1115]/80 text-xl font-bold text-[#C99A22]">
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -364,9 +373,12 @@ export function ProfileSettingsClient({
               <div className="space-y-1.5">
                 <Label
                   htmlFor="profile-avatar-upload"
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-input bg-card px-3.5 py-2 text-xs font-semibold text-foreground shadow-xs transition-colors hover:border-gold-border hover:bg-accent"
+                  className={cn(
+                    "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold text-foreground shadow-xs transition-colors hover:border-[#C99A22]/50 hover:bg-[#0F1115]/80",
+                    DARK_GLASS_INNER,
+                  )}
                 >
-                  <Camera className="size-4 text-gold-foreground" aria-hidden="true" />
+                  <Camera className="size-4 text-[#C99A22]" aria-hidden="true" />
                   <span>
                     {uploadingAvatar
                       ? authT.profile.uploadingAvatarButton
@@ -393,13 +405,19 @@ export function ProfileSettingsClient({
                     id="profile-full-name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    className={DARK_GLASS_FIELD}
                     required
                   />
                 </div>
 
                 <div className="grid gap-2">
                   <Label htmlFor="profile-email">{authT.signup.emailLabel}</Label>
-                  <Input id="profile-email" value={profile.email} disabled />
+                  <Input
+                    id="profile-email"
+                    value={profile.email}
+                    disabled
+                    className={DARK_GLASS_FIELD}
+                  />
                 </div>
               </div>
 
@@ -410,10 +428,10 @@ export function ProfileSettingsClient({
                     id="profile-country"
                     value={countryIso2}
                     onChange={(e) => setCountryIso2(e.target.value)}
-                    className={cn(fieldBase, "h-10 py-2")}
+                    className={cn(fieldBase, "h-10 py-2", DARK_GLASS_FIELD)}
                   >
                     {COUNTRY_CALLING_CODES.map((c) => (
-                      <option key={c.iso2} value={c.iso2}>
+                      <option key={c.iso2} value={c.iso2} className="bg-[#0F1115] text-foreground">
                         {c.flag} {c.iso2} ({c.dialCode})
                       </option>
                     ))}
@@ -428,6 +446,7 @@ export function ProfileSettingsClient({
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder={authT.signup.phonePlaceholder}
+                    className={DARK_GLASS_FIELD}
                   />
                 </div>
               </div>
@@ -442,6 +461,7 @@ export function ProfileSettingsClient({
                     value={specialization}
                     onChange={(e) => setSpecialization(e.target.value)}
                     placeholder="e.g., Full-Stack Web Engineering, Machine Learning, Cybersecurity"
+                    className={DARK_GLASS_FIELD}
                   />
                 </div>
               )}
@@ -454,6 +474,7 @@ export function ProfileSettingsClient({
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder={authT.profile.bioPlaceholder}
+                  className={DARK_GLASS_FIELD}
                 />
               </div>
 
@@ -469,15 +490,15 @@ export function ProfileSettingsClient({
         </Card>
 
         {/* 2. Language, Theme & Notification Preferences */}
-        <Card>
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Globe className="size-5 text-gold-foreground" aria-hidden="true" />
+              <Globe className="size-5 text-[#C99A22]" aria-hidden="true" />
               <span>{authT.profile.preferencesTitle}</span>
             </CardTitle>
             <CardDescription>{authT.profile.preferencesDescription}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             <form onSubmit={handleSavePreferences} className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
@@ -488,10 +509,10 @@ export function ProfileSettingsClient({
                     id="pref-locale"
                     value={preferredLocale}
                     onChange={(e) => setPreferredLocale(e.target.value as Locale)}
-                    className={cn(fieldBase, "h-10 py-2")}
+                    className={cn(fieldBase, "h-10 py-2", DARK_GLASS_FIELD)}
                   >
                     {SUPPORTED_LOCALES.map((code) => (
-                      <option key={code} value={code}>
+                      <option key={code} value={code} className="bg-[#0F1115] text-foreground">
                         {LOCALE_METADATA[code].nativeName} ({LOCALE_METADATA[code].shortLabel})
                       </option>
                     ))}
@@ -504,18 +525,18 @@ export function ProfileSettingsClient({
                     id="pref-theme"
                     value={preferredTheme}
                     onChange={(e) => setPreferredTheme(e.target.value as Theme)}
-                    className={cn(fieldBase, "h-10 py-2")}
+                    className={cn(fieldBase, "h-10 py-2", DARK_GLASS_FIELD)}
                   >
-                    <option value="light">{t.theme.light}</option>
-                    <option value="dark">{t.theme.dark}</option>
-                    <option value="system">{t.theme.system}</option>
+                    <option value="light" className="bg-[#0F1115] text-foreground">{t.theme.light}</option>
+                    <option value="dark" className="bg-[#0F1115] text-foreground">{t.theme.dark}</option>
+                    <option value="system" className="bg-[#0F1115] text-foreground">{t.theme.system}</option>
                   </select>
                 </div>
               </div>
 
-              <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+              <div className={cn("space-y-3 rounded-xl border p-4", DARK_GLASS_INNER)}>
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Bell className="size-4 text-gold-foreground" aria-hidden="true" />
+                  <Bell className="size-4 text-[#C99A22]" aria-hidden="true" />
                   <span>{authT.profile.notificationsTitle}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -537,7 +558,7 @@ export function ProfileSettingsClient({
                   ).map((item) => (
                     <label
                       key={item.key}
-                      className="flex cursor-pointer items-center justify-between rounded-lg border border-border bg-card px-3.5 py-2.5 text-xs font-medium text-foreground select-none"
+                      className="flex cursor-pointer items-center justify-between rounded-lg border border-white/10 bg-[#0F1115]/45 px-3.5 py-2.5 text-xs font-medium text-foreground select-none transition-colors hover:border-white/20 hover:bg-[#0F1115]/65"
                     >
                       <span>{item.label}</span>
                       <input
@@ -549,7 +570,7 @@ export function ProfileSettingsClient({
                             [item.key]: e.target.checked,
                           }))
                         }
-                        className="size-4 rounded border-input accent-brand-gold"
+                        className="size-4 rounded border-white/20 accent-emerald-500"
                       />
                     </label>
                   ))}
@@ -566,15 +587,15 @@ export function ProfileSettingsClient({
         </Card>
 
         {/* 3. Password & Session Security */}
-        <Card>
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <KeyRound className="size-5 text-gold-foreground" aria-hidden="true" />
+              <KeyRound className="size-5 text-[#C99A22]" aria-hidden="true" />
               <span>{authT.profile.securityTitle}</span>
             </CardTitle>
             <CardDescription>{authT.profile.securityDescription}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             <form onSubmit={handleChangePassword} className="space-y-4" noValidate>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
@@ -588,6 +609,7 @@ export function ProfileSettingsClient({
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
+                    className={DARK_GLASS_FIELD}
                     required
                   />
                 </div>
@@ -603,6 +625,7 @@ export function ProfileSettingsClient({
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     placeholder="••••••••"
+                    className={DARK_GLASS_FIELD}
                     required
                   />
                 </div>

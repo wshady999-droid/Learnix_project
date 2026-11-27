@@ -43,7 +43,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getStudentDictionary } from "@/i18n/student-dictionaries";
+import { cn } from "@/lib/utils";
 import type { StudentPerformanceAndGrowthData } from "@/services/student/queries";
+
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
+const KPI_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02] hover:border-emerald-400/45 hover:bg-emerald-950/55 dark:border-white/10 dark:bg-[#0F1115]/75 dark:hover:border-emerald-400/45 dark:hover:bg-emerald-950/55";
 
 type DatePreset =
   | "today"
@@ -275,7 +282,11 @@ export function StudentPerformanceClient({
               size="sm"
               variant={preset === p.id ? "gold" : "outline"}
               onClick={() => setPreset(p.id)}
-              className="text-xs"
+              className={
+                preset === p.id
+                  ? "text-xs"
+                  : "border-white/10 bg-[#0F1115]/60 text-xs backdrop-blur-md hover:bg-[#0F1115]/80"
+              }
             >
               {p.id === "custom" && <Calendar className="mr-1 size-3.5" />}
               {p.label}
@@ -285,7 +296,7 @@ export function StudentPerformanceClient({
       </div>
 
       {preset === "custom" && (
-        <Card className="border-gold-primary/40 bg-gold-primary/5">
+        <Card className={DARK_GLASS_CARD}>
           <CardContent className="flex flex-wrap items-center gap-4 py-3 text-xs">
             <span className="font-semibold text-foreground">
               Custom Date Range:
@@ -296,7 +307,7 @@ export function StudentPerformanceClient({
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
-                className="h-8 w-40 text-xs"
+                className="h-8 w-40 border-white/10 bg-[#0F1115]/60 text-xs"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -305,7 +316,7 @@ export function StudentPerformanceClient({
                 type="date"
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                className="h-8 w-40 text-xs"
+                className="h-8 w-40 border-white/10 bg-[#0F1115]/60 text-xs"
               />
             </div>
           </CardContent>
@@ -319,15 +330,16 @@ export function StudentPerformanceClient({
           return (
             <Card
               key={item.label}
-              className={
-                item.highlight
-                  ? "border-gold-primary/50 bg-gold-primary/5"
-                  : "border-border/80"
-              }
+              className={cn(
+                "group",
+                KPI_GLASS_CARD,
+                item.highlight &&
+                  "border-[#C99A22]/50 shadow-[0_0_24px_rgba(201,154,34,0.12)]",
+              )}
             >
               <CardContent className="flex items-center justify-between p-4">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground">
+                  <p className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-emerald-200">
                     {item.label}
                   </p>
                   <p className="mt-1 text-xl font-bold text-foreground">
@@ -337,7 +349,7 @@ export function StudentPerformanceClient({
                     {item.sub}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gold-primary/15 p-2.5 text-gold-foreground">
+                <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/15 p-2.5 text-emerald-400 transition-transform duration-300 group-hover:scale-110">
                   <Icon className="size-4" />
                 </div>
               </CardContent>
@@ -348,14 +360,14 @@ export function StudentPerformanceClient({
 
       {/* Charts: Performance Trends & Course Completion vs Quiz/Assignment Mastery */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base">Performance Trends</CardTitle>
             <CardDescription>
               Chronological quiz & assignment scores in the selected date window.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             {trendSeries.length === 0 ? (
               <EmptyState
                 icon={Award}
@@ -373,7 +385,7 @@ export function StudentPerformanceClient({
                   <LineChart data={trendSeries}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(115,115,115,0.2)"
+                      stroke="rgba(255,255,255,0.12)"
                     />
                     <XAxis dataKey="name" fontSize={11} />
                     <YAxis fontSize={12} domain={[0, 100]} />
@@ -393,8 +405,8 @@ export function StudentPerformanceClient({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base">
               Course Completion, Quiz & Assignment Averages
             </CardTitle>
@@ -402,7 +414,7 @@ export function StudentPerformanceClient({
               Per-course breakdown across all enrolled courses.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             {courseComparisonChart.length === 0 ? (
               <EmptyState
                 icon={TrendingUp}
@@ -420,7 +432,7 @@ export function StudentPerformanceClient({
                   <BarChart data={courseComparisonChart}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(115,115,115,0.2)"
+                      stroke="rgba(255,255,255,0.12)"
                     />
                     <XAxis dataKey="course" fontSize={12} />
                     <YAxis fontSize={12} domain={[0, 100]} />
@@ -453,14 +465,14 @@ export function StudentPerformanceClient({
 
       {/* Quiz Grades & Assignment Grades Tables */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Award className="size-4 text-gold-foreground" />
+              <Award className="size-4 text-[#C99A22]" />
               <span>Quiz Grades ({filteredResults.length})</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {filteredResults.length === 0 ? (
               <EmptyState
                 icon={Award}
@@ -470,7 +482,7 @@ export function StudentPerformanceClient({
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="border-white/10 hover:bg-white/5">
                     <TableHead>Quiz</TableHead>
                     <TableHead>Course</TableHead>
                     <TableHead>Score</TableHead>
@@ -479,7 +491,10 @@ export function StudentPerformanceClient({
                 </TableHeader>
                 <TableBody>
                   {filteredResults.map((r) => (
-                    <TableRow key={r.id}>
+                    <TableRow
+                      key={r.id}
+                      className="border-white/10 hover:bg-white/5"
+                    >
                       <TableCell className="font-semibold text-foreground">
                         {r.examTitle}
                       </TableCell>
@@ -500,16 +515,16 @@ export function StudentPerformanceClient({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-base">
-              <FileText className="size-4 text-gold-foreground" />
+              <FileText className="size-4 text-[#C99A22]" />
               <span>
                 Assignment Grades ({filteredAssignmentGrades.length})
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {filteredAssignmentGrades.length === 0 ? (
               <EmptyState
                 icon={FileText}
@@ -519,7 +534,7 @@ export function StudentPerformanceClient({
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="border-white/10 hover:bg-white/5">
                     <TableHead>Assignment</TableHead>
                     <TableHead>Course</TableHead>
                     <TableHead>Marks</TableHead>
@@ -528,7 +543,10 @@ export function StudentPerformanceClient({
                 </TableHeader>
                 <TableBody>
                   {filteredAssignmentGrades.map((g) => (
-                    <TableRow key={g.id}>
+                    <TableRow
+                      key={g.id}
+                      className="border-white/10 hover:bg-white/5"
+                    >
                       <TableCell className="font-semibold text-foreground">
                         {g.assignmentTitle}
                       </TableCell>

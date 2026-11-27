@@ -41,6 +41,15 @@ interface NotificationsCenterClientProps {
   items: SharedNotificationItem[];
 }
 
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
+const DARK_GLASS_ITEM =
+  "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
+
+const DARK_GLASS_UNREAD_ITEM =
+  "border-[#C99A22]/50 bg-[#0F1115]/65 backdrop-blur-md shadow-[0_0_20px_rgba(201,154,34,0.1)]";
+
 export function NotificationsCenterClient({
   userId,
   unreadCount,
@@ -184,6 +193,7 @@ export function NotificationsCenterClient({
               size="sm"
               disabled={isPending}
               onClick={handleMarkAllRead}
+              className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
             >
               <CheckCheck className="mr-1.5 size-4" />
               Mark All Read
@@ -193,17 +203,17 @@ export function NotificationsCenterClient({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="lg:col-span-8">
-          <CardHeader>
+        <Card className={cn(DARK_GLASS_CARD, "lg:col-span-8")}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Bell className="size-4 text-gold-foreground" />
+              <Bell className="size-4 text-[#C99A22]" />
               <span>Notification History</span>
             </CardTitle>
             <CardDescription>
               Delivered automatically in real time as academic events occur.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 pt-4">
             {visibleItems.length === 0 ? (
               <EmptyState
                 icon={Bell}
@@ -220,9 +230,7 @@ export function NotificationsCenterClient({
                   key={item.recipientId}
                   className={cn(
                     "flex flex-col justify-between gap-3 rounded-xl border p-4 transition-colors sm:flex-row sm:items-start",
-                    item.isRead
-                      ? "border-border/70 bg-card/60"
-                      : "border-gold-primary/50 bg-gold-primary/5",
+                    item.isRead ? DARK_GLASS_ITEM : DARK_GLASS_UNREAD_ITEM,
                   )}
                 >
                   <div className="min-w-0 flex-1 space-y-1">
@@ -244,7 +252,12 @@ export function NotificationsCenterClient({
 
                   <div className="flex shrink-0 items-center gap-2">
                     {item.actionUrl && (
-                      <Button asChild variant="outline" size="sm">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
+                      >
                         <Link href={item.actionUrl}>
                           <span>Open</span>
                           <ExternalLink className="ml-1 size-3.5" />
@@ -265,7 +278,7 @@ export function NotificationsCenterClient({
                         </>
                       ) : (
                         <>
-                          <MailOpen className="mr-1 size-3.5 text-gold-foreground" />
+                          <MailOpen className="mr-1 size-3.5 text-[#C99A22]" />
                           <span className="text-xs">Mark Read</span>
                         </>
                       )}
@@ -277,23 +290,26 @@ export function NotificationsCenterClient({
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-4">
-          <CardHeader>
+        <Card className={cn(DARK_GLASS_CARD, "lg:col-span-4")}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Settings2 className="size-4 text-gold-foreground" />
+              <Settings2 className="size-4 text-[#C99A22]" />
               <span>Notification Preferences</span>
             </CardTitle>
             <CardDescription>
               Control which realtime academic alerts are delivered to you.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 pt-4">
             {prefItems.map((pref) => {
               const enabled = prefs[pref.key];
               return (
                 <div
                   key={pref.key}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-border/70 p-3"
+                  className={cn(
+                    "flex items-start justify-between gap-3 rounded-xl border p-3",
+                    DARK_GLASS_ITEM,
+                  )}
                 >
                   <div className="space-y-0.5">
                     <p className="text-xs font-semibold text-foreground">

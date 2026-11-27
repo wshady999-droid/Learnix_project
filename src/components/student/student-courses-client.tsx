@@ -35,6 +35,12 @@ interface StudentCoursesClientProps {
   data: StudentCoursesData;
 }
 
+const DARK_GLASS_MODAL =
+  "max-h-[85dvh] overflow-y-auto border-white/10 bg-[#0F1115]/80 text-foreground backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/80 sm:max-w-2xl";
+
+const DARK_GLASS_BOX =
+  "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
+
 export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
   const router = useRouter();
   const { locale } = useLocale();
@@ -145,7 +151,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by course, category, or instructor..."
-            className="bg-white/20 pl-9 backdrop-blur-md dark:bg-[#121a19]"
+            className="border-white/10 bg-[#0F1115]/75 pl-9 backdrop-blur-md dark:bg-[#0F1115]/75"
           />
         </div>
       </div>
@@ -174,7 +180,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
           if (!open) setInspectedCourse(null);
         }}
       >
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className={DARK_GLASS_MODAL}>
           {inspectedCourse && (
             <>
               <DialogHeader>
@@ -183,7 +189,10 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                     <Tag className="mr-1 size-3" />
                     {inspectedCourse.category}
                   </Badge>
-                  <Badge variant="outline" className="font-mono text-xs">
+                  <Badge
+                    variant="outline"
+                    className="border-white/15 bg-[#0F1115]/60 font-mono text-xs"
+                  >
                     {inspectedCourse.code}
                   </Badge>
                   {isInspectedEnrolled && (
@@ -207,13 +216,15 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                 <img
                   src={inspectedCourse.image_url}
                   alt={inspectedCourse.title}
-                  className="h-48 w-full rounded-xl border border-border object-cover"
+                  className="h-48 w-full rounded-xl border border-white/10 object-cover"
                 />
 
                 {/* Key Metadata */}
-                <div className="grid grid-cols-3 gap-3 rounded-xl border border-border/70 bg-muted/30 p-3 text-xs">
+                <div
+                  className={`grid grid-cols-3 gap-3 rounded-xl border p-3 text-xs ${DARK_GLASS_BOX}`}
+                >
                   <div className="flex items-center gap-2">
-                    <User className="size-4 text-gold-foreground" />
+                    <User className="size-4 text-[#C99A22]" />
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground">
                         Instructor
@@ -224,7 +235,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Clock className="size-4 text-gold-foreground" />
+                    <Clock className="size-4 text-[#C99A22]" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">
                         Duration
@@ -235,7 +246,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Users className="size-4 text-gold-foreground" />
+                    <Users className="size-4 text-[#C99A22]" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">
                         Enrollment & Rating
@@ -260,7 +271,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                 </div>
 
                 {/* Approved Reviews */}
-                <div className="space-y-2.5 border-t border-border/70 pt-4">
+                <div className="space-y-2.5 border-t border-white/10 pt-4">
                   <div className="flex items-center justify-between">
                     <h4 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                       <Star className="size-4 fill-amber-400 text-amber-400" />
@@ -272,8 +283,10 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                   </div>
 
                   {!inspectedCourse.approvedReviews ||
-                  inspectedCourse.approvedReviews.length === 0 ? (
-                    <p className="rounded-lg border border-border/60 p-3 text-xs text-muted-foreground">
+                    inspectedCourse.approvedReviews.length === 0 ? (
+                    <p
+                      className={`rounded-lg border p-3 text-xs text-muted-foreground ${DARK_GLASS_BOX}`}
+                    >
                       No reviews published for this course yet.
                     </p>
                   ) : (
@@ -281,13 +294,13 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                       {inspectedCourse.approvedReviews.map((rev) => (
                         <div
                           key={rev.id}
-                          className="rounded-lg border border-border/70 bg-card/70 p-3 text-xs"
+                          className={`rounded-lg border p-3 text-xs ${DARK_GLASS_BOX}`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-foreground">
                               {rev.studentName}
                             </span>
-                            <span className="font-mono text-amber-500">
+                            <span className="font-mono text-amber-400">
                               {"★".repeat(rev.rating)}
                             </span>
                           </div>
@@ -304,6 +317,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
               <DialogFooter className="gap-2">
                 <Button
                   variant="outline"
+                  className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
                   onClick={() => setInspectedCourse(null)}
                 >
                   Close

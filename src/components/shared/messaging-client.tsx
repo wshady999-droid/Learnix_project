@@ -35,6 +35,9 @@ interface MessagingClientProps {
   data: MessagingContactsData;
 }
 
+const TRANSLUCENT_PANEL =
+  "flex h-full flex-col overflow-hidden border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
 export function MessagingClient({ data }: MessagingClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -79,7 +82,6 @@ export function MessagingClient({ data }: MessagingClientProps) {
     [data.announcements, selectedAnnouncementId],
   );
 
-  // Auto-open or start direct chat when deep-linked with ?userId=...
   useEffect(() => {
     const targetUserId = searchParams.get("userId");
     const targetCourseId = searchParams.get("courseId");
@@ -109,7 +111,6 @@ export function MessagingClient({ data }: MessagingClientProps) {
     });
   }, [searchParams, data.conversations, router]);
 
-  // Mark active conversation read & auto-scroll to latest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     if (activeConv && activeConv.unreadCount > 0) {
@@ -119,7 +120,6 @@ export function MessagingClient({ data }: MessagingClientProps) {
     }
   }, [activeConv?.id, activeConv?.messages.length, activeConv?.unreadCount, router]);
 
-  // Supabase Realtime subscription for incoming messages & read-receipt updates
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const convIds = new Set(data.conversations.map((c) => c.id));
@@ -254,7 +254,6 @@ export function MessagingClient({ data }: MessagingClientProps) {
     try {
       const supabase = createSupabaseBrowserClient();
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      // Storage RLS requires: {conversation_id}/{user_id}/{filename}
       const storagePath = `${activeConv.id}/${data.userId}/${Date.now()}_${safeName}`;
       const { error } = await supabase.storage
         .from("message-attachments")
@@ -331,9 +330,8 @@ export function MessagingClient({ data }: MessagingClientProps) {
       </div>
 
       <div className="grid h-[calc(100dvh-13.5rem)] min-h-[540px] gap-4 lg:grid-cols-12">
-        {/* LEFT PANE — WHATSAPP-STYLE SIDEBAR */}
-        <Card className="flex h-full flex-col overflow-hidden lg:col-span-4">
-          <CardHeader className="space-y-3 border-b border-border/70 pb-3">
+        <Card className={cn(TRANSLUCENT_PANEL, "lg:col-span-4")}>
+          <CardHeader className="space-y-3 border-b border-white/10 pb-3">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -341,8 +339,8 @@ export function MessagingClient({ data }: MessagingClientProps) {
                 className={cn(
                   "flex-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
                   sidebarTab === "chats"
-                    ? "bg-gold-metallic text-primary-foreground shadow-xs"
-                    : "bg-muted/50 text-muted-foreground hover:text-foreground",
+                    ? "bg-emerald-500 text-white shadow-xs"
+                    : "bg-[#0F1115]/55 text-muted-foreground hover:text-foreground",
                 )}
               >
                 Chats
@@ -354,8 +352,8 @@ export function MessagingClient({ data }: MessagingClientProps) {
                 className={cn(
                   "flex-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
                   sidebarTab === "contacts"
-                    ? "bg-gold-metallic text-primary-foreground shadow-xs"
-                    : "bg-muted/50 text-muted-foreground hover:text-foreground",
+                    ? "bg-emerald-500 text-white shadow-xs"
+                    : "bg-[#0F1115]/55 text-muted-foreground hover:text-foreground",
                 )}
               >
                 {contactsLabel} ({data.authorizedContacts.length})
@@ -367,8 +365,8 @@ export function MessagingClient({ data }: MessagingClientProps) {
                   className={cn(
                     "flex-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
                     sidebarTab === "announcements"
-                      ? "bg-gold-metallic text-primary-foreground shadow-xs"
-                      : "bg-muted/50 text-muted-foreground hover:text-foreground",
+                      ? "bg-emerald-500 text-white shadow-xs"
+                      : "bg-[#0F1115]/55 text-muted-foreground hover:text-foreground",
                   )}
                 >
                   Notices
@@ -383,7 +381,7 @@ export function MessagingClient({ data }: MessagingClientProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={`Search ${sidebarTab === "contacts" ? contactsLabel.toLowerCase() : "conversations"}...`}
-                className="h-9 pl-8 text-xs"
+                className="h-9 border-white/10 bg-[#0F1115]/55 pl-8 text-xs backdrop-blur-md"
               />
             </div>
           </CardHeader>
@@ -415,19 +413,18 @@ export function MessagingClient({ data }: MessagingClientProps) {
                         className={cn(
                           "flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors",
                           isSelected
-                            ? "border-gold-primary bg-gold-primary/10"
-                            : "border-transparent hover:border-border/70 hover:bg-muted/40",
+                            ? "border-emerald-500/45 bg-[#0F1115]/65"
+                            : "border-transparent hover:border-white/10 hover:bg-[#0F1115]/45",
                         )}
                       >
                         {conv.peerAvatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={conv.peerAvatarUrl}
                             alt={conv.peerName}
-                            className="size-10 shrink-0 rounded-full border border-gold-border object-cover"
+                            className="size-10 shrink-0 rounded-full border border-emerald-500/30 object-cover"
                           />
                         ) : (
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold-border bg-gold-subtle font-bold text-gold-foreground">
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 font-bold text-emerald-400">
                             {conv.peerName.charAt(0).toUpperCase()}
                           </span>
                         )}
@@ -441,7 +438,7 @@ export function MessagingClient({ data }: MessagingClientProps) {
                             </span>
                           </div>
                           {conv.courseTitle && (
-                            <p className="truncate text-[10px] font-medium text-gold-foreground">
+                            <p className="truncate text-[10px] font-medium text-emerald-400">
                               {conv.courseTitle}
                             </p>
                           )}
@@ -450,7 +447,7 @@ export function MessagingClient({ data }: MessagingClientProps) {
                               {conv.lastMessagePreview}
                             </p>
                             {conv.unreadCount > 0 && (
-                              <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-gold-primary px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">
+                              <span className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">
                                 {conv.unreadCount}
                               </span>
                             )}
@@ -482,17 +479,16 @@ export function MessagingClient({ data }: MessagingClientProps) {
                       type="button"
                       disabled={isPending}
                       onClick={() => handleOpenContactChat(contact)}
-                      className="flex w-full items-center gap-3 rounded-xl border border-border/60 p-3 text-left transition-colors hover:border-gold-primary/60 hover:bg-muted/40"
+                      className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-[#0F1115]/45 p-3 text-left transition-colors hover:border-emerald-500/45 hover:bg-[#0F1115]/65"
                     >
                       {contact.avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={contact.avatarUrl}
                           alt={contact.fullName}
-                          className="size-10 shrink-0 rounded-full border border-gold-border object-cover"
+                          className="size-10 shrink-0 rounded-full border border-emerald-500/30 object-cover"
                         />
                       ) : (
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold-border bg-gold-subtle font-bold text-gold-foreground">
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 font-bold text-emerald-400">
                           {contact.fullName.charAt(0).toUpperCase()}
                         </span>
                       )}
@@ -504,7 +500,10 @@ export function MessagingClient({ data }: MessagingClientProps) {
                           {contact.courseTitle || contact.email}
                         </p>
                       </div>
-                      <Badge variant="gold-subtle" className="capitalize">
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 capitalize"
+                      >
                         Chat
                       </Badge>
                     </button>
@@ -531,15 +530,17 @@ export function MessagingClient({ data }: MessagingClientProps) {
                     className={cn(
                       "w-full rounded-xl border p-3 text-left transition-colors",
                       activeAnnouncement?.id === ann.id
-                        ? "border-gold-primary bg-gold-primary/10"
-                        : "border-border/60 hover:bg-muted/40",
+                        ? "border-emerald-500/45 bg-[#0F1115]/65"
+                        : "border-white/10 bg-[#0F1115]/45 hover:bg-[#0F1115]/60",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate font-semibold text-foreground">
                         {ann.title}
                       </span>
-                      {!ann.isRead && <Badge variant="gold">New</Badge>}
+                      {!ann.isRead && (
+                        <Badge className="bg-emerald-500 text-white">New</Badge>
+                      )}
                     </div>
                     <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
                       {ann.body}
@@ -554,13 +555,12 @@ export function MessagingClient({ data }: MessagingClientProps) {
           </CardContent>
         </Card>
 
-        {/* RIGHT PANE — CONVERSATION STREAM OR READ-ONLY ANNOUNCEMENT */}
-        <Card className="flex h-full flex-col overflow-hidden lg:col-span-8">
+        <Card className={cn(TRANSLUCENT_PANEL, "lg:col-span-8")}>
           {sidebarTab === "announcements" && activeAnnouncement ? (
             <div className="flex h-full flex-col justify-between p-6">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Badge variant="gold">
+                  <Badge className="bg-emerald-500 text-white">
                     <Megaphone className="mr-1 size-3.5" />
                     Official Platform Announcement
                   </Badge>
@@ -571,11 +571,11 @@ export function MessagingClient({ data }: MessagingClientProps) {
                 <CardTitle className="text-xl">
                   {activeAnnouncement.title}
                 </CardTitle>
-                <div className="rounded-xl border border-border/70 bg-muted/30 p-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground">
+                <div className="rounded-xl border border-white/10 bg-[#0F1115]/55 p-4 text-sm leading-relaxed whitespace-pre-wrap text-foreground backdrop-blur-md">
                   {activeAnnouncement.body}
                 </div>
               </div>
-              <div className="rounded-xl border border-border/70 bg-muted/40 px-4 py-3 text-center text-xs text-muted-foreground">
+              <div className="rounded-xl border border-white/10 bg-[#0F1115]/55 px-4 py-3 text-center text-xs text-muted-foreground">
                 Platform announcements from Administration are broadcast-only and do not accept replies.
               </div>
             </div>
@@ -589,17 +589,16 @@ export function MessagingClient({ data }: MessagingClientProps) {
             </CardContent>
           ) : (
             <>
-              <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/70 py-3.5">
+              <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-white/10 py-3.5">
                 <div className="flex min-w-0 items-center gap-3">
                   {activeConv.peerAvatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={activeConv.peerAvatarUrl}
                       alt={activeConv.peerName}
-                      className="size-10 shrink-0 rounded-full border border-gold-border object-cover"
+                      className="size-10 shrink-0 rounded-full border border-emerald-500/30 object-cover"
                     />
                   ) : (
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold-border bg-gold-subtle font-bold text-gold-foreground">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 font-bold text-emerald-400">
                       {activeConv.peerName.charAt(0).toUpperCase()}
                     </span>
                   )}
@@ -615,7 +614,10 @@ export function MessagingClient({ data }: MessagingClientProps) {
                     </p>
                   </div>
                 </div>
-                <Badge variant="gold-subtle" className="shrink-0">
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                >
                   Realtime Active
                 </Badge>
               </CardHeader>
@@ -635,12 +637,12 @@ export function MessagingClient({ data }: MessagingClientProps) {
                           className={cn(
                             "max-w-[82%] rounded-2xl p-3 shadow-2xs",
                             isMine
-                              ? "ml-auto bg-emerald-700 text-white dark:bg-emerald-800"
-                              : "mr-auto border border-border/80 bg-card text-foreground",
+                              ? "ml-auto bg-emerald-600/90 text-white"
+                              : "mr-auto border border-white/10 bg-[#0F1115]/60 text-foreground backdrop-blur-md",
                           )}
                         >
                           {!isMine && (
-                            <p className="mb-0.5 text-[10px] font-semibold text-gold-foreground">
+                            <p className="mb-0.5 text-[10px] font-semibold text-emerald-400">
                               {msg.senderName}
                             </p>
                           )}
@@ -661,7 +663,7 @@ export function MessagingClient({ data }: MessagingClientProps) {
                                       "inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
                                       isMine
                                         ? "border-white/25 bg-white/10 text-white hover:bg-white/20"
-                                        : "border-gold-border bg-gold-subtle text-foreground hover:bg-accent",
+                                        : "border-emerald-500/30 bg-emerald-500/10 text-foreground hover:bg-emerald-500/20",
                                     )}
                                   >
                                     <Paperclip className="size-3.5 shrink-0" />
@@ -686,7 +688,7 @@ export function MessagingClient({ data }: MessagingClientProps) {
                           >
                             <span>
                               {msg.createdAt.slice(0, 10) ===
-                              new Date().toISOString().slice(0, 10)
+                                new Date().toISOString().slice(0, 10)
                                 ? msg.createdAt.slice(11, 16)
                                 : `${msg.createdAt.slice(5, 10)} ${msg.createdAt.slice(11, 16)}`}
                             </span>
@@ -710,11 +712,11 @@ export function MessagingClient({ data }: MessagingClientProps) {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="space-y-2 border-t border-border/70 pt-3">
+                <div className="space-y-2 border-t border-white/10 pt-3">
                   {pendingAttachment && (
-                    <div className="flex items-center justify-between rounded-lg border border-gold-border bg-gold-subtle px-3 py-1.5 text-xs">
+                    <div className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs">
                       <span className="inline-flex items-center gap-1.5 truncate font-medium">
-                        <Paperclip className="size-3.5 text-gold-foreground" />
+                        <Paperclip className="size-3.5 text-emerald-400" />
                         {pendingAttachment.fileName}
                       </span>
                       <button
@@ -730,10 +732,10 @@ export function MessagingClient({ data }: MessagingClientProps) {
 
                   <div className="flex items-end gap-2">
                     <label
-                      className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-card px-3 text-muted-foreground transition-colors hover:border-gold-border hover:text-foreground"
+                      className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-[#0F1115]/55 px-3 text-muted-foreground backdrop-blur-md transition-colors hover:border-emerald-500/50 hover:text-foreground"
                       title="Attach PDF, image, text, or ZIP (max 25 MB)"
                     >
-                      <Paperclip className="size-4 text-gold-foreground" />
+                      <Paperclip className="size-4 text-emerald-400" />
                       <input
                         type="file"
                         accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.zip"
@@ -758,12 +760,11 @@ export function MessagingClient({ data }: MessagingClientProps) {
                           ? "Uploading attachment..."
                           : "Type a message (Enter to send, Shift+Enter for new line)..."
                       }
-                      className="min-h-10 flex-1 resize-none"
+                      className="min-h-10 flex-1 resize-none border-white/10 bg-[#0F1115]/55 backdrop-blur-md"
                     />
 
                     <Button
-                      variant="gold"
-                      className="h-10 shrink-0"
+                      className="h-10 shrink-0 bg-emerald-500 text-white hover:bg-emerald-600"
                       disabled={
                         isPending ||
                         uploadingAttachment ||

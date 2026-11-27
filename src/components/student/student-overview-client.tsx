@@ -48,6 +48,15 @@ interface StudentOverviewClientProps {
   data: StudentOverviewData;
 }
 
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
+const KPI_HOVER_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.02] hover:border-emerald-400/50 hover:bg-emerald-950/60 hover:shadow-[0_14px_36px_rgba(16,185,129,0.22),inset_0_1px_0_rgba(110,231,183,0.22)] dark:border-white/10 dark:bg-[#0F1115]/75 dark:hover:border-emerald-400/50 dark:hover:bg-emerald-950/60";
+
+const DARK_GLASS_INNER =
+  "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
+
 export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
   const router = useRouter();
   const { locale } = useLocale();
@@ -151,22 +160,22 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
             <Link key={item.label} href={item.href} className="block">
               <Card
                 className={cn(
-                  "group relative overflow-hidden bg-white/15 backdrop-blur-lg transition-all duration-300 ease-in-out hover:-translate-y-1 hover:shadow-lg dark:bg-[#121a19] dark:backdrop-blur-none",
-                  item.highlight
-                    ? "border-emerald-500/50 shadow-sm shadow-emerald-500/10"
-                    : "border-border/50",
+                  "group relative overflow-hidden",
+                  KPI_HOVER_CARD,
+                  item.highlight &&
+                    "border-emerald-400/35 shadow-[0_0_24px_rgba(16,185,129,0.12)]",
                 )}
               >
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+                    <p className="text-xs font-medium text-muted-foreground transition-colors duration-300 group-hover:text-emerald-200">
                       {item.label}
                     </p>
-                    <p className="mt-1 text-xl font-bold text-foreground">
+                    <p className="mt-1 text-xl font-bold text-foreground transition-transform duration-300 group-hover:translate-x-0.5">
                       {item.value}
                     </p>
                   </div>
-                  <div className="rounded-full bg-emerald-100 p-2.5 text-emerald-600 transition-all duration-300 group-hover:scale-110 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <div className="rounded-full border border-emerald-400/25 bg-emerald-500/15 p-2.5 text-emerald-400 transition-all duration-300 group-hover:scale-110 group-hover:border-emerald-400/60 group-hover:bg-emerald-500/25 group-hover:text-emerald-300">
                     <Icon className="size-5" />
                   </div>
                 </CardContent>
@@ -177,8 +186,8 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
       </div>
 
       {/* 2. Enrolled Courses */}
-      <Card className="border-border/50 bg-white/15 shadow-sm backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className={DARK_GLASS_CARD}>
+        <CardHeader className="flex flex-row items-center justify-between border-b border-white/10">
           <div>
             <CardTitle className="text-base">
               {t.overview.enrolledCoursesSectionTitle}
@@ -192,7 +201,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
               asChild
               variant="outline"
               size="sm"
-              className="border-emerald-500/30 bg-transparent text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+              className="border-white/15 bg-[#0F1115]/55 text-foreground hover:bg-[#0F1115]/80"
             >
               <Link href="/student/my-learning">{t.nav.courses}</Link>
             </Button>
@@ -201,7 +210,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-5">
           {data.enrolledCourses.length === 0 ? (
             <EmptyState
               icon={BookOpen}
@@ -218,13 +227,13 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
               {data.enrolledCourses.slice(0, 6).map((course) => (
                 <Card
                   key={course.id}
-                  className="border-border/50 bg-white/20 shadow-sm backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none"
+                  className={cn(DARK_GLASS_INNER, "text-foreground")}
                 >
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
                       <Badge
                         variant="outline"
-                        className="bg-transparent font-mono text-xs"
+                        className="border-white/15 bg-[#0F1115]/60 font-mono text-xs"
                       >
                         {course.code}
                       </Badge>
@@ -232,8 +241,8 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         className={cn(
                           "px-2 py-0.5",
                           course.progressPercent >= 100
-                            ? "border-transparent bg-emerald-500 text-white dark:text-white"
-                            : "border-border bg-transparent text-foreground",
+                            ? "border-transparent bg-emerald-500 text-white"
+                            : "border-white/15 bg-[#0F1115]/60 text-foreground",
                         )}
                       >
                         {course.progressPercent}%
@@ -247,9 +256,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pb-3">
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
                       <div
-                        className="h-full bg-emerald-500 transition-all dark:bg-emerald-400"
+                        className="h-full bg-emerald-500 transition-all"
                         style={{
                           width: `${Math.min(100, course.progressPercent)}%`,
                         }}
@@ -261,7 +270,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                       asChild
                       variant="outline"
                       size="sm"
-                      className="w-full border-emerald-500/50 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500/50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+                      className="w-full border-white/15 bg-[#0F1115]/60 text-foreground hover:bg-[#0F1115]/85"
                     >
                       <Link href={`/student/my-learning?courseId=${course.id}`}>
                         {t.common.continueLearning}
@@ -277,8 +286,8 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
 
       {/* 3. Progress Chart & Notifications */}
       <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none lg:col-span-8">
-          <CardHeader>
+        <Card className={cn(DARK_GLASS_CARD, "lg:col-span-8")}>
+          <CardHeader className="border-b border-white/10">
             <CardTitle className="text-base">
               {t.overview.studyChartTitle}
             </CardTitle>
@@ -286,7 +295,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
               {t.overview.studyChartDescription}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             {chartData.length === 0 ? (
               <EmptyState
                 icon={TrendingUp}
@@ -304,11 +313,11 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                   <BarChart data={chartData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
-                      stroke="rgba(115,115,115,0.2)"
+                      stroke="rgba(255,255,255,0.12)"
                     />
                     <XAxis dataKey="name" fontSize={12} />
                     <YAxis fontSize={12} domain={[0, 100]} />
-                    <Tooltip cursor={{ fill: "rgba(16, 185, 129, 0.1)" }} />
+                    <Tooltip cursor={{ fill: "rgba(16, 185, 129, 0.12)" }} />
                     <Bar
                       dataKey="progress"
                       name={t.overview.completionProgress}
@@ -328,8 +337,8 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none lg:col-span-4">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className={cn(DARK_GLASS_CARD, "lg:col-span-4")}>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-white/10">
             <CardTitle className="text-base">
               {t.overview.notificationsTitle}
             </CardTitle>
@@ -339,14 +348,14 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 size="sm"
                 disabled={isPending}
                 onClick={handleMarkAllRead}
-                className="text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                className="text-emerald-400 hover:bg-emerald-500/15 hover:text-emerald-300"
               >
                 <CheckCheck className="size-3.5" />
                 <span>{t.overview.markAllReadButton}</span>
               </Button>
             )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
             {data.notifications.length === 0 ? (
               <EmptyState
                 icon={Bell}
@@ -359,7 +368,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                   <Link
                     key={notif.recipientId}
                     href={notif.actionUrl || "/notifications"}
-                    className="block rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg transition-colors hover:border-emerald-500/40 dark:bg-[#1a2624] dark:backdrop-blur-none"
+                    className={cn(
+                      "block rounded-lg border p-3 text-xs transition-colors hover:border-emerald-400/40",
+                      DARK_GLASS_INNER,
+                    )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate font-semibold text-foreground">
@@ -369,8 +381,8 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         className={cn(
                           "px-2 py-0.5",
                           notif.isRead
-                            ? "border-border bg-transparent text-foreground"
-                            : "border-transparent bg-emerald-500 text-white dark:text-white",
+                            ? "border-white/15 bg-[#0F1115]/60 text-foreground"
+                            : "border-transparent bg-emerald-500 text-white",
                         )}
                       >
                         {notif.category}
@@ -389,19 +401,19 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
 
       {/* 4. Upcoming Quizzes, Assignments, Recent Grades & Teacher Messages */}
       <div className="grid gap-6 lg:grid-cols-4">
-        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-white/10 pb-3">
             <CardTitle className="text-base">
               {t.overview.upcomingExamsTitle}
             </CardTitle>
             <Link
               href="/student/exams"
-              className="text-xs font-semibold text-gold-foreground hover:underline"
+              className="text-xs font-semibold text-[#C99A22] hover:underline"
             >
               View All
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {data.upcomingExams.length === 0 ? (
               <EmptyState
                 icon={ClipboardCheck}
@@ -414,7 +426,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                   <Link
                     key={exam.id}
                     href={`/student/exams/${exam.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg transition-colors hover:border-emerald-500/40 dark:bg-[#1a2624] dark:backdrop-blur-none"
+                    className={cn(
+                      "flex items-center justify-between rounded-lg border p-3 text-xs transition-colors hover:border-emerald-400/40",
+                      DARK_GLASS_INNER,
+                    )}
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -424,7 +439,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         {exam.courseTitle} • {exam.duration_minutes}m
                       </p>
                     </div>
-                    <Badge className="shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                    <Badge className="shrink-0 border border-emerald-400/25 bg-emerald-500/15 text-emerald-300">
                       {Number(exam.total_points)} pts
                     </Badge>
                   </Link>
@@ -434,19 +449,19 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-white/10 pb-3">
             <CardTitle className="text-base">
               {t.overview.upcomingAssignmentsTitle}
             </CardTitle>
             <Link
               href="/student/assignments"
-              className="text-xs font-semibold text-gold-foreground hover:underline"
+              className="text-xs font-semibold text-[#C99A22] hover:underline"
             >
               Open
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {data.upcomingAssignments.length === 0 ? (
               <EmptyState
                 icon={FileText}
@@ -459,7 +474,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                   <Link
                     key={asg.id}
                     href={`/student/assignments?assignmentId=${asg.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg transition-colors hover:border-emerald-500/40 dark:bg-[#1a2624] dark:backdrop-blur-none"
+                    className={cn(
+                      "flex items-center justify-between rounded-lg border p-3 text-xs transition-colors hover:border-emerald-400/40",
+                      DARK_GLASS_INNER,
+                    )}
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -470,7 +488,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                         {asg.due_at ? ` • Due ${asg.due_at.slice(0, 10)}` : ""}
                       </p>
                     </div>
-                    <Badge variant="outline" className="shrink-0 bg-transparent">
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 border-white/15 bg-[#0F1115]/60"
+                    >
                       {Number(asg.max_points)} pts
                     </Badge>
                   </Link>
@@ -480,19 +501,19 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-white/10 pb-3">
             <CardTitle className="text-base">
               {t.overview.recentGradesTitle}
             </CardTitle>
             <Link
               href="/student/performance"
-              className="text-xs font-semibold text-gold-foreground hover:underline"
+              className="text-xs font-semibold text-[#C99A22] hover:underline"
             >
               Analytics
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {data.recentGrades.length === 0 ? (
               <EmptyState
                 icon={Award}
@@ -504,7 +525,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                 {data.recentGrades.map((grade) => (
                   <div
                     key={grade.id}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg dark:bg-[#1a2624] dark:backdrop-blur-none"
+                    className={cn(
+                      "flex items-center justify-between rounded-lg border p-3 text-xs",
+                      DARK_GLASS_INNER,
+                    )}
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">
@@ -519,7 +543,7 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                       className={cn(
                         "shrink-0 px-2 py-0.5",
                         grade.passed
-                          ? "border-transparent bg-emerald-500 text-white dark:text-white"
+                          ? "border-transparent bg-emerald-500 text-white"
                           : "border-transparent bg-destructive text-destructive-foreground",
                       )}
                     >
@@ -532,17 +556,17 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-white/15 backdrop-blur-lg dark:bg-[#121a19] dark:backdrop-blur-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <Card className={DARK_GLASS_CARD}>
+          <CardHeader className="flex flex-row items-center justify-between border-b border-white/10 pb-3">
             <CardTitle className="text-base">Recent Teacher Messages</CardTitle>
             <Link
               href="/messages"
-              className="text-xs font-semibold text-gold-foreground hover:underline"
+              className="text-xs font-semibold text-[#C99A22] hover:underline"
             >
               Chat
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {data.recentTeacherMessages.length === 0 ? (
               <EmptyState
                 icon={MessageSquare}
@@ -555,7 +579,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                   <Link
                     key={msg.id}
                     href={`/messages?convId=${msg.conversationId}`}
-                    className="block rounded-lg border border-border/50 bg-white/20 p-3 text-xs backdrop-blur-lg transition-colors hover:border-emerald-500/40 dark:bg-[#1a2624] dark:backdrop-blur-none"
+                    className={cn(
+                      "block rounded-lg border p-3 text-xs transition-colors hover:border-emerald-400/40",
+                      DARK_GLASS_INNER,
+                    )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate font-semibold text-foreground">

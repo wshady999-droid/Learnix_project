@@ -39,6 +39,12 @@ interface StudentAssignmentsClientProps {
   data: StudentAssignmentsWorkspaceData;
 }
 
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
+const DARK_GLASS_SUBBOX =
+  "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
+
 export function StudentAssignmentsClient({
   data,
 }: StudentAssignmentsClientProps) {
@@ -200,7 +206,10 @@ export function StudentAssignmentsClient({
 
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className={cn(fieldBase, "h-9 w-48 text-xs")}
+            className={cn(
+              fieldBase,
+              "h-9 w-48 border-white/10 bg-[#0F1115]/75 text-xs backdrop-blur-md",
+            )}
             value={courseFilter}
             onChange={(e) => setCourseFilter(e.target.value)}
           >
@@ -213,7 +222,10 @@ export function StudentAssignmentsClient({
           </select>
 
           <select
-            className={cn(fieldBase, "h-9 w-40 text-xs")}
+            className={cn(
+              fieldBase,
+              "h-9 w-40 border-white/10 bg-[#0F1115]/75 text-xs backdrop-blur-md",
+            )}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -229,21 +241,25 @@ export function StudentAssignmentsClient({
       </div>
 
       {data.assignments.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="No assignments published yet"
-          description="Assignments published by your course instructors will appear here."
-        />
+        <Card className={cn(DARK_GLASS_CARD, "py-6")}>
+          <CardContent className="p-6">
+            <EmptyState
+              icon={FileText}
+              title="No assignments published yet"
+              description="Assignments published by your course instructors will appear here."
+            />
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-12">
           {/* Assignment List */}
-          <Card className="lg:col-span-4">
-            <CardHeader className="pb-3">
+          <Card className={cn(DARK_GLASS_CARD, "lg:col-span-4")}>
+            <CardHeader className="border-b border-white/10 pb-3">
               <CardTitle className="text-sm">
                 Assignments ({filteredAssignments.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-xs">
+            <CardContent className="space-y-2 pt-4 text-xs">
               {filteredAssignments.map((asg) => {
                 const isSelected = activeAssignment?.id === asg.id;
                 return (
@@ -254,12 +270,12 @@ export function StudentAssignmentsClient({
                     className={cn(
                       "w-full rounded-xl border p-3 text-left transition-colors",
                       isSelected
-                        ? "border-gold-primary bg-gold-primary/10"
-                        : "border-border/70 hover:bg-muted/40",
+                        ? "border-[#C99A22]/60 bg-[#0F1115]/80"
+                        : "border-white/10 bg-[#0F1115]/45 hover:bg-[#0F1115]/65",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] text-gold-foreground">
+                      <span className="font-mono text-[10px] text-[#C99A22]">
                         {asg.courseCode}
                       </span>
                       {renderStatusBadge(asg)}
@@ -285,7 +301,7 @@ export function StudentAssignmentsClient({
           {/* Assignment Detail, Submission Form & Published Grade */}
           <div className="space-y-6 lg:col-span-8">
             {!activeAssignment ? (
-              <Card>
+              <Card className={DARK_GLASS_CARD}>
                 <CardContent className="py-12">
                   <EmptyState
                     icon={FileText}
@@ -296,11 +312,14 @@ export function StudentAssignmentsClient({
               </Card>
             ) : (
               <>
-                <Card>
-                  <CardHeader>
+                <Card className={DARK_GLASS_CARD}>
+                  <CardHeader className="border-b border-white/10">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="font-mono text-xs">
+                        <Badge
+                          variant="outline"
+                          className="border-white/15 bg-[#0F1115]/60 font-mono text-xs"
+                        >
                           {activeAssignment.courseCode}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
@@ -323,15 +342,23 @@ export function StudentAssignmentsClient({
                           : "No strict deadline"}
                       </span>
                       {!activeAssignment.allowLateSubmissions && (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge
+                          variant="outline"
+                          className="border-white/15 bg-[#0F1115]/60 text-[10px]"
+                        >
                           Strict Deadline
                         </Badge>
                       )}
                     </CardDescription>
                   </CardHeader>
 
-                  <CardContent className="space-y-4 text-xs">
-                    <div className="rounded-xl border border-border/70 bg-muted/30 p-4 leading-relaxed whitespace-pre-wrap text-foreground">
+                  <CardContent className="space-y-4 pt-4 text-xs">
+                    <div
+                      className={cn(
+                        "rounded-xl border p-4 leading-relaxed whitespace-pre-wrap text-foreground",
+                        DARK_GLASS_SUBBOX,
+                      )}
+                    >
                       {activeAssignment.description}
                     </div>
 
@@ -340,20 +367,30 @@ export function StudentAssignmentsClient({
                         <p className="font-semibold text-foreground">
                           Detailed Instructions
                         </p>
-                        <div className="rounded-xl border border-border/70 bg-card/60 p-3.5 leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                        <div
+                          className={cn(
+                            "rounded-xl border p-3.5 leading-relaxed whitespace-pre-wrap text-muted-foreground",
+                            DARK_GLASS_SUBBOX,
+                          )}
+                        >
                           {activeAssignment.instructions}
                         </div>
                       </div>
                     )}
 
                     {activeAssignment.teacherAttachmentUrl && (
-                      <Button asChild variant="outline" size="sm">
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
+                      >
                         <a
                           href={activeAssignment.teacherAttachmentUrl}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          <Download className="size-3.5 text-gold-foreground" />
+                          <Download className="size-3.5 text-[#C99A22]" />
                           <span>
                             Download Reference:{" "}
                             {activeAssignment.teacherAttachmentName}
@@ -366,11 +403,11 @@ export function StudentAssignmentsClient({
 
                 {/* Published Grade & Feedback Card (Strictly shown ONLY when grade is published!) */}
                 {activeAssignment.submission?.isGradePublished ? (
-                  <Card className="border-emerald-500/50 bg-emerald-500/5">
+                  <Card className="border-emerald-400/35 bg-[#0F1115]/75 text-foreground backdrop-blur-xl">
                     <CardHeader>
                       <CardTitle className="flex items-center justify-between text-base">
                         <span className="flex items-center gap-2">
-                          <Award className="size-5 text-emerald-500" />
+                          <Award className="size-5 text-emerald-400" />
                           Published Grade & Feedback
                         </span>
                         <Badge variant="gold" className="text-sm">
@@ -383,7 +420,12 @@ export function StudentAssignmentsClient({
                       <p className="font-semibold text-foreground">
                         Instructor Feedback:
                       </p>
-                      <p className="rounded-lg border border-border/70 bg-background/70 p-3 leading-relaxed whitespace-pre-wrap text-foreground">
+                      <p
+                        className={cn(
+                          "rounded-lg border p-3 leading-relaxed whitespace-pre-wrap text-foreground",
+                          DARK_GLASS_SUBBOX,
+                        )}
+                      >
                         {activeAssignment.submission.publishedFeedback ||
                           "Graded and approved by your instructor."}
                       </p>
@@ -392,9 +434,9 @@ export function StudentAssignmentsClient({
                 ) : (
                   activeAssignment.submission &&
                   activeAssignment.submission.status !== "draft" && (
-                    <Card className="border-gold-primary/30 bg-gold-primary/5">
+                    <Card className={DARK_GLASS_CARD}>
                       <CardContent className="flex items-center gap-3 py-4 text-xs">
-                        <CheckCircle2 className="size-5 shrink-0 text-gold-foreground" />
+                        <CheckCircle2 className="size-5 shrink-0 text-[#C99A22]" />
                         <div>
                           <p className="font-semibold text-foreground">
                             Submission Received (
@@ -414,8 +456,8 @@ export function StudentAssignmentsClient({
                 )}
 
                 {/* Answer & File Upload Workspace */}
-                <Card>
-                  <CardHeader>
+                <Card className={DARK_GLASS_CARD}>
+                  <CardHeader className="border-b border-white/10">
                     <CardTitle className="text-base">Your Submission</CardTitle>
                     <CardDescription>
                       {activeAssignment.submission?.isGradePublished
@@ -423,7 +465,7 @@ export function StudentAssignmentsClient({
                         : "Write your response below and/or attach your work file (PDF, DOCX, ZIP, TXT, or image)."}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-4 pt-4">
                     {activeAssignment.submissionTypes.includes("text") && (
                       <div className="space-y-1.5">
                         <Label>Written Response</Label>
@@ -435,6 +477,7 @@ export function StudentAssignmentsClient({
                           value={answerText}
                           onChange={(e) => setAnswerText(e.target.value)}
                           placeholder="Write your structured assignment answer here..."
+                          className={cn(DARK_GLASS_SUBBOX, "text-foreground")}
                         />
                       </div>
                     )}
@@ -444,8 +487,13 @@ export function StudentAssignmentsClient({
                         <Label>Assignment File Attachment</Label>
                         <div className="flex flex-wrap items-center gap-3">
                           {!activeAssignment.submission?.isGradePublished && (
-                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3.5 py-2 text-xs font-semibold hover:border-gold-border">
-                              <Upload className="size-4 text-gold-foreground" />
+                            <label
+                              className={cn(
+                                "inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold hover:border-[#C99A22]/50",
+                                DARK_GLASS_SUBBOX,
+                              )}
+                            >
+                              <Upload className="size-4 text-[#C99A22]" />
                               <span>
                                 {uploading
                                   ? "Uploading..."
@@ -464,14 +512,19 @@ export function StudentAssignmentsClient({
                           )}
 
                           {uploadedFile && (
-                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-gold-border bg-gold-subtle px-3 py-1.5 text-xs font-medium">
-                              <Paperclip className="size-3.5 text-gold-foreground" />
+                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#C99A22]/40 bg-[#0F1115]/65 px-3 py-1.5 text-xs font-medium">
+                              <Paperclip className="size-3.5 text-[#C99A22]" />
                               {uploadedFile.fileName}
                             </span>
                           )}
 
                           {activeAssignment.submission?.attachmentSignedUrl && (
-                            <Button asChild variant="outline" size="sm">
+                            <Button
+                              asChild
+                              variant="outline"
+                              size="sm"
+                              className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
+                            >
                               <a
                                 href={
                                   activeAssignment.submission
@@ -496,6 +549,7 @@ export function StudentAssignmentsClient({
                           size="sm"
                           disabled={isPending || uploading}
                           onClick={() => handleSaveOrSubmit(true)}
+                          className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
                         >
                           <Save className="size-3.5" />
                           <span>Save Draft</span>

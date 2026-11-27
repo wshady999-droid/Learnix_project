@@ -30,6 +30,12 @@ interface StudentRatingsClientProps {
   data: StudentPerformanceAndGrowthData;
 }
 
+const DARK_GLASS_CARD =
+  "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
+
+const DARK_GLASS_FIELD =
+  "border-white/10 bg-[#0F1115]/55 text-foreground backdrop-blur-md";
+
 export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
   const router = useRouter();
   const { locale } = useLocale();
@@ -130,20 +136,20 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
         </p>
       </div>
 
-      <Card className="border-gold-primary/40 bg-gold-primary/5">
+      <Card className={DARK_GLASS_CARD}>
         <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4 text-xs">
           <div className="flex items-center gap-3">
-            <ShieldCheck className="size-4 shrink-0 text-gold-foreground" />
+            <ShieldCheck className="size-4 shrink-0 text-[#C99A22]" />
             <p className="text-foreground">{t.ratings.policyNotice}</p>
           </div>
           {data.enrolledCourses.length > 0 && (
             <select
-              className={cn(fieldBase, "h-9 w-72 bg-background")}
+              className={cn(fieldBase, "h-9 w-72", DARK_GLASS_FIELD)}
               value={selectedCourseId}
               onChange={(e) => handleCourseSelect(e.target.value)}
             >
               {data.enrolledCourses.map((c) => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} className="bg-[#0F1115] text-foreground">
                   {c.code} — {c.title} ({c.progressPercent}%)
                 </option>
               ))}
@@ -161,8 +167,8 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
           {/* Course Rating Form */}
-          <Card>
-            <CardHeader>
+          <Card className={DARK_GLASS_CARD}>
+            <CardHeader className="border-b border-white/10">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">
                   {activeCourse?.title ?? "Course"}
@@ -175,7 +181,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                 {t.ratings.courseRatingStarsLabel} (Requires 100% completion)
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-4">
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Button
@@ -183,6 +189,11 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                     type="button"
                     size="sm"
                     variant={courseStars >= star ? "gold" : "outline"}
+                    className={
+                      courseStars >= star
+                        ? ""
+                        : "border-white/15 bg-[#0F1115]/55 hover:bg-[#0F1115]/80"
+                    }
                     onClick={() => setCourseStars(star)}
                   >
                     ★ {star}
@@ -197,6 +208,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                   value={courseComment}
                   onChange={(e) => setCourseComment(e.target.value)}
                   placeholder="Share your feedback on the lessons, materials, and clarity..."
+                  className={DARK_GLASS_FIELD}
                 />
               </div>
 
@@ -207,6 +219,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                   value={courseSuggestions}
                   onChange={(e) => setCourseSuggestions(e.target.value)}
                   placeholder="Optional suggestions to help improve course content..."
+                  className={DARK_GLASS_FIELD}
                 />
               </div>
 
@@ -223,8 +236,8 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
           </Card>
 
           {/* Teacher Rating Form */}
-          <Card>
-            <CardHeader>
+          <Card className={DARK_GLASS_CARD}>
+            <CardHeader className="border-b border-white/10">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">
                   {activeCourse?.teacherName ?? "Instructor"}
@@ -237,7 +250,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                 {t.ratings.teacherRatingStarsLabel}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 pt-4">
               <div className="flex items-center gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Button
@@ -245,6 +258,11 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                     type="button"
                     size="sm"
                     variant={teacherStars >= star ? "gold" : "outline"}
+                    className={
+                      teacherStars >= star
+                        ? ""
+                        : "border-white/15 bg-[#0F1115]/55 hover:bg-[#0F1115]/80"
+                    }
                     onClick={() => setTeacherStars(star)}
                   >
                     ★ {star}
@@ -259,6 +277,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                   value={teacherComment}
                   onChange={(e) => setTeacherComment(e.target.value)}
                   placeholder="Share your feedback on the instructor's teaching style and support..."
+                  className={DARK_GLASS_FIELD}
                 />
               </div>
 
@@ -269,6 +288,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                   value={teacherSuggestions}
                   onChange={(e) => setTeacherSuggestions(e.target.value)}
                   placeholder="Optional constructive feedback for the instructor..."
+                  className={DARK_GLASS_FIELD}
                 />
               </div>
 
@@ -287,13 +307,13 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
       )}
 
       {/* My Submitted Reviews History */}
-      <Card>
-        <CardHeader>
+      <Card className={DARK_GLASS_CARD}>
+        <CardHeader className="border-b border-white/10">
           <CardTitle className="text-base">
             {t.ratings.mySubmittedReviewsTitle}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2.5 text-xs">
+        <CardContent className="space-y-2.5 pt-4 text-xs">
           {data.courseReviews.length === 0 &&
           data.teacherReviews.length === 0 ? (
             <p className="text-muted-foreground">
@@ -308,7 +328,10 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                 return (
                   <div
                     key={rev.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 p-3"
+                    className={cn(
+                      "flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3",
+                      DARK_GLASS_FIELD,
+                    )}
                   >
                     <div>
                       <p className="font-semibold text-foreground">
@@ -318,7 +341,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                         {rev.comment || "No written comment"}
                       </p>
                       {rev.improvement_suggestions && (
-                        <p className="mt-0.5 text-[11px] text-gold-foreground">
+                        <p className="mt-0.5 text-[11px] text-[#C99A22]">
                           Suggestion: {rev.improvement_suggestions}
                         </p>
                       )}
@@ -340,7 +363,10 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                 return (
                   <div
                     key={rev.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 p-3"
+                    className={cn(
+                      "flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3",
+                      DARK_GLASS_FIELD,
+                    )}
                   >
                     <div>
                       <p className="font-semibold text-foreground">

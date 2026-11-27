@@ -7,7 +7,6 @@ import {
   BookOpen,
   Camera,
   ClipboardCheck,
-  Clock,
   FileCheck2,
   PlayCircle,
   ShieldCheck,
@@ -39,6 +38,15 @@ interface StudentExamsClientProps {
   data: StudentExamsCenterData;
 }
 
+const DARK_GLASS_CARD =
+  "w-full border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]";
+
+const DARK_GLASS_ROW =
+  "flex w-full flex-col items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#0F1115]/55 p-4 backdrop-blur-md transition-colors hover:border-[#C99A22]/35 hover:bg-[#0F1115]/70 md:flex-row";
+
+const DARK_GLASS_ACTIVE_ROW =
+  "flex w-full flex-col items-center justify-between gap-4 rounded-xl border border-[#C99A22]/50 bg-[#0F1115]/65 p-4 backdrop-blur-md shadow-[0_0_24px_rgba(201,154,34,0.12)] transition-colors hover:bg-[#0F1115]/75 md:flex-row";
+
 export function StudentExamsClient({ data }: StudentExamsClientProps) {
   const { locale } = useLocale();
   const t = getStudentDictionary(locale);
@@ -51,17 +59,17 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
       data.enrolledCourses && data.enrolledCourses.length > 0
         ? data.enrolledCourses
         : Array.from(
-          new Map(
-            data.exams.map((e) => [
-              e.course_id,
-              {
-                id: e.course_id,
-                code: e.courseCode,
-                title: e.courseTitle,
-              },
-            ]),
-          ).values(),
-        );
+            new Map(
+              data.exams.map((e) => [
+                e.course_id,
+                {
+                  id: e.course_id,
+                  code: e.courseCode,
+                  title: e.courseTitle,
+                },
+              ]),
+            ).values(),
+          );
 
     return enrolledList.map((course) => {
       const courseExams = data.exams.filter((e) => e.course_id === course.id);
@@ -139,18 +147,18 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
           ) : (
             <div className="flex flex-col gap-6">
               {courseExamGroups.map((group) => (
-                <Card key={group.course.id} className="w-full border-border/80 bg-card">
-                  <CardHeader className="border-b border-border/60 pb-3 pt-4 px-5">
+                <Card key={group.course.id} className={DARK_GLASS_CARD}>
+                  <CardHeader className="border-b border-white/10 px-5 pt-4 pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold-primary/15 text-gold-foreground">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#C99A22]/30 bg-[#C99A22]/10 text-[#C99A22]">
                           <BookOpen className="size-4" />
                         </div>
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge
                               variant="outline"
-                              className="font-mono text-[10px]"
+                              className="border-white/15 bg-[#0F1115]/60 font-mono text-[10px] text-foreground"
                             >
                               {group.course.code}
                             </Badge>
@@ -191,22 +199,28 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
                               key={exam.id}
                               className={
                                 exam.activeAttemptId
-                                  ? "flex w-full flex-col items-center justify-between gap-4 rounded-xl border border-gold-primary/70 bg-background p-4 shadow-sm md:flex-row"
-                                  : "flex w-full flex-col items-center justify-between gap-4 rounded-xl border border-border/80 bg-background p-4 shadow-sm md:flex-row"
+                                  ? DARK_GLASS_ACTIVE_ROW
+                                  : DARK_GLASS_ROW
                               }
                             >
                               <div className="w-full space-y-1.5 md:w-1/3">
                                 <div className="flex flex-wrap items-center gap-2">
                                   {getExamStatusBadge(exam)}
                                   {exam.strict_proctoring && (
-                                    <Badge variant="gold" className="text-[10px] px-1.5 py-0.5">
+                                    <Badge
+                                      variant="gold"
+                                      className="px-1.5 py-0.5 text-[10px]"
+                                    >
                                       <ShieldCheck className="mr-1 size-3" />
                                       {t.exams.proctoredBadge}
                                     </Badge>
                                   )}
                                   {exam.camera_monitoring_enabled && (
-                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5">
-                                      <Camera className="mr-1 size-3 text-gold-foreground" />
+                                    <Badge
+                                      variant="outline"
+                                      className="border-white/15 bg-[#0F1115]/60 px-1.5 py-0.5 text-[10px]"
+                                    >
+                                      <Camera className="mr-1 size-3 text-[#C99A22]" />
                                       Camera
                                     </Badge>
                                   )}
@@ -221,41 +235,50 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
                                 )}
                               </div>
 
-                              <div className="flex w-full flex-1 items-center justify-evenly gap-2 border-y border-border/50 py-3 md:border-x md:border-y-0 md:py-0">
+                              <div className="flex w-full flex-1 items-center justify-evenly gap-2 border-y border-white/10 py-3 md:border-x md:border-y-0 md:py-0">
                                 <div className="text-center">
-                                  <p className="font-semibold text-foreground text-sm">
+                                  <p className="text-sm font-semibold text-foreground">
                                     {exam.questionCount}
                                   </p>
-                                  <p className="text-[10px] text-muted-foreground">Qs</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Qs
+                                  </p>
                                 </div>
                                 <div className="text-center">
-                                  <p className="font-semibold text-foreground text-sm">
+                                  <p className="text-sm font-semibold text-foreground">
                                     {exam.duration_minutes}m
                                   </p>
-                                  <p className="text-[10px] text-muted-foreground">Dur</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Dur
+                                  </p>
                                 </div>
                                 <div className="text-center">
-                                  <p className="font-semibold text-foreground text-sm">
+                                  <p className="text-sm font-semibold text-foreground">
                                     {Number(exam.total_points)}
                                   </p>
-                                  <p className="text-[10px] text-muted-foreground">Marks</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Marks
+                                  </p>
                                 </div>
                                 <div className="text-center">
-                                  <p className="font-semibold text-foreground text-sm">
+                                  <p className="text-sm font-semibold text-foreground">
                                     {Number(exam.passing_score)}%
                                   </p>
-                                  <p className="text-[10px] text-muted-foreground">Pass</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Pass
+                                  </p>
                                 </div>
                                 <div className="text-center">
-                                  <p className="font-semibold text-foreground text-sm">
+                                  <p className="text-sm font-semibold text-foreground">
                                     {exam.attemptsUsed} / {exam.max_attempts}
                                   </p>
-                                  <p className="text-[10px] text-muted-foreground">Att</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Att
+                                  </p>
                                 </div>
                               </div>
 
-        
-                              <div className="w-full md:w-auto shrink-0">
+                              <div className="w-full shrink-0 md:w-auto">
                                 {exam.activeAttemptId ? (
                                   <Button
                                     asChild
@@ -285,7 +308,7 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
                                     asChild
                                     variant="outline"
                                     size="sm"
-                                    className="w-full md:w-auto"
+                                    className="w-full border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80 md:w-auto"
                                   >
                                     <Link href={`/student/exams/${exam.id}`}>
                                       <Award className="mr-2 size-4" />
@@ -308,7 +331,7 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
       )}
 
       {activeTab === "history" && (
-        <Card>
+        <Card className={DARK_GLASS_CARD}>
           <CardContent className="pt-6">
             {data.attempts.length === 0 ? (
               <EmptyState
@@ -319,7 +342,7 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="border-white/10 hover:bg-white/5">
                     <TableHead>Examination</TableHead>
                     <TableHead>Attempt</TableHead>
                     <TableHead>Status</TableHead>
@@ -330,7 +353,10 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
                 </TableHeader>
                 <TableBody>
                   {data.attempts.map((att) => (
-                    <TableRow key={att.id}>
+                    <TableRow
+                      key={att.id}
+                      className="border-white/10 hover:bg-white/5"
+                    >
                       <TableCell>
                         <p className="font-semibold text-foreground">
                           {att.examTitle}
@@ -360,7 +386,12 @@ export function StudentExamsClient({ data }: StudentExamsClientProps) {
                         {att.started_at.slice(0, 16).replace("T", " ")}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button asChild variant="outline" size="sm">
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="sm"
+                          className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
+                        >
                           <Link href={`/student/exams/${att.exam_id}`}>
                             {att.status === "in_progress"
                               ? t.exams.resumeExamButton
