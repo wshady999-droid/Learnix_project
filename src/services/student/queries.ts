@@ -11,6 +11,8 @@ export interface StudentOverviewData {
   studentEmail: string;
   studentAvatarUrl: string | null;
   enrolledCoursesCount: number;
+  completedCoursesCount: number;
+  inProgressCoursesCount: number;
   averageCompletionPercent: number;
   upcomingExamsCount: number;
   upcomingAssignmentsCount: number;
@@ -35,18 +37,29 @@ export interface StudentOverviewData {
       courseTitle: string;
     }
   >;
-  recentGrades: Array<
-    TableRow<"results"> & {
-      courseTitle: string;
-      examTitle: string;
-    }
-  >;
+  recentGrades: Array<{
+    id: string;
+    kind: "quiz" | "assignment";
+    title: string;
+    courseTitle: string;
+    scorePercent: number;
+    passed: boolean;
+    gradedAt: string;
+  }>;
+  recentTeacherMessages: Array<{
+    id: string;
+    conversationId: string;
+    senderName: string;
+    body: string;
+    createdAt: string;
+  }>;
   notifications: Array<{
     recipientId: string;
     notificationId: string;
     title: string;
     body: string;
     category: string;
+    actionUrl: string | null;
     isRead: boolean;
     createdAt: string;
   }>;
@@ -61,12 +74,13 @@ export async function getStudentOverviewData(): Promise<
   const supabase = await createSupabaseServerClient();
   const studentId = auth.data.userId;
 
-  // Reuse profile attributes already resolved and cached by requireRole() -> getCachedCallerProfile()
   const [
     enrollmentsRes,
     resultsRes,
+    publishedAsgGradesRes,
     studyRes,
     notifRecipientsRes,
+    myConvPartsRes,
   ] = await Promise.all([
     supabase
       .from("course_enrollments")
@@ -80,6 +94,13 @@ export async function getStudentOverviewData(): Promise<
       .eq("is_published", true)
       .order("graded_at", { ascending: false }),
     supabase
+      .from("assignment_grades")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("is_published", true)
+      .order("published_at", { ascending: false })
+      .limit(10),
+    supabase
       .from("study_sessions")
       .select("duration_seconds")
       .eq("student_id", studentId),
@@ -89,6 +110,10 @@ export async function getStudentOverviewData(): Promise<
       .eq("recipient_id", studentId)
       .order("created_at", { ascending: false })
       .limit(15),
+    supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", studentId),
   ]);
 
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
@@ -96,40 +121,71 @@ export async function getStudentOverviewData(): Promise<
 
   const enrollments = enrollmentsRes.data ?? [];
   const results = resultsRes.data ?? [];
+  const publishedAsgGrades = publishedAsgGradesRes.data ?? [];
   const studySessions = studyRes.data ?? [];
   const notifRecipients = notifRecipientsRes.data ?? [];
+  const myConvIds = (myConvPartsRes.data ?? []).map((p) => p.conversation_id);
 
   const courseIds = enrollments.map((e) => e.course_id);
   const notifIds = notifRecipients.map((n) => n.notification_id);
 
-  // Batch Wave 2 queries in parallel (including notifications!) instead of 3 sequential steps
-  const [coursesRes, examsRes, assignmentsRes, notificationsRes] = await Promise.all([
-    courseIds.length > 0
-      ? supabase.from("courses").select("*").in("id", courseIds)
-      : Promise.resolve({ data: [] as Array<TableRow<"courses">>, error: null }),
-    courseIds.length > 0
-      ? supabase
-          .from("exams")
-          .select("*")
-          .in("course_id", courseIds)
-          .eq("status", "published")
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] as Array<TableRow<"exams">>, error: null }),
-    courseIds.length > 0
-      ? supabase
-          .from("assignments")
-          .select("*")
-          .in("course_id", courseIds)
-          .eq("is_published", true)
-          .order("due_at", { ascending: true })
-      : Promise.resolve({ data: [] as Array<TableRow<"assignments">>, error: null }),
-    notifIds.length > 0
-      ? supabase.from("notifications").select("*").in("id", notifIds)
-      : Promise.resolve({ data: [] as Array<TableRow<"notifications">>, error: null }),
-  ]);
+  const [coursesRes, examsRes, assignmentsRes, notificationsRes, recentMsgsRes] =
+    await Promise.all([
+      courseIds.length > 0
+        ? supabase
+            .from("courses")
+            .select("*")
+            .in("id", courseIds)
+            .is("deleted_at", null)
+        : Promise.resolve({ data: [] as Array<TableRow<"courses">>, error: null }),
+      courseIds.length > 0
+        ? supabase
+            .from("exams")
+            .select("*")
+            .in("course_id", courseIds)
+            .eq("status", "published")
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as Array<TableRow<"exams">>, error: null }),
+      courseIds.length > 0
+        ? supabase
+            .from("assignments")
+            .select("*")
+            .in("course_id", courseIds)
+            .eq("is_published", true)
+            .order("due_at", { ascending: true })
+        : Promise.resolve({ data: [] as Array<TableRow<"assignments">>, error: null }),
+      notifIds.length > 0
+        ? supabase.from("notifications").select("*").in("id", notifIds)
+        : Promise.resolve({ data: [] as Array<TableRow<"notifications">>, error: null }),
+      myConvIds.length > 0
+        ? supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, body, created_at")
+            .in("conversation_id", myConvIds)
+            .neq("sender_id", studentId)
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .limit(5)
+        : Promise.resolve({
+            data: [] as Array<{
+              id: string;
+              conversation_id: string;
+              sender_id: string;
+              body: string;
+              created_at: string;
+            }>,
+            error: null,
+          }),
+    ]);
 
   const courses = coursesRes.data ?? [];
-  const teacherIds = Array.from(new Set(courses.map((c) => c.teacher_id)));
+  const recentMsgs = recentMsgsRes.data ?? [];
+  const teacherIds = Array.from(
+    new Set([
+      ...courses.map((c) => c.teacher_id),
+      ...recentMsgs.map((m) => m.sender_id),
+    ]),
+  );
   const teacherProfilesRes =
     teacherIds.length > 0
       ? await supabase
@@ -144,6 +200,7 @@ export async function getStudentOverviewData(): Promise<
   const exams = examsRes.data ?? [];
   const examMap = new Map(exams.map((e) => [e.id, e]));
   const assignments = assignmentsRes.data ?? [];
+  const assignmentMap = new Map(assignments.map((a) => [a.id, a]));
   const notifMap = new Map((notificationsRes.data ?? []).map((n) => [n.id, n]));
 
   const enrolledCourses = enrollments
@@ -172,6 +229,14 @@ export async function getStudentOverviewData(): Promise<
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const completedCoursesCount = enrolledCourses.filter(
+    (c) => c.progressPercent >= 100 || c.enrollmentStatus === "completed",
+  ).length;
+  const inProgressCoursesCount = Math.max(
+    0,
+    enrolledCourses.length - completedCoursesCount,
+  );
+
   const averageCompletionPercent =
     enrolledCourses.length > 0
       ? Number(
@@ -187,8 +252,36 @@ export async function getStudentOverviewData(): Promise<
     0,
   );
   const totalStudyHours = Number((totalStudySeconds / 3600).toFixed(1));
+
+  const combinedGrades: StudentOverviewData["recentGrades"] = [
+    ...results.map((r) => ({
+      id: `quiz-${r.id}`,
+      kind: "quiz" as const,
+      title: examMap.get(r.exam_id)?.title || "Quiz",
+      courseTitle: courseMap.get(r.course_id)?.title || "Course",
+      scorePercent: Number(r.score_percent ?? 0),
+      passed: Boolean(r.passed),
+      gradedAt: r.graded_at,
+    })),
+    ...publishedAsgGrades.map((ag) => {
+      const asg = assignmentMap.get(ag.assignment_id);
+      const maxPts = Number(asg?.max_points ?? 100) || 100;
+      const earned = Number(ag.teacher_points ?? 0);
+      const pct = Math.min(100, Number(((earned / maxPts) * 100).toFixed(1)));
+      return {
+        id: `asg-${ag.id}`,
+        kind: "assignment" as const,
+        title: asg?.title || "Assignment",
+        courseTitle: courseMap.get(ag.course_id)?.title || "Course",
+        scorePercent: pct,
+        passed: pct >= 60,
+        gradedAt: ag.published_at || ag.updated_at,
+      };
+    }),
+  ].sort((a, b) => new Date(b.gradedAt).getTime() - new Date(a.gradedAt).getTime());
+
   const latestGradePercent =
-    results.length > 0 ? Number(results[0]?.score_percent ?? 0) : 0;
+    combinedGrades.length > 0 ? combinedGrades[0]!.scorePercent : 0;
 
   const notificationsList = notifRecipients
     .map((nr) => {
@@ -200,6 +293,7 @@ export async function getStudentOverviewData(): Promise<
         title: n.title,
         body: n.body,
         category: n.notification_type,
+        actionUrl: n.action_url,
         isRead: nr.is_read,
         createdAt: nr.created_at,
       };
@@ -216,6 +310,8 @@ export async function getStudentOverviewData(): Promise<
       studentEmail: fallbackEmail,
       studentAvatarUrl: auth.data.avatarUrl ?? null,
       enrolledCoursesCount: enrolledCourses.length,
+      completedCoursesCount,
+      inProgressCoursesCount,
       averageCompletionPercent,
       upcomingExamsCount: exams.length,
       upcomingAssignmentsCount: assignments.length,
@@ -231,10 +327,13 @@ export async function getStudentOverviewData(): Promise<
         ...a,
         courseTitle: courseMap.get(a.course_id)?.title || "Course",
       })),
-      recentGrades: results.slice(0, 8).map((r) => ({
-        ...r,
-        courseTitle: courseMap.get(r.course_id)?.title || "Course",
-        examTitle: examMap.get(r.exam_id)?.title || "Examination",
+      recentGrades: combinedGrades.slice(0, 8),
+      recentTeacherMessages: recentMsgs.map((m) => ({
+        id: m.id,
+        conversationId: m.conversation_id,
+        senderName: profileNameMap.get(m.sender_id) || "Instructor",
+        body: m.body,
+        createdAt: m.created_at,
       })),
       notifications: notificationsList,
     },
@@ -244,24 +343,62 @@ export async function getStudentOverviewData(): Promise<
 // -----------------------------------------------------------------------------
 // 2. MY COURSES, CHAPTERS, LESSONS & FAVORITES DATA
 // -----------------------------------------------------------------------------
+export interface StudentLearningResourceView {
+  id: string;
+  courseId: string;
+  chapterId: string | null;
+  lessonId: string | null;
+  title: string;
+  description: string | null;
+  resourceType: string;
+  fileName: string | null;
+  externalUrl: string | null;
+  signedUrl: string | null;
+}
+
 export interface StudentCoursesData {
   studentId: string;
+  categories: string[];
   enrolledCourses: Array<
     TableRow<"courses"> & {
       progressPercent: number;
       enrollmentStatus: string;
       teacherName: string;
+      teacherAvatarUrl: string | null;
+      ratingAvg: number;
+      reviewCount: number;
+      enrollmentCount: number;
     }
   >;
   availablePublishedCourses: Array<
     TableRow<"courses"> & {
       teacherName: string;
+      teacherAvatarUrl: string | null;
+      ratingAvg: number;
+      reviewCount: number;
+      enrollmentCount: number;
     }
   >;
   chapters: Array<TableRow<"chapters">>;
-  lessons: Array<TableRow<"lessons">>;
+  lessons: Array<
+    TableRow<"lessons"> & {
+      signedVideoUrl?: string | null;
+      signedAttachmentUrl?: string | null;
+    }
+  >;
+  learningResources: StudentLearningResourceView[];
   lessonProgress: Array<TableRow<"lesson_progress">>;
   favorites: Array<TableRow<"favorites">>;
+  approvedReviews: Array<{
+    id: string;
+    courseId: string;
+    studentName: string;
+    rating: number;
+    comment: string | null;
+    createdAt: string;
+  }>;
+  myCourseReviews: Array<TableRow<"course_reviews">>;
+  myTeacherReviews: Array<TableRow<"teacher_reviews">>;
 }
 
 export async function getStudentCoursesData(): Promise<
@@ -274,11 +411,19 @@ export async function getStudentCoursesData(): Promise<
   const studentId = auth.data.userId;
 
   const [
+    categoriesRes,
     enrollmentsRes,
     publishedCoursesRes,
     lessonProgressRes,
     favoritesRes,
+    myCourseRevsRes,
+    myTeacherRevsRes,
   ] = await Promise.all([
+    supabase
+      .from("categories")
+      .select("name")
+      .eq("is_active", true)
+      .order("name", { ascending: true }),
     supabase
       .from("course_enrollments")
       .select("*")
@@ -288,9 +433,12 @@ export async function getStudentCoursesData(): Promise<
       .from("courses")
       .select("*")
       .eq("status", "published")
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     supabase.from("lesson_progress").select("*").eq("student_id", studentId),
     supabase.from("favorites").select("*").eq("student_id", studentId),
+    supabase.from("course_reviews").select("*").eq("student_id", studentId),
+    supabase.from("teacher_reviews").select("*").eq("student_id", studentId),
   ]);
 
   if (enrollmentsRes.error) return { ok: false, error: enrollmentsRes.error.message };
@@ -303,10 +451,17 @@ export async function getStudentCoursesData(): Promise<
 
   const enrolledIdsSet = new Set(enrollments.map((e) => e.course_id));
   const enrolledCourseIds = Array.from(enrolledIdsSet);
+  const allCatalogCourseIds = Array.from(
+    new Set([...publishedCourses.map((c) => c.id), ...enrolledCourseIds]),
+  );
 
   const enrolledCoursesRawRes =
     enrolledCourseIds.length > 0
-      ? await supabase.from("courses").select("*").in("id", enrolledCourseIds)
+      ? await supabase
+          .from("courses")
+          .select("*")
+          .in("id", enrolledCourseIds)
+          .is("deleted_at", null)
       : { data: [] as Array<TableRow<"courses">>, error: null };
 
   const enrolledCourseMap = new Map(
@@ -320,7 +475,14 @@ export async function getStudentCoursesData(): Promise<
     ]),
   );
 
-  const [chaptersRes, lessonsRes, profilesRes] = await Promise.all([
+  const [
+    chaptersRes,
+    lessonsRes,
+    resourcesRes,
+    profilesRes,
+    approvedRevsRes,
+    allEnrCountsRes,
+  ] = await Promise.all([
     enrolledCourseIds.length > 0
       ? supabase
           .from("chapters")
@@ -337,51 +499,167 @@ export async function getStudentCoursesData(): Promise<
           .eq("is_published", true)
           .order("position", { ascending: true })
       : Promise.resolve({ data: [] as Array<TableRow<"lessons">>, error: null }),
+    enrolledCourseIds.length > 0
+      ? supabase
+          .from("learning_resources")
+          .select("*")
+          .in("course_id", enrolledCourseIds)
+          .eq("is_published", true)
+          .order("position", { ascending: true })
+      : Promise.resolve({
+          data: [] as Array<TableRow<"learning_resources">>,
+          error: null,
+        }),
     teacherIds.length > 0
       ? supabase
           .from("profiles")
-          .select("id, full_name, email")
+          .select("id, full_name, email, avatar_url")
           .in("id", teacherIds)
       : Promise.resolve({
-          data: [] as Array<{ id: string; full_name: string | null; email: string }>,
+          data: [] as Array<{
+            id: string;
+            full_name: string | null;
+            email: string;
+            avatar_url: string | null;
+          }>,
           error: null,
         }),
+    allCatalogCourseIds.length > 0
+      ? supabase
+          .from("course_reviews")
+          .select("id, course_id, student_id, rating, comment, created_at")
+          .in("course_id", allCatalogCourseIds)
+          .eq("is_published", true)
+          .eq("moderation_status", "approved")
+          .order("created_at", { ascending: false })
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            course_id: string;
+            student_id: string;
+            rating: number;
+            comment: string | null;
+            created_at: string;
+          }>,
+          error: null,
+        }),
+    allCatalogCourseIds.length > 0
+      ? supabase
+          .from("course_enrollments")
+          .select("course_id")
+          .in("course_id", allCatalogCourseIds)
+      : Promise.resolve({ data: [] as Array<{ course_id: string }>, error: null }),
   ]);
 
-  const profileNameMap = new Map(
-    (profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]),
+  const profileMap = new Map(
+    (profilesRes.data ?? []).map((p) => [p.id, p]),
+  );
+
+  const approvedRevs = approvedRevsRes.data ?? [];
+  const enrollmentCountMap = new Map<string, number>();
+  for (const row of allEnrCountsRes.data ?? []) {
+    enrollmentCountMap.set(
+      row.course_id,
+      (enrollmentCountMap.get(row.course_id) ?? 0) + 1,
+    );
+  }
+
+  function computeRatingStats(courseId: string) {
+    const revs = approvedRevs.filter((r) => r.course_id === courseId);
+    const avg =
+      revs.length > 0
+        ? Number(
+            (
+              revs.reduce((s, r) => s + Number(r.rating), 0) / revs.length
+            ).toFixed(1),
+          )
+        : 0;
+    return { ratingAvg: avg, reviewCount: revs.length };
+  }
+
+  // Sign URLs for learning resources in enrolled courses
+  const rawResources = resourcesRes.data ?? [];
+  const learningResources: StudentLearningResourceView[] = await Promise.all(
+    rawResources.map(async (resRow) => {
+      let signedUrl: string | null = null;
+      if (resRow.storage_bucket && resRow.storage_path) {
+        const { data: signed } = await supabase.storage
+          .from(resRow.storage_bucket)
+          .createSignedUrl(resRow.storage_path, 3600);
+        signedUrl = signed?.signedUrl ?? null;
+      }
+      return {
+        id: resRow.id,
+        courseId: resRow.course_id,
+        chapterId: resRow.chapter_id,
+        lessonId: resRow.lesson_id,
+        title: resRow.title,
+        description: resRow.description,
+        resourceType: resRow.resource_type,
+        fileName: resRow.file_name,
+        externalUrl: resRow.external_url,
+        signedUrl,
+      };
+    }),
   );
 
   const enrolledCourses = enrollments
     .map((enr) => {
       const course = enrolledCourseMap.get(enr.course_id);
       if (!course) return null;
+      const teacher = profileMap.get(course.teacher_id);
+      const stats = computeRatingStats(course.id);
       return {
         ...course,
         progressPercent: Number(enr.progress_percent ?? 0),
         enrollmentStatus: enr.status,
-        teacherName: profileNameMap.get(course.teacher_id) || "Instructor",
+        teacherName: teacher?.full_name || teacher?.email || "Instructor",
+        teacherAvatarUrl: teacher?.avatar_url ?? null,
+        ratingAvg: stats.ratingAvg,
+        reviewCount: stats.reviewCount,
+        enrollmentCount: enrollmentCountMap.get(course.id) ?? 1,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const availablePublishedCourses = publishedCourses
     .filter((c) => !enrolledIdsSet.has(c.id))
-    .map((c) => ({
-      ...c,
-      teacherName: profileNameMap.get(c.teacher_id) || "Instructor",
-    }));
+    .map((c) => {
+      const teacher = profileMap.get(c.teacher_id);
+      const stats = computeRatingStats(c.id);
+      return {
+        ...c,
+        teacherName: teacher?.full_name || teacher?.email || "Instructor",
+        teacherAvatarUrl: teacher?.avatar_url ?? null,
+        ratingAvg: stats.ratingAvg,
+        reviewCount: stats.reviewCount,
+        enrollmentCount: enrollmentCountMap.get(c.id) ?? 0,
+      };
+    });
 
   return {
     ok: true,
     data: {
       studentId,
+      categories: (categoriesRes.data ?? []).map((c) => c.name),
       enrolledCourses,
       availablePublishedCourses,
       chapters: chaptersRes.data ?? [],
       lessons: lessonsRes.data ?? [],
+      learningResources,
       lessonProgress: lessonProgressRes.data ?? [],
       favorites: favoritesRes.data ?? [],
+      approvedReviews: approvedRevs.map((r) => ({
+        id: r.id,
+        courseId: r.course_id,
+        studentName:
+          r.student_id === studentId ? "You" : "Verified Student",
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.created_at,
+      })),
+      myCourseReviews: myCourseRevsRes.data ?? [],
+      myTeacherReviews: myTeacherRevsRes.data ?? [],
     },
   };
 }
@@ -396,6 +674,7 @@ export interface StudentLessonViewerData {
   lesson: TableRow<"lessons">;
   signedVideoUrl: string | null;
   signedAttachmentUrl: string | null;
+  learningResources: StudentLearningResourceView[];
   progress: TableRow<"lesson_progress"> | null;
   isFavorited: boolean;
   notes: Array<TableRow<"lesson_notes">>;
@@ -458,6 +737,7 @@ export async function getStudentLessonViewerData(
     progressRes,
     favRes,
     notesRes,
+    resourcesRes,
   ] = await Promise.all([
     supabase.from("courses").select("*").eq("id", lesson.course_id).single(),
     supabase
@@ -488,6 +768,12 @@ export async function getStudentLessonViewerData(
       .eq("student_id", studentId)
       .eq("lesson_id", lesson.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("learning_resources")
+      .select("*")
+      .eq("course_id", lesson.course_id)
+      .eq("is_published", true)
+      .order("position", { ascending: true }),
   ]);
 
   if (courseRes.error || !courseRes.data) {
@@ -548,6 +834,33 @@ export async function getStudentLessonViewerData(
   const currentProgress =
     courseLessonProgress.find((p) => p.lesson_id === lesson.id) ?? null;
 
+  const filteredLessonResources = (resourcesRes.data ?? []).filter(
+    (r) => !r.lesson_id || r.lesson_id === lesson.id,
+  );
+  const learningResources: StudentLearningResourceView[] = await Promise.all(
+    filteredLessonResources.map(async (resRow) => {
+      let signedUrl: string | null = null;
+      if (resRow.storage_bucket && resRow.storage_path) {
+        const { data: signed } = await supabase.storage
+          .from(resRow.storage_bucket)
+          .createSignedUrl(resRow.storage_path, 3600);
+        signedUrl = signed?.signedUrl ?? null;
+      }
+      return {
+        id: resRow.id,
+        courseId: resRow.course_id,
+        chapterId: resRow.chapter_id,
+        lessonId: resRow.lesson_id,
+        title: resRow.title,
+        description: resRow.description,
+        resourceType: resRow.resource_type,
+        fileName: resRow.file_name,
+        externalUrl: resRow.external_url,
+        signedUrl,
+      };
+    }),
+  );
+
   return {
     ok: true,
     data: {
@@ -558,6 +871,7 @@ export async function getStudentLessonViewerData(
       lesson,
       signedVideoUrl,
       signedAttachmentUrl,
+      learningResources,
       progress: currentProgress,
       isFavorited: Boolean(favRes.data),
       notes: notesRes.data ?? [],
@@ -584,6 +898,7 @@ export interface StudentPerformanceAndGrowthData {
       enrollmentStatus: string;
       teacherName: string;
       averageExamScore: number;
+      averageAssignmentScore: number;
     }
   >;
   results: Array<
@@ -592,6 +907,23 @@ export interface StudentPerformanceAndGrowthData {
       examTitle: string;
     }
   >;
+  assignmentGrades: Array<{
+    id: string;
+    assignmentId: string;
+    assignmentTitle: string;
+    courseId: string;
+    courseTitle: string;
+    earnedPoints: number;
+    maxPoints: number;
+    scorePercent: number;
+    feedback: string | null;
+    gradedAt: string;
+  }>;
+  completedLessons: Array<{
+    id: string;
+    courseId: string;
+    completedAt: string;
+  }>;
   studySessions: Array<TableRow<"study_sessions">>;
   completedLessonsCount: number;
   notesCount: number;
@@ -618,6 +950,7 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
     profileRes,
     enrollmentsRes,
     resultsRes,
+    asgGradesRes,
     studyRes,
     lessonProgRes,
     notesRes,
@@ -638,13 +971,19 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
       .eq("is_published", true)
       .order("graded_at", { ascending: false }),
     supabase
+      .from("assignment_grades")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("is_published", true)
+      .order("published_at", { ascending: false }),
+    supabase
       .from("study_sessions")
       .select("*")
       .eq("student_id", studentId)
       .order("started_at", { ascending: false }),
     supabase
       .from("lesson_progress")
-      .select("id", { count: "exact", head: true })
+      .select("id, course_id, completed_at, updated_at")
       .eq("student_id", studentId)
       .eq("is_completed", true),
     supabase
@@ -666,17 +1005,20 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
 
   const enrollments = enrollmentsRes.data ?? [];
   const results = resultsRes.data ?? [];
+  const rawAsgGrades = asgGradesRes.data ?? [];
   const certificates = certsRes.data ?? [];
+  const completedLessonsRows = lessonProgRes.data ?? [];
 
   const courseIds = Array.from(
     new Set([
       ...enrollments.map((e) => e.course_id),
       ...certificates.map((c) => c.course_id),
       ...results.map((r) => r.course_id),
+      ...rawAsgGrades.map((g) => g.course_id),
     ]),
   );
 
-  const [coursesRes, examsRes] = await Promise.all([
+  const [coursesRes, examsRes, assignmentsRes] = await Promise.all([
     courseIds.length > 0
       ? supabase.from("courses").select("*").in("id", courseIds)
       : Promise.resolve({ data: [] as Array<TableRow<"courses">>, error: null }),
@@ -689,6 +1031,18 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
             results.map((r) => r.exam_id),
           )
       : Promise.resolve({ data: [] as Array<{ id: string; title: string }>, error: null }),
+    rawAsgGrades.length > 0
+      ? supabase
+          .from("assignments")
+          .select("id, title, max_points")
+          .in(
+            "id",
+            rawAsgGrades.map((g) => g.assignment_id),
+          )
+      : Promise.resolve({
+          data: [] as Array<{ id: string; title: string; max_points: number }>,
+          error: null,
+        }),
   ]);
 
   const teacherIds = Array.from(
@@ -707,11 +1061,35 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
 
   const courseMap = new Map((coursesRes.data ?? []).map((c) => [c.id, c]));
   const examTitleMap = new Map((examsRes.data ?? []).map((e) => [e.id, e.title]));
+  const asgMap = new Map((assignmentsRes.data ?? []).map((a) => [a.id, a]));
+
+  const assignmentGrades: StudentPerformanceAndGrowthData["assignmentGrades"] =
+    rawAsgGrades.map((g) => {
+      const asg = asgMap.get(g.assignment_id);
+      const maxPoints = Number(asg?.max_points ?? 100) || 100;
+      const earnedPoints = Number(g.teacher_points ?? 0);
+      const scorePercent = Math.min(
+        100,
+        Number(((earnedPoints / maxPoints) * 100).toFixed(1)),
+      );
+      return {
+        id: g.id,
+        assignmentId: g.assignment_id,
+        assignmentTitle: asg?.title || "Assignment",
+        courseId: g.course_id,
+        courseTitle: courseMap.get(g.course_id)?.title || "Course",
+        earnedPoints,
+        maxPoints,
+        scorePercent,
+        feedback: g.teacher_feedback,
+        gradedAt: g.published_at || g.updated_at,
+      };
+    });
 
   const enrolledCourses = enrollments
     .map((enr) => {
       const course = courseMap.get(enr.course_id);
-      if (!course) return null;
+      if (!course || course.deleted_at) return null;
       const courseResults = results.filter((r) => r.course_id === course.id);
       const avgScore =
         courseResults.length > 0
@@ -724,12 +1102,23 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
               ).toFixed(1),
             )
           : 0;
+      const courseAsg = assignmentGrades.filter((a) => a.courseId === course.id);
+      const avgAsg =
+        courseAsg.length > 0
+          ? Number(
+              (
+                courseAsg.reduce((sum, a) => sum + a.scorePercent, 0) /
+                courseAsg.length
+              ).toFixed(1),
+            )
+          : 0;
       return {
         ...course,
         progressPercent: Number(enr.progress_percent ?? 0),
         enrollmentStatus: enr.status,
         teacherName: profileNameMap.get(course.teacher_id) || "Instructor",
         averageExamScore: avgScore,
+        averageAssignmentScore: avgAsg,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -745,8 +1134,14 @@ export async function getStudentPerformanceAndGrowthData(): Promise<
         courseTitle: courseMap.get(r.course_id)?.title || "Course",
         examTitle: examTitleMap.get(r.exam_id) || "Examination",
       })),
+      assignmentGrades,
+      completedLessons: completedLessonsRows.map((lp) => ({
+        id: lp.id,
+        courseId: lp.course_id,
+        completedAt: lp.completed_at || lp.updated_at,
+      })),
       studySessions: studyRes.data ?? [],
-      completedLessonsCount: lessonProgRes.count ?? 0,
+      completedLessonsCount: completedLessonsRows.length,
       notesCount: notesRes.count ?? 0,
       certificates: certificates.map((cert) => ({
         ...cert,
@@ -1009,69 +1404,107 @@ export async function getStudentExamRunnerData(
   const allQuestions = questionsRes.data ?? [];
   const allQuestionIds = allQuestions.map((q) => q.id);
 
-  const [optionsRes, answersRes, resultRes, violationsRes] = await Promise.all([
-    allQuestionIds.length > 0
-      ? supabase
-          .from("question_options")
-          .select("*")
-          .in("question_id", allQuestionIds)
-          .order("position", { ascending: true })
-      : Promise.resolve({
-          data: [] as Array<TableRow<"question_options">>,
-          error: null,
-        }),
-    targetAttempt
-      ? supabase
-          .from("student_answers")
-          .select("*")
-          .eq("attempt_id", targetAttempt.id)
-      : Promise.resolve({
-          data: [] as Array<TableRow<"student_answers">>,
-          error: null,
-        }),
-    latestCompletedAttempt
-      ? supabase
-          .from("results")
-          .select("*")
-          .eq("attempt_id", latestCompletedAttempt.id)
-          .eq("is_published", true)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    targetAttempt
-      ? supabase
-          .from("exam_violations")
-          .select("*")
-          .eq("attempt_id", targetAttempt.id)
-          .order("occurred_at", { ascending: false })
-      : Promise.resolve({
-          data: [] as Array<TableRow<"exam_violations">>,
-          error: null,
-        }),
-  ]);
+  const [optionsRes, activePayloadRes, answersRes, resultRes, violationsRes] =
+    await Promise.all([
+      !activeAttempt && allQuestionIds.length > 0
+        ? supabase
+            .from("question_options")
+            .select("*")
+            .in("question_id", allQuestionIds)
+            .order("position", { ascending: true })
+        : Promise.resolve({
+            data: [] as Array<TableRow<"question_options">>,
+            error: null,
+          }),
+      activeAttempt
+        ? supabase.rpc("get_student_exam_payload", {
+            p_attempt_id: activeAttempt.id,
+          })
+        : Promise.resolve({ data: null, error: null }),
+      targetAttempt
+        ? supabase
+            .from("student_answers")
+            .select("*")
+            .eq("attempt_id", targetAttempt.id)
+        : Promise.resolve({
+            data: [] as Array<TableRow<"student_answers">>,
+            error: null,
+          }),
+      latestCompletedAttempt
+        ? supabase
+            .from("results")
+            .select("*")
+            .eq("attempt_id", latestCompletedAttempt.id)
+            .eq("is_published", true)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      targetAttempt
+        ? supabase
+            .from("exam_violations")
+            .select("*")
+            .eq("attempt_id", targetAttempt.id)
+            .order("occurred_at", { ascending: false })
+        : Promise.resolve({
+            data: [] as Array<TableRow<"exam_violations">>,
+            error: null,
+          }),
+    ]);
 
   const publishedResult = resultRes.data ?? null;
   const canRevealCorrectAnswers =
     !activeAttempt && Boolean(publishedResult) && exam.allow_answer_review;
 
-  // Order questions according to attempt's assigned_question_ids when available
-  const assignedIds = targetAttempt?.assigned_question_ids ?? [];
-  const orderedRawQuestions =
-    assignedIds.length > 0
-      ? assignedIds
-          .map((id) => allQuestions.find((q) => q.id === id))
-          .filter((q): q is NonNullable<typeof q> => Boolean(q))
-      : allQuestions;
+  let sanitizedQuestions: Array<StudentExamRunnerQuestion> = [];
 
-  const allOptions = optionsRes.data ?? [];
-  const sanitizedQuestions: Array<StudentExamRunnerQuestion> =
-    orderedRawQuestions.map((q, index) => {
+  // Active in-progress attempt: use server-randomized RPC payload with zero `is_correct` exposure
+  if (activeAttempt && Array.isArray(activePayloadRes.data)) {
+    const rpcQuestions = activePayloadRes.data as Array<{
+      id: string;
+      question_type: TableRow<"questions">["question_type"];
+      difficulty: TableRow<"questions">["difficulty"];
+      prompt: string;
+      points: number;
+      position: number;
+      media_url: string | null;
+      options: Array<{
+        id: string;
+        option_text: string;
+        position: number;
+      }>;
+    }>;
+
+    sanitizedQuestions = rpcQuestions.map((q, index) => ({
+      id: q.id,
+      questionType: q.question_type,
+      difficulty: q.difficulty,
+      prompt: q.prompt,
+      points: Number(q.points),
+      position: index + 1,
+      mediaUrl: q.media_url,
+      explanation: null,
+      options: (q.options ?? []).map((o) => ({
+        id: o.id,
+        optionText: o.option_text,
+        position: o.position,
+      })),
+    }));
+  } else {
+    const assignedIds = targetAttempt?.assigned_question_ids ?? [];
+    const orderedRawQuestions =
+      assignedIds.length > 0
+        ? assignedIds
+            .map((id) => allQuestions.find((q) => q.id === id))
+            .filter((q): q is NonNullable<typeof q> => Boolean(q))
+        : allQuestions;
+
+    const allOptions = optionsRes.data ?? [];
+    sanitizedQuestions = orderedRawQuestions.map((q, index) => {
       const qOpts = allOptions
         .filter((o) => o.question_id === q.id)
         .map((o) => ({
           id: o.id,
           optionText: o.option_text,
           position: o.position,
-          // NEVER expose isCorrect to the browser while an exam is in progress
           ...(canRevealCorrectAnswers ? { isCorrect: o.is_correct } : {}),
         }));
 
@@ -1087,6 +1520,7 @@ export async function getStudentExamRunnerData(
         options: qOpts,
       };
     });
+  }
 
   return {
     ok: true,
@@ -1104,6 +1538,228 @@ export async function getStudentExamRunnerData(
       questions: sanitizedQuestions,
       savedAnswers: answersRes.data ?? [],
       violations: violationsRes.data ?? [],
+    },
+  };
+}
+
+
+// -----------------------------------------------------------------------------
+// 6. STUDENT ASSIGNMENTS WORKSPACE DATA
+// -----------------------------------------------------------------------------
+export interface StudentAssignmentItem {
+  id: string;
+  courseId: string;
+  courseCode: string;
+  courseTitle: string;
+  teacherName: string;
+  title: string;
+  description: string;
+  instructions: string | null;
+  submissionTypes: string[];
+  maxPoints: number;
+  dueAt: string | null;
+  allowLateSubmissions: boolean;
+  teacherAttachmentName: string | null;
+  teacherAttachmentUrl: string | null;
+  submission: {
+    id: string;
+    status: "draft" | "submitted" | "under_review" | "graded" | "returned" | "late";
+    submissionText: string | null;
+    attachmentPath: string | null;
+    attachmentFileName: string | null;
+    attachmentSignedUrl: string | null;
+    submittedAt: string;
+    isGradePublished: boolean;
+    publishedPoints: number | null;
+    publishedFeedback: string | null;
+    gradedAt: string | null;
+  } | null;
+}
+
+export interface StudentAssignmentsWorkspaceData {
+  studentId: string;
+  enrolledCourses: Array<{ id: string; code: string; title: string }>;
+  assignments: StudentAssignmentItem[];
+}
+
+export async function getStudentAssignmentsData(): Promise<
+  ServiceResult<StudentAssignmentsWorkspaceData>
+> {
+  const auth = await requireRole(["student", "teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const supabase = await createSupabaseServerClient();
+  const studentId = auth.data.userId;
+
+  const { data: enrollments, error: enrErr } = await supabase
+    .from("course_enrollments")
+    .select("course_id")
+    .eq("student_id", studentId);
+
+  if (enrErr) return { ok: false, error: enrErr.message };
+
+  const courseIds = (enrollments ?? []).map((e) => e.course_id);
+  if (courseIds.length === 0) {
+    return {
+      ok: true,
+      data: { studentId, enrolledCourses: [], assignments: [] },
+    };
+  }
+
+  const [coursesRes, assignmentsRes, submissionsRes, gradesRes] =
+    await Promise.all([
+      supabase
+        .from("courses")
+        .select("id, code, title, teacher_id")
+        .in("id", courseIds)
+        .is("deleted_at", null),
+      supabase
+        .from("assignments")
+        .select("*")
+        .in("course_id", courseIds)
+        .eq("is_published", true)
+        .order("due_at", { ascending: true }),
+      supabase
+        .from("assignment_submissions")
+        .select("*")
+        .eq("student_id", studentId),
+      supabase
+        .from("assignment_grades")
+        .select("*")
+        .eq("student_id", studentId)
+        .eq("is_published", true),
+    ]);
+
+  const courses = coursesRes.data ?? [];
+  const teacherIds = Array.from(new Set(courses.map((c) => c.teacher_id)));
+  const { data: teacherProfiles } =
+    teacherIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", teacherIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; email: string }> };
+
+  const teacherMap = new Map(
+    (teacherProfiles ?? []).map((p) => [p.id, p.full_name || p.email]),
+  );
+  const courseMap = new Map(courses.map((c) => [c.id, c]));
+  const subByAsgMap = new Map(
+    (submissionsRes.data ?? []).map((s) => [s.assignment_id, s]),
+  );
+  const gradeBySubMap = new Map(
+    (gradesRes.data ?? []).map((g) => [g.submission_id, g]),
+  );
+
+  // Batch-sign teacher assignment attachments & student submission files
+  const allPaths = Array.from(
+    new Set(
+      [
+        ...(assignmentsRes.data ?? []).map((a) => a.attachment_storage_path),
+        ...(submissionsRes.data ?? []).map((s) => s.attachment_storage_path),
+      ].filter((p): p is string => Boolean(p)),
+    ),
+  );
+  const signedMap = new Map<string, string>();
+  if (allPaths.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from("assignment-attachments")
+      .createSignedUrls(allPaths, 3600);
+    for (const s of signed ?? []) {
+      if (s.path && s.signedUrl) {
+        signedMap.set(s.path, s.signedUrl);
+      }
+    }
+  }
+
+  const items: StudentAssignmentItem[] = (assignmentsRes.data ?? [])
+    .map((asg) => {
+      const course = courseMap.get(asg.course_id);
+      if (!course) return null;
+      const sub = subByAsgMap.get(asg.id) ?? null;
+      const pubGrade = sub ? gradeBySubMap.get(sub.id) ?? null : null;
+      const isGradePublished = Boolean(
+        pubGrade?.is_published || sub?.is_grade_published,
+      );
+
+      let displayStatus: NonNullable<StudentAssignmentItem["submission"]>["status"] =
+        (sub?.status as NonNullable<
+          StudentAssignmentItem["submission"]
+        >["status"]) ?? "submitted";
+      if (sub) {
+        if (isGradePublished) {
+          displayStatus = "graded";
+        } else if (sub.status === "graded" && !isGradePublished) {
+          displayStatus = "under_review";
+        }
+      }
+
+      return {
+        id: asg.id,
+        courseId: course.id,
+        courseCode: course.code,
+        courseTitle: course.title,
+        teacherName: teacherMap.get(course.teacher_id) || "Instructor",
+        title: asg.title,
+        description: asg.description,
+        instructions: asg.instructions,
+        submissionTypes:
+          asg.submission_types && asg.submission_types.length > 0
+            ? asg.submission_types
+            : ["text", "file"],
+        maxPoints: Number(asg.max_points ?? 100),
+        dueAt: asg.due_at,
+        allowLateSubmissions: asg.allow_late_submissions,
+        teacherAttachmentName:
+          asg.attachment_file_name ||
+          (asg.attachment_storage_path
+            ? asg.attachment_storage_path.split("/").pop() ?? "Attachment"
+            : null),
+        teacherAttachmentUrl: asg.attachment_storage_path
+          ? signedMap.get(asg.attachment_storage_path) ?? null
+          : null,
+        submission: sub
+          ? {
+              id: sub.id,
+              status: displayStatus,
+              submissionText: sub.submission_text,
+              attachmentPath: sub.attachment_storage_path,
+              attachmentFileName:
+                sub.attachment_file_name ||
+                (sub.attachment_storage_path
+                  ? sub.attachment_storage_path.split("/").pop() ?? "File"
+                  : null),
+              attachmentSignedUrl: sub.attachment_storage_path
+                ? signedMap.get(sub.attachment_storage_path) ?? null
+                : null,
+              submittedAt: sub.submitted_at,
+              isGradePublished,
+              // Strictly prevent unpublished grade exposure
+              publishedPoints: isGradePublished
+                ? Number(pubGrade?.teacher_points ?? sub.grade_points ?? 0)
+                : null,
+              publishedFeedback: isGradePublished
+                ? pubGrade?.teacher_feedback ?? sub.feedback ?? null
+                : null,
+              gradedAt: isGradePublished
+                ? pubGrade?.published_at ?? sub.graded_at ?? null
+                : null,
+            }
+          : null,
+      };
+    })
+    .filter((i): i is NonNullable<typeof i> => i !== null);
+
+  return {
+    ok: true,
+    data: {
+      studentId,
+      enrolledCourses: courses.map((c) => ({
+        id: c.id,
+        code: c.code,
+        title: c.title,
+      })),
+      assignments: items,
     },
   };
 }

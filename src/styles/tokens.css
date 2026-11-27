@@ -8,6 +8,9 @@
   --brand-emerald: #10b981; 
   --brand-emerald-highlight: #34d399;
   --brand-emerald-shadow: #047857;
+  --brand-gold: var(--brand-emerald);
+  --brand-gold-highlight: var(--brand-emerald-highlight);
+  --brand-gold-shadow: var(--brand-emerald-shadow);
   --brand-grey: #64748b;
 
   /* Metallic Emerald (بدل الذهبي) */

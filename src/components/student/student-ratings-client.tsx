@@ -56,12 +56,18 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
   const [courseComment, setCourseComment] = useState<string>(
     existingCourseReview?.comment ?? "",
   );
+  const [courseSuggestions, setCourseSuggestions] = useState<string>(
+    existingCourseReview?.improvement_suggestions ?? "",
+  );
 
   const [teacherStars, setTeacherStars] = useState<number>(
     existingTeacherReview?.rating ?? 5,
   );
   const [teacherComment, setTeacherComment] = useState<string>(
     existingTeacherReview?.comment ?? "",
+  );
+  const [teacherSuggestions, setTeacherSuggestions] = useState<string>(
+    existingTeacherReview?.improvement_suggestions ?? "",
   );
 
   function handleCourseSelect(nextCourseId: string) {
@@ -70,8 +76,10 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
     const tRev = data.teacherReviews.find((r) => r.course_id === nextCourseId);
     setCourseStars(cRev?.rating ?? 5);
     setCourseComment(cRev?.comment ?? "");
+    setCourseSuggestions(cRev?.improvement_suggestions ?? "");
     setTeacherStars(tRev?.rating ?? 5);
     setTeacherComment(tRev?.comment ?? "");
+    setTeacherSuggestions(tRev?.improvement_suggestions ?? "");
   }
 
   function handleSubmitCourseReview() {
@@ -81,6 +89,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
         courseId: selectedCourseId,
         rating: courseStars,
         comment: courseComment,
+        improvementSuggestions: courseSuggestions,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -99,6 +108,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
         teacherId: activeCourse.teacher_id,
         rating: teacherStars,
         comment: teacherComment,
+        improvementSuggestions: teacherSuggestions,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -128,7 +138,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
           </div>
           {data.enrolledCourses.length > 0 && (
             <select
-              className={cn(fieldBase, "h-9 w-64 bg-background")}
+              className={cn(fieldBase, "h-9 w-72 bg-background")}
               value={selectedCourseId}
               onChange={(e) => handleCourseSelect(e.target.value)}
             >
@@ -162,7 +172,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                 )}
               </div>
               <CardDescription>
-                {t.ratings.courseRatingStarsLabel}
+                {t.ratings.courseRatingStarsLabel} (Requires 100% completion)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -183,10 +193,20 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
               <div className="space-y-1.5">
                 <Label>{t.ratings.courseCommentLabel}</Label>
                 <Textarea
-                  rows={4}
+                  rows={3}
                   value={courseComment}
                   onChange={(e) => setCourseComment(e.target.value)}
                   placeholder="Share your feedback on the lessons, materials, and clarity..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Optional Improvement Suggestions</Label>
+                <Textarea
+                  rows={2}
+                  value={courseSuggestions}
+                  onChange={(e) => setCourseSuggestions(e.target.value)}
+                  placeholder="Optional suggestions to help improve course content..."
                 />
               </div>
 
@@ -235,10 +255,20 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
               <div className="space-y-1.5">
                 <Label>{t.ratings.teacherCommentLabel}</Label>
                 <Textarea
-                  rows={4}
+                  rows={3}
                   value={teacherComment}
                   onChange={(e) => setTeacherComment(e.target.value)}
                   placeholder="Share your feedback on the instructor's teaching style and support..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Optional Improvement Suggestions</Label>
+                <Textarea
+                  rows={2}
+                  value={teacherSuggestions}
+                  onChange={(e) => setTeacherSuggestions(e.target.value)}
+                  placeholder="Optional constructive feedback for the instructor..."
                 />
               </div>
 
@@ -287,8 +317,18 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                       <p className="text-muted-foreground">
                         {rev.comment || "No written comment"}
                       </p>
+                      {rev.improvement_suggestions && (
+                        <p className="mt-0.5 text-[11px] text-gold-foreground">
+                          Suggestion: {rev.improvement_suggestions}
+                        </p>
+                      )}
                     </div>
-                    <Badge variant="gold">{"★".repeat(rev.rating)}</Badge>
+                    <div className="flex items-center gap-2">
+                      {rev.moderation_status === "hidden" && (
+                        <Badge variant="destructive">Moderated</Badge>
+                      )}
+                      <Badge variant="gold">{"★".repeat(rev.rating)}</Badge>
+                    </div>
                   </div>
                 );
               })}

@@ -14,14 +14,16 @@ import {
   YAxis,
 } from "recharts";
 import {
-  Activity,
-  Award,
+  BookCheck,
   BookOpen,
   ClipboardCheck,
-  Clock,
+  FileText,
   GraduationCap,
+  Layers,
   ShieldCheck,
+  Star,
   UserCheck,
+  UserX,
   Users,
 } from "lucide-react";
 
@@ -76,73 +78,105 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
       href: "/admin/courses",
     },
     {
+      label: "Published Courses",
+      value: data.publishedCourses,
+      icon: BookCheck,
+      href: "/admin/courses",
+    },
+    {
+      label: "Enrollments",
+      value: data.totalEnrollments,
+      icon: Layers,
+      href: "/admin/analytics",
+    },
+    {
+      label: "Assignments",
+      value: data.totalAssignments,
+      icon: FileText,
+      href: "/admin/analytics",
+    },
+    {
+      label: "Quizzes",
+      value: data.totalExaminations,
+      icon: ClipboardCheck,
+      href: "/admin/analytics",
+    },
+    {
+      label: "Reviews",
+      value: data.totalReviews,
+      icon: Star,
+      href: "/admin/reviews",
+    },
+    {
       label: adminT.overview.activeUsers,
       value: data.activeUsers,
       icon: UserCheck,
       href: "/admin/users",
     },
     {
-      label: adminT.overview.pendingTeacherRequests,
-      value: data.pendingTeacherRequests,
-      icon: Clock,
+      label: "Suspended Users",
+      value: data.suspendedUsers,
+      icon: UserX,
       href: "/admin/users",
-      highlight: data.pendingTeacherRequests > 0,
-    },
-    {
-      label: adminT.overview.totalExaminations,
-      value: data.totalExaminations,
-      icon: ClipboardCheck,
-      href: "/admin/analytics",
-    },
-    {
-      label: adminT.overview.completionRate,
-      value: `${data.completionRatePercent}%`,
-      icon: Award,
-      href: "/admin/analytics",
-    },
-    {
-      label: adminT.overview.platformActivityCount,
-      value: data.platformActivityCount,
-      icon: Activity,
-      href: "/admin/security",
+      highlight: data.suspendedUsers > 0,
     },
   ] as const;
 
   const platformBarData = [
-    { name: adminT.overview.totalStudents, count: data.totalStudents },
-    { name: adminT.overview.totalTeachers, count: data.totalTeachers },
-    { name: adminT.overview.totalCourses, count: data.totalCourses },
-    { name: adminT.overview.totalExaminations, count: data.totalExaminations },
+    { name: "Students", count: data.totalStudents },
+    { name: "Teachers", count: data.totalTeachers },
+    { name: "Courses", count: data.totalCourses },
+    { name: "Enrollments", count: data.totalEnrollments },
+    { name: "Assignments", count: data.totalAssignments },
+    { name: "Quizzes", count: data.totalExaminations },
   ];
 
   const completionPieData = [
-    { name: adminT.common.active, value: data.activeEnrollments, color: "#10b981" },
+    {
+      name: adminT.common.active,
+      value: data.activeEnrollments,
+      color: "#10b981",
+    },
     { name: "Completed", value: data.completedEnrollments, color: "#34d399" },
     { name: "Dropped", value: data.droppedEnrollments, color: "#64748b" },
   ];
 
   return (
     <div className="space-y-8">
-      {/* شلنا العنوان والوصف وسيبنا الزراير بس */}
       <div className="flex flex-wrap items-center justify-end gap-2">
         <Button asChild variant="gold" size="sm">
           <Link href="/admin/users">{adminT.nav.users}</Link>
         </Button>
-        <Button asChild variant="outline" size="sm" className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]"
+        >
+          <Link href="/admin/reviews">Reviews Moderation</Link>
+        </Button>
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]"
+        >
           <Link href="/admin/analytics">{adminT.nav.analytics}</Link>
         </Button>
       </div>
 
-      {/* 8 Live KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* 10 Live KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {kpiCards.map((kpi) => {
           const Icon = kpi.icon;
           return (
             <Link key={kpi.label} href={kpi.href} className="group block">
               <Card
                 className={cn(
-                  "h-full transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-emerald-500/50 group-hover:shadow-md bg-white/30 backdrop-blur-md dark:bg-[#121a19] dark:backdrop-blur-none border-border/50",
-                  "highlight" in kpi && kpi.highlight && "border-emerald-500/50 shadow-sm shadow-emerald-500/10"
+                  "h-full border-border/50 bg-white/30 backdrop-blur-md transition-all duration-150 group-hover:-translate-y-0.5 group-hover:border-emerald-500/50 group-hover:shadow-md dark:bg-[#121a19] dark:backdrop-blur-none",
+                  "highlight" in kpi &&
+                    kpi.highlight &&
+                    "border-destructive/40 shadow-sm",
                 )}
               >
                 <CardContent className="flex items-center justify-between gap-4 pt-1">
@@ -154,8 +188,8 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                       {kpi.value}
                     </p>
                   </div>
-                  <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 transition-all duration-300 group-hover:scale-110">
-                    <Icon className="size-5" aria-hidden="true" />
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 transition-all duration-300 group-hover:scale-110 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <Icon className="size-4" aria-hidden="true" />
                   </span>
                 </CardContent>
               </Card>
@@ -177,12 +211,20 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
           </CardHeader>
           <CardContent>
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={0}
+                minHeight={240}
+              >
                 <BarChart
                   data={platformBarData}
                   margin={{ top: 8, right: 12, left: -12, bottom: 0 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(115,115,115,0.2)" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="rgba(115,115,115,0.2)"
+                  />
                   <XAxis
                     dataKey="name"
                     stroke="var(--muted-foreground)"
@@ -196,7 +238,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                     allowDecimals={false}
                   />
                   <RechartsTooltip
-                    cursor={{fill: 'rgba(16, 185, 129, 0.1)'}}
+                    cursor={{ fill: "rgba(16, 185, 129, 0.1)" }}
                     contentStyle={{
                       backgroundColor: "var(--popover)",
                       borderColor: "var(--border)",
@@ -205,11 +247,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                       fontSize: "12px",
                     }}
                   />
-                  <Bar
-                    dataKey="count"
-                    fill="#10b981"
-                    radius={[6, 6, 0, 0]}
-                  />
+                  <Bar dataKey="count" fill="#10b981" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -237,7 +275,12 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
               </div>
             ) : (
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={240}
+                >
                   <PieChart>
                     <Pie
                       data={completionPieData}
@@ -281,7 +324,12 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
               {adminT.overview.recentAuditDescription}
             </CardDescription>
           </div>
-          <Button asChild variant="outline" size="sm" className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="bg-white/20 backdrop-blur-md dark:bg-[#121a19]"
+          >
             <Link href="/admin/security">{adminT.nav.security}</Link>
           </Button>
         </CardHeader>
@@ -308,7 +356,7 @@ export function AdminOverviewClient({ data }: AdminOverviewClientProps) {
                 {data.recentAuditLogs.map((log) => (
                   <TableRow key={log.id} className="border-border/50">
                     <TableCell>
-                      <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400 font-mono">
+                      <Badge className="border border-emerald-500/20 bg-emerald-500/10 font-mono text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
                         {log.action}
                       </Badge>
                     </TableCell>

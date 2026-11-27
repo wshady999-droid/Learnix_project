@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   "/profile",
   "/calendar",
   "/messages",
+  "/notifications",
 ] as const;
 const AUTH_ENTRY_PATHS = ["/login", "/signup", "/forgot-password"] as const;
 

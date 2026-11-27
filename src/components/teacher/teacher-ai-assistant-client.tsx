@@ -14,6 +14,7 @@ import {
   Upload,
 } from "lucide-react";
 
+import type { GeneratedDraftQuestion } from "@/app/api/ai/teacher/route";
 import { EmptyState } from "@/components/feedback/empty-state";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +30,6 @@ import { Input, Textarea, fieldBase } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
 import { cn } from "@/lib/utils";
-import type { GeneratedDraftQuestion } from "@/app/api/ai/teacher/route";
 import type { AiCitation } from "@/services/ai/engine";
 import type { AiWorkspaceHistoryData } from "@/services/ai/queries";
 import { teacherSaveQuestionAction } from "@/services/teacher/actions";
@@ -55,6 +55,49 @@ type TeacherAiMode =
   | "weakness_detector"
   | "learning_recommendations";
 
+const ANALYTICAL_QUICK_PROMPTS: Array<{
+  label: string;
+  mode: TeacherAiMode;
+  prompt: string;
+}> = [
+  {
+    label: "Individual Student Performance",
+    mode: "performance_analyzer",
+    prompt:
+      "Summarize individual student performance across this course, highlighting top performers and struggling learners.",
+  },
+  {
+    label: "Low Grades & At-Risk Students",
+    mode: "performance_analyzer",
+    prompt:
+      "Which enrolled students currently have low quiz or assignment grades and need immediate support?",
+  },
+  {
+    label: "Missing Assignments",
+    mode: "assignment_assistant",
+    prompt:
+      "Identify students with missing or unsubmitted assignments in this course and suggest an outreach plan.",
+  },
+  {
+    label: "Course & Quiz Averages",
+    mode: "performance_analyzer",
+    prompt:
+      "Analyze course completion averages, quiz performance trends, and overall grade distribution.",
+  },
+  {
+    label: "Difficult Topics Detector",
+    mode: "weakness_detector",
+    prompt:
+      "Which topics or questions are students struggling with most in quizzes and assignments, and how should I reteach them?",
+  },
+  {
+    label: "Course Analytics & Action Plan",
+    mode: "learning_recommendations",
+    prompt:
+      "Provide a data-backed course analytics summary and concrete teaching recommendations for next week.",
+  },
+];
+
 export function TeacherAiAssistantClient({
   coursesData,
   gradingData,
@@ -72,7 +115,10 @@ export function TeacherAiAssistantClient({
   const [targetExamId, setTargetExamId] = useState<string>(
     gradingData.exams[0]?.id ?? "",
   );
-  const [mode, setMode] = useState<TeacherAiMode>("exam_generator");
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null);
+  const [mode, setMode] = useState<TeacherAiMode>("performance_analyzer");
   const [questionCount, setQuestionCount] = useState("5");
   const [difficultyMix, setDifficultyMix] = useState<
     "balanced" | "foundational" | "advanced"
@@ -100,6 +146,15 @@ export function TeacherAiAssistantClient({
     () =>
       history.indexedDocuments.filter((d) => d.courseId === selectedCourseId),
     [history.indexedDocuments, selectedCourseId],
+  );
+  const conversationMessages = useMemo(
+    () =>
+      activeConversationId
+        ? history.messages.filter(
+            (m) => m.conversation_id === activeConversationId,
+          )
+        : [],
+    [history.messages, activeConversationId],
   );
 
   async function handleUploadPdf(e: React.ChangeEvent<HTMLInputElement>) {
@@ -136,14 +191,21 @@ export function TeacherAiAssistantClient({
     }
   }
 
-  async function handleGenerate() {
+  async function handleGenerate(override?: {
+    mode?: TeacherAiMode;
+    prompt?: string;
+  }) {
     if (!selectedCourseId) {
       toast.error("Create and select a course first.");
       return;
     }
+    const effectiveMode = override?.mode ?? mode;
     const prompt =
-      promptInput.trim() ||
-      `Generate ${mode.replace(/_/g, " ")} grounded in the selected course materials`;
+      (override?.prompt ?? promptInput).trim() ||
+      `Generate ${effectiveMode.replace(/_/g, " ")} grounded in the selected course materials`;
+
+    if (override?.mode) setMode(override.mode);
+    if (override?.prompt) setPromptInput(override.prompt);
 
     setLoading(true);
     setApprovedIndices([]);
@@ -152,9 +214,10 @@ export function TeacherAiAssistantClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          conversationId: activeConversationId,
           courseId: selectedCourseId,
           lessonId: selectedLessonId === "all" ? null : selectedLessonId,
-          mode,
+          mode: effectiveMode,
           prompt,
           questionCount: Number(questionCount) || 5,
           difficultyMix,
@@ -164,6 +227,7 @@ export function TeacherAiAssistantClient({
         ok: boolean;
         error?: string;
         data?: {
+          conversationId?: string | null;
           content: string;
           citations: AiCitation[];
           draftQuestions: GeneratedDraftQuestion[];
@@ -175,6 +239,9 @@ export function TeacherAiAssistantClient({
         return;
       }
 
+      if (json.data.conversationId) {
+        setActiveConversationId(json.data.conversationId);
+      }
       setResponseText(json.data.content);
       setCitations(json.data.citations ?? []);
       setDraftQuestions(json.data.draftQuestions ?? []);
@@ -193,7 +260,7 @@ export function TeacherAiAssistantClient({
     const resolvedExamId = targetExamId || courseExams[0]?.id;
     if (!resolvedExamId) {
       toast.error(
-        "Create an examination for this course in Smart Exam Builder first before importing approved AI questions.",
+        "Create a quiz for this course first before importing approved AI questions.",
       );
       return;
     }
@@ -218,9 +285,7 @@ export function TeacherAiAssistantClient({
       }
 
       setApprovedIndices((prev) => [...prev, index]);
-      toast.success(
-        "Approved AI question imported into examination & Question Bank.",
-      );
+      toast.success("Approved AI question imported into quiz & Question Bank.");
       router.refresh();
     });
   }
@@ -236,17 +301,32 @@ export function TeacherAiAssistantClient({
             {t.aiAssistant.subtitle}
           </p>
         </div>
-        <Badge variant="gold" className="gap-1.5 px-3 py-1">
-          <Sparkles className="size-3.5" />
-          <span>Live AI Teacher Engine • Review Required</span>
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setActiveConversationId(null);
+              setResponseText(null);
+              setDraftQuestions([]);
+              setPromptInput("");
+            }}
+          >
+            <Plus className="size-3.5" />
+            <span>New Session</span>
+          </Button>
+          <Badge variant="gold" className="gap-1.5 px-3 py-1">
+            <Sparkles className="size-3.5" />
+            <span>Authorized Teacher Scope</span>
+          </Badge>
+        </div>
       </div>
 
       {coursesData.courses.length === 0 ? (
         <EmptyState
           icon={Sparkles}
           title={t.common.noRecordsTitle}
-          description="Create a course first to generate AI exams, PDF questions, teaching plans, and weakness analytics."
+          description="Create a course first to analyze student performance, missing assignments, difficult topics, and AI assessments."
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-12">
@@ -255,11 +335,10 @@ export function TeacherAiAssistantClient({
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">
-                  AI Generator Parameters
+                  AI Teacher Context & Scope
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  All AI outputs are drafts requiring teacher review before
-                  student publication.
+                  Strictly scoped to your own courses and enrolled students.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-xs">
@@ -298,13 +377,25 @@ export function TeacherAiAssistantClient({
                 </div>
 
                 <div className="space-y-1">
-                  <Label>AI Teacher Tool</Label>
+                  <Label>AI Teacher Mode</Label>
                   <select
                     className={cn(fieldBase, "h-9 w-full")}
                     value={mode}
                     onChange={(e) => setMode(e.target.value as TeacherAiMode)}
                   >
-                    <option value="exam_generator">AI Exam Generator</option>
+                    <option value="performance_analyzer">
+                      Student & Course Performance Analyzer
+                    </option>
+                    <option value="weakness_detector">
+                      Difficult Topics & Weakness Detector
+                    </option>
+                    <option value="assignment_assistant">
+                      Missing Assignments & Rubric Assistant
+                    </option>
+                    <option value="learning_recommendations">
+                      Teaching & Intervention Recommendations
+                    </option>
+                    <option value="exam_generator">AI Quiz Generator</option>
                     <option value="question_generator">
                       AI Question Generator
                     </option>
@@ -315,53 +406,48 @@ export function TeacherAiAssistantClient({
                     <option value="teaching_plan">
                       Teaching Plan Assistant
                     </option>
-                    <option value="assignment_assistant">
-                      Assignment Assistant
-                    </option>
-                    <option value="performance_analyzer">
-                      Student & Class Performance Analyzer
-                    </option>
-                    <option value="weakness_detector">Weakness Detector</option>
-                    <option value="learning_recommendations">
-                      Additional Learning Recommendations
-                    </option>
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label>{t.aiAssistant.questionCountLabel}</Label>
-                    <Input
-                      type="number"
-                      value={questionCount}
-                      onChange={(e) => setQuestionCount(e.target.value)}
-                    />
+                {(mode === "exam_generator" ||
+                  mode === "question_generator" ||
+                  mode === "pdf_questions" ||
+                  mode === "lesson_questions") && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label>{t.aiAssistant.questionCountLabel}</Label>
+                      <Input
+                        type="number"
+                        value={questionCount}
+                        onChange={(e) => setQuestionCount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Difficulty</Label>
+                      <select
+                        className={cn(fieldBase, "h-9 w-full")}
+                        value={difficultyMix}
+                        onChange={(e) =>
+                          setDifficultyMix(
+                            e.target.value as
+                              | "balanced"
+                              | "foundational"
+                              | "advanced",
+                          )
+                        }
+                      >
+                        <option value="balanced">Balanced</option>
+                        <option value="foundational">Foundational</option>
+                        <option value="advanced">Advanced</option>
+                      </select>
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label>Difficulty</Label>
-                    <select
-                      className={cn(fieldBase, "h-9 w-full")}
-                      value={difficultyMix}
-                      onChange={(e) =>
-                        setDifficultyMix(
-                          e.target.value as
-                            | "balanced"
-                            | "foundational"
-                            | "advanced",
-                        )
-                      }
-                    >
-                      <option value="balanced">Balanced</option>
-                      <option value="foundational">Foundational</option>
-                      <option value="advanced">Advanced</option>
-                    </select>
-                  </div>
-                </div>
+                )}
 
                 <div className="space-y-1.5 border-t border-border/70 pt-3">
                   <Label className="flex items-center gap-1.5">
-                    <Upload className="size-3.5 text-gold-foreground" />
-                    <span>Upload Course PDF for AI Extraction</span>
+                    <Upload className="size-3.5 text-emerald-500" />
+                    <span>Upload Course PDF for AI Grounding</span>
                   </Label>
                   <Input
                     type="file"
@@ -377,7 +463,7 @@ export function TeacherAiAssistantClient({
                           className="flex items-center justify-between rounded bg-muted/50 px-2 py-1 text-[11px]"
                         >
                           <span className="flex items-center gap-1 truncate">
-                            <FileText className="size-3 text-gold-foreground" />
+                            <FileText className="size-3 text-emerald-500" />
                             {doc.sourceTitle}
                           </span>
                           <Badge variant="outline">
@@ -391,12 +477,12 @@ export function TeacherAiAssistantClient({
               </CardContent>
             </Card>
 
-            {/* Recent AI Teacher Sessions */}
+            {/* Conversation History */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-1.5 text-sm">
-                  <History className="size-4 text-gold-foreground" />
-                  <span>Recent Generations</span>
+                  <History className="size-4 text-emerald-500" />
+                  <span>Conversation History</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1.5 text-xs">
@@ -405,10 +491,26 @@ export function TeacherAiAssistantClient({
                     No previous AI teacher sessions yet.
                   </p>
                 ) : (
-                  history.conversations.slice(0, 6).map((c) => (
-                    <div
+                  history.conversations.slice(0, 8).map((c) => (
+                    <button
                       key={c.id}
-                      className="rounded-lg border border-border/70 p-2 text-muted-foreground"
+                      type="button"
+                      onClick={() => {
+                        setActiveConversationId(c.id);
+                        const msgs = history.messages.filter(
+                          (m) => m.conversation_id === c.id,
+                        );
+                        const lastAi = [...msgs]
+                          .reverse()
+                          .find((m) => m.sender === "assistant");
+                        if (lastAi) setResponseText(lastAi.content);
+                      }}
+                      className={cn(
+                        "w-full rounded-lg border p-2 text-left transition-colors",
+                        activeConversationId === c.id
+                          ? "border-emerald-500/60 bg-emerald-500/10 text-foreground"
+                          : "border-border/70 text-muted-foreground hover:border-emerald-500/30",
+                      )}
                     >
                       <p className="truncate font-medium text-foreground">
                         {c.title}
@@ -416,7 +518,7 @@ export function TeacherAiAssistantClient({
                       <p className="font-mono text-[10px]">
                         {c.mode} • {c.updated_at.slice(0, 10)}
                       </p>
-                    </div>
+                    </button>
                   ))
                 )}
               </CardContent>
@@ -428,15 +530,38 @@ export function TeacherAiAssistantClient({
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
-                  Pedagogical Prompt & Generation
+                  Ask About Student Performance, Missing Work, or Course Content
                 </CardTitle>
+                <CardDescription className="text-xs">
+                  Select a quick inquiry below or write a custom question about your students, grades, or lessons.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {ANALYTICAL_QUICK_PROMPTS.map((item) => (
+                    <Button
+                      key={item.label}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={loading}
+                      onClick={() =>
+                        void handleGenerate({
+                          mode: item.mode,
+                          prompt: item.prompt,
+                        })
+                      }
+                    >
+                      {item.label}
+                    </Button>
+                  ))}
+                </div>
+
                 <Textarea
                   rows={3}
                   value={promptInput}
                   onChange={(e) => setPromptInput(e.target.value)}
-                  placeholder="Describe the learning objectives, PDF section, or weakness area you want Learnix AI to analyze or turn into draft questions..."
+                  placeholder="Ask about a specific student's grades, missing assignments, course averages, quiz weaknesses, or generate practice questions..."
                 />
                 <Button
                   variant="gold"
@@ -448,16 +573,42 @@ export function TeacherAiAssistantClient({
                   ) : (
                     <Send className="size-4" />
                   )}
-                  <span>Generate Draft with Learnix AI</span>
+                  <span>Ask Learnix Teacher AI</span>
                 </Button>
               </CardContent>
             </Card>
 
+            {conversationMessages.length > 0 && !responseText && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Session Messages</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2.5 text-xs">
+                  {conversationMessages.map((m) => (
+                    <div
+                      key={m.id}
+                      className={cn(
+                        "rounded-lg border p-3 whitespace-pre-wrap",
+                        m.sender === "user"
+                          ? "border-emerald-500/30 bg-emerald-500/5"
+                          : "border-border/70 bg-muted/30",
+                      )}
+                    >
+                      <p className="mb-1 font-mono text-[10px] uppercase text-muted-foreground">
+                        {m.sender}
+                      </p>
+                      <p className="text-foreground">{m.content}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
             {responseText && (
-              <Card className="border-gold-primary/40">
+              <Card className="border-emerald-500/40">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">
-                    AI Output (Teacher Review Draft)
+                    AI Teacher Analysis & Drafts
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 text-xs">
@@ -467,7 +618,7 @@ export function TeacherAiAssistantClient({
 
                   {citations.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-semibold text-gold-foreground">
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                         Sources:
                       </span>
                       {citations.map((c, i) => (
@@ -493,7 +644,7 @@ export function TeacherAiAssistantClient({
                           >
                             {courseExams.map((ex) => (
                               <option key={ex.id} value={ex.id}>
-                                Target Exam: {ex.title}
+                                Target Quiz: {ex.title}
                               </option>
                             ))}
                           </select>
@@ -521,7 +672,7 @@ export function TeacherAiAssistantClient({
                               {imported ? (
                                 <Badge variant="gold" className="gap-1">
                                   <CheckCircle2 className="size-3" />
-                                  Imported to Exam
+                                  Imported to Quiz
                                 </Badge>
                               ) : (
                                 <Button

@@ -87,9 +87,9 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
       </div>
 
       {/* Read-only integrity notice */}
-      <Card className="border-gold-primary/40 bg-gold-primary/5">
+      <Card className="border-emerald-500/40 bg-emerald-500/5">
         <CardContent className="flex items-center gap-3 py-3.5 text-xs">
-          <Lock className="size-4 shrink-0 text-gold-foreground" />
+          <Lock className="size-4 shrink-0 text-emerald-500" />
           <p className="text-foreground">{t.ratings.readOnlySecurityNotice}</p>
         </CardContent>
       </Card>
@@ -102,7 +102,7 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
               key={item.label}
               className={
                 item.highlight
-                  ? "border-gold-primary/50 bg-gold-primary/5"
+                  ? "border-emerald-500/50 bg-emerald-500/5"
                   : "border-border/80"
               }
             >
@@ -115,7 +115,7 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
                     {item.value}
                   </p>
                 </div>
-                <div className="rounded-lg bg-gold-primary/15 p-2 text-gold-foreground">
+                <div className="rounded-lg bg-emerald-500/15 p-2 text-emerald-500">
                   <Icon className="size-4" />
                 </div>
               </CardContent>
@@ -165,6 +165,7 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
                     <TableHead>{t.ratings.studentLabel}</TableHead>
                     <TableHead>{t.ratings.ratingStarsLabel}</TableHead>
                     <TableHead>{t.ratings.reviewCommentLabel}</TableHead>
+                    <TableHead>Suggestions</TableHead>
                     <TableHead>{t.ratings.submittedAtLabel}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -180,8 +181,11 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
                           {"★".repeat(rev.rating)} ({rev.rating}/5)
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-md text-xs text-muted-foreground">
+                      <TableCell className="max-w-sm text-xs text-muted-foreground">
                         {rev.comment || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-xs text-xs text-muted-foreground">
+                        {rev.improvement_suggestions || "—"}
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {rev.created_at.slice(0, 10)}
@@ -212,6 +216,7 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
                     <TableHead>{t.ratings.studentLabel}</TableHead>
                     <TableHead>{t.ratings.ratingStarsLabel}</TableHead>
                     <TableHead>{t.ratings.reviewCommentLabel}</TableHead>
+                    <TableHead>Suggestions</TableHead>
                     <TableHead>{t.ratings.submittedAtLabel}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -227,8 +232,11 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
                           {"★".repeat(rev.rating)} ({rev.rating}/5)
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-md text-xs text-muted-foreground">
+                      <TableCell className="max-w-sm text-xs text-muted-foreground">
                         {rev.comment || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-xs text-xs text-muted-foreground">
+                        {rev.improvement_suggestions || "—"}
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {rev.created_at.slice(0, 10)}
@@ -254,7 +262,12 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
           </CardHeader>
           <CardContent>
             <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={0}
+                minHeight={260}
+              >
                 <BarChart data={starDistribution}>
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -266,13 +279,13 @@ export function TeacherRatingsClient({ data }: TeacherRatingsClientProps) {
                   <Bar
                     dataKey="courseCount"
                     name={t.ratings.totalCourseReviews}
-                    fill="#A88945"
+                    fill="#10b981"
                     radius={[6, 6, 0, 0]}
                   />
                   <Bar
                     dataKey="teacherCount"
                     name={t.ratings.totalTeacherReviews}
-                    fill="#202124"
+                    fill="#34d399"
                     radius={[6, 6, 0, 0]}
                   />
                 </BarChart>

@@ -5,6 +5,7 @@ import { connection } from "next/server";
 
 import { ProfileSettingsClient } from "@/components/auth/profile-settings-client";
 import { LoadingState } from "@/components/feedback/loading-state";
+import { RoleDashboardShell } from "@/components/navigation/role-dashboard-shell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -42,10 +43,13 @@ async function ProfileDataLoader() {
   }
 
   return (
-    <ProfileSettingsClient
-      profile={profileRes.data}
-      teacherRequest={teacherReqRes.data ?? null}
-    />
+    <RoleDashboardShell>
+      <ProfileSettingsClient
+        profile={profileRes.data}
+        teacherRequest={teacherReqRes.data ?? null}
+        embedded
+      />
+    </RoleDashboardShell>
   );
 }
 

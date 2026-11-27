@@ -38,29 +38,71 @@ async function verifyTeacherOwnsCourse(params: {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("courses")
-    .select("id, teacher_id")
+    .select("id, teacher_id, deleted_at")
     .eq("id", params.courseId)
     .maybeSingle();
 
-  if (error || !data) return false;
+  if (error || !data || data.deleted_at) return false;
   return data.teacher_id === params.userId;
 }
 
+async function notifyEnrolledCourseStudents(params: {
+  courseId: string;
+  title: string;
+  body: string;
+  type: "course" | "assignment" | "exam" | "grade";
+  actionUrl: string;
+  isAnnouncement?: boolean;
+}) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: enrollments } = await supabase
+      .from("course_enrollments")
+      .select("student_id")
+      .eq("course_id", params.courseId)
+      .neq("status", "dropped");
+
+    const studentIds = Array.from(
+      new Set((enrollments ?? []).map((e) => e.student_id)),
+    );
+    if (studentIds.length === 0) return;
+
+    await supabase.rpc("dispatch_event_notification", {
+      p_title: params.title,
+      p_body: params.body,
+      p_type: params.type,
+      p_recipient_ids: studentIds,
+      p_target_scope: "class",
+      p_course_id: params.courseId,
+      p_action_url: params.actionUrl,
+      p_is_announcement: Boolean(params.isAnnouncement),
+    });
+  } catch {
+    // Non-blocking notification dispatch
+  }
+}
+
 // -----------------------------------------------------------------------------
-// 1. COURSE & CURRICULUM MANAGEMENT ACTIONS
+// 1. COURSE, CHAPTER, LESSON & LEARNING RESOURCES ACTIONS
 // -----------------------------------------------------------------------------
 const saveCourseSchema = z.object({
   id: z.string().uuid().optional(),
-  code: z.string().trim().min(2).max(24),
-  title: z.string().trim().min(3).max(160),
-  category: z.enum(COURSE_CATEGORIES).default(COURSE_CATEGORIES[0]),
+  code: z.string().trim().max(24).optional(),
+  title: z.string().trim().min(3, "Course Name must be at least 3 characters.").max(160),
+  categoryId: z.string().uuid().nullable().optional(),
+  category: z.string().trim().min(2).max(120).default(COURSE_CATEGORIES[0]),
   summary: z.string().trim().max(400).optional(),
-  description: z.string().trim().max(5000).optional(),
+  description: z
+    .string()
+    .trim()
+    .min(10, "Course Description must be at least 10 characters.")
+    .max(5000),
   departmentId: z.string().uuid().nullable().optional(),
   educationalLevelId: z.string().uuid().nullable().optional(),
   language: z.enum(["en", "ar", "de", "it", "fr"]).default("en"),
   status: z.enum(["draft", "published", "archived"]).default("draft"),
-  estimatedHours: z.coerce.number().min(0).max(1000).default(10),
+  estimatedHours: z.coerce.number().min(1, "Duration must be at least 1.").max(1000).default(10),
+  durationUnit: z.enum(["hours", "days"]).default("hours"),
   passingScore: z.coerce.number().min(0).max(100).default(60),
   completionRequirements: z.string().trim().max(2000).optional(),
   thumbnailUrl: z.string().trim().max(1000).nullable().optional(),
@@ -68,7 +110,7 @@ const saveCourseSchema = z.object({
 
 export async function teacherSaveCourseAction(
   input: z.infer<typeof saveCourseSchema>,
-): Promise<ServiceResult<{ id: string }>> {
+): Promise<ServiceResult<{ id: string; code: string }>> {
   const auth = await requireRole(["teacher", "admin"]);
   if (!auth.ok) return auth;
 
@@ -80,11 +122,37 @@ export async function teacherSaveCourseAction(
     };
   }
 
+  if (!parsed.data.id && !parsed.data.thumbnailUrl) {
+    return {
+      ok: false,
+      error: "Course cover image is required when creating a new course.",
+    };
+  }
+
   const supabase = await createSupabaseServerClient();
-  const slugBase = parsed.data.code
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+
+  let resolvedCategoryName = parsed.data.category;
+  let resolvedCategoryId = parsed.data.categoryId ?? null;
+  if (resolvedCategoryId) {
+    const { data: catRow } = await supabase
+      .from("categories")
+      .select("id, name")
+      .eq("id", resolvedCategoryId)
+      .maybeSingle();
+    if (catRow) {
+      resolvedCategoryName = catRow.name;
+    }
+  } else if (resolvedCategoryName) {
+    const { data: catRow } = await supabase
+      .from("categories")
+      .select("id, name")
+      .ilike("name", resolvedCategoryName)
+      .maybeSingle();
+    if (catRow) {
+      resolvedCategoryId = catRow.id;
+      resolvedCategoryName = catRow.name;
+    }
+  }
 
   if (parsed.data.id) {
     const allowed = await verifyTeacherOwnsCourse({
@@ -99,24 +167,27 @@ export async function teacherSaveCourseAction(
     const { data, error } = await supabase
       .from("courses")
       .update({
-        code: parsed.data.code.toUpperCase(),
         title: parsed.data.title,
-        category: parsed.data.category,
-        subtitle: parsed.data.summary || null,
-        description: parsed.data.description || null,
+        category: resolvedCategoryName,
+        category_id: resolvedCategoryId,
+        subtitle:
+          parsed.data.summary ||
+          parsed.data.description.slice(0, 140),
+        description: parsed.data.description,
         department_id: parsed.data.departmentId ?? null,
         educational_level_id: parsed.data.educationalLevelId ?? null,
         language: parsed.data.language,
         status: parsed.data.status,
         estimated_hours: parsed.data.estimatedHours,
+        duration_unit: parsed.data.durationUnit,
         passing_score: parsed.data.passingScore,
         completion_requirements: parsed.data.completionRequirements || null,
-        thumbnail_url: parsed.data.thumbnailUrl ?? null,
+        thumbnail_url: parsed.data.thumbnailUrl ?? undefined,
         published_at:
           parsed.data.status === "published" ? new Date().toISOString() : undefined,
       })
       .eq("id", parsed.data.id)
-      .select("id")
+      .select("id, code")
       .single();
 
     if (error || !data) {
@@ -135,32 +206,35 @@ export async function teacherSaveCourseAction(
     revalidatePath("/teacher/courses");
     revalidatePath("/student");
     revalidatePath("/student/courses");
-    return { ok: true, data: { id: data.id } };
+    return { ok: true, data: { id: data.id, code: data.code } };
   }
 
-  const uniqueSlug = `${slugBase || "course"}-${Math.floor(1000 + Math.random() * 9000)}`;
+  // Pass empty code/slug so DB trigger ensure_course_code_slug_and_category generates LRX-XXXX automatically
   const { data, error } = await supabase
     .from("courses")
     .insert({
-      code: parsed.data.code.toUpperCase(),
-      slug: uniqueSlug,
+      code: "",
+      slug: "",
       title: parsed.data.title,
-      category: parsed.data.category || COURSE_CATEGORIES[0],
-      subtitle: parsed.data.summary || null,
-      description: parsed.data.description || null,
+      category: resolvedCategoryName || COURSE_CATEGORIES[0],
+      category_id: resolvedCategoryId,
+      subtitle:
+        parsed.data.summary || parsed.data.description.slice(0, 140),
+      description: parsed.data.description,
       teacher_id: auth.data.userId,
       department_id: parsed.data.departmentId ?? null,
       educational_level_id: parsed.data.educationalLevelId ?? null,
       language: parsed.data.language,
       status: parsed.data.status,
       estimated_hours: parsed.data.estimatedHours,
+      duration_unit: parsed.data.durationUnit,
       passing_score: parsed.data.passingScore,
       completion_requirements: parsed.data.completionRequirements || null,
       thumbnail_url: parsed.data.thumbnailUrl ?? null,
       published_at:
         parsed.data.status === "published" ? new Date().toISOString() : null,
     })
-    .select("id")
+    .select("id, code")
     .single();
 
   if (error || !data) {
@@ -172,14 +246,63 @@ export async function teacherSaveCourseAction(
     action: "teacher.course.create",
     entityType: "courses",
     entityId: data.id,
-    newValues: { title: parsed.data.title, code: parsed.data.code },
+    newValues: { title: parsed.data.title, code: data.code, status: parsed.data.status },
   });
 
   revalidatePath("/teacher");
   revalidatePath("/teacher/courses");
   revalidatePath("/student");
   revalidatePath("/student/courses");
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: data.id, code: data.code } };
+}
+
+export async function teacherToggleCourseStatusAction(params: {
+  courseId: string;
+  status: "draft" | "published";
+}): Promise<ServiceResult<{ status: string }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) {
+    return { ok: false, error: "You do not own this course." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .update({
+      status: params.status,
+      published_at:
+        params.status === "published" ? new Date().toISOString() : undefined,
+    })
+    .eq("id", params.courseId)
+    .select("id, title, status")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Failed to update course status." };
+  }
+
+  if (params.status === "published") {
+    await notifyEnrolledCourseStudents({
+      courseId: params.courseId,
+      title: `Course Published: ${data.title}`,
+      body: `"${data.title}" is now published and updated for your learning.`,
+      type: "course",
+      actionUrl: `/student/my-learning?courseId=${params.courseId}`,
+    });
+  }
+
+  revalidatePath("/teacher");
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student");
+  revalidatePath("/student/courses");
+  return { ok: true, data: { status: data.status } };
 }
 
 const saveChapterSchema = z.object({
@@ -201,7 +324,7 @@ export async function teacherSaveChapterAction(
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid chapter parameters.",
+      error: parsed.error.issues[0]?.message ?? "Invalid section parameters.",
     };
   }
 
@@ -231,9 +354,10 @@ export async function teacherSaveChapterAction(
       .single();
 
     if (error || !data) {
-      return { ok: false, error: error?.message ?? "Failed to update chapter." };
+      return { ok: false, error: error?.message ?? "Failed to update section." };
     }
     revalidatePath("/teacher/courses");
+    revalidatePath("/student/my-learning");
     return { ok: true, data: { id: data.id } };
   }
 
@@ -250,11 +374,66 @@ export async function teacherSaveChapterAction(
     .single();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "Failed to create chapter." };
+    return { ok: false, error: error?.message ?? "Failed to create section." };
+  }
+
+  if (parsed.data.isPublished) {
+    await notifyEnrolledCourseStudents({
+      courseId: parsed.data.courseId,
+      title: `New Section Added: ${parsed.data.title}`,
+      body: `A new section "${parsed.data.title}" was added to your enrolled course.`,
+      type: "course",
+      actionUrl: `/student/my-learning?courseId=${parsed.data.courseId}`,
+    });
   }
 
   revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
   return { ok: true, data: { id: data.id } };
+}
+
+export async function teacherReorderChapterAction(params: {
+  courseId: string;
+  chapterId: string;
+  direction: "up" | "down";
+}): Promise<ServiceResult<{ reordered: boolean }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: chapters } = await supabase
+    .from("chapters")
+    .select("id, position")
+    .eq("course_id", params.courseId)
+    .order("position", { ascending: true });
+
+  const list = chapters ?? [];
+  const idx = list.findIndex((c) => c.id === params.chapterId);
+  const swapIdx = params.direction === "up" ? idx - 1 : idx + 1;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) {
+    return { ok: true, data: { reordered: false } };
+  }
+
+  const current = list[idx]!;
+  const neighbor = list[swapIdx]!;
+  const posA = idx + 1;
+  const posB = swapIdx + 1;
+
+  await Promise.all([
+    supabase.from("chapters").update({ position: posB }).eq("id", current.id),
+    supabase.from("chapters").update({ position: posA }).eq("id", neighbor.id),
+  ]);
+
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
+  return { ok: true, data: { reordered: true } };
 }
 
 export async function teacherDeleteChapterAction(params: {
@@ -282,6 +461,7 @@ export async function teacherDeleteChapterAction(params: {
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
   return { ok: true, data: { deleted: true } };
 }
 
@@ -359,6 +539,7 @@ export async function teacherSaveLessonAction(
       return { ok: false, error: error?.message ?? "Failed to update lesson." };
     }
     revalidatePath("/teacher/courses");
+    revalidatePath("/student/my-learning");
     return { ok: true, data: { id: data.id } };
   }
 
@@ -372,8 +553,108 @@ export async function teacherSaveLessonAction(
     return { ok: false, error: error?.message ?? "Failed to create lesson." };
   }
 
+  if (parsed.data.isPublished) {
+    await notifyEnrolledCourseStudents({
+      courseId: parsed.data.courseId,
+      title: `New Lesson Published: ${parsed.data.title}`,
+      body: `New learning content "${parsed.data.title}" is now available in your course.`,
+      type: "course",
+      actionUrl: `/student/courses/${parsed.data.courseId}/lessons/${data.id}`,
+    });
+  }
+
   revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
   return { ok: true, data: { id: data.id } };
+}
+
+export async function teacherReorderLessonAction(params: {
+  courseId: string;
+  chapterId: string;
+  lessonId: string;
+  direction: "up" | "down";
+}): Promise<ServiceResult<{ reordered: boolean }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: lessons } = await supabase
+    .from("lessons")
+    .select("id, position")
+    .eq("course_id", params.courseId)
+    .eq("chapter_id", params.chapterId)
+    .order("position", { ascending: true });
+
+  const list = lessons ?? [];
+  const idx = list.findIndex((l) => l.id === params.lessonId);
+  const swapIdx = params.direction === "up" ? idx - 1 : idx + 1;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) {
+    return { ok: true, data: { reordered: false } };
+  }
+
+  const current = list[idx]!;
+  const neighbor = list[swapIdx]!;
+  const posA = idx + 1;
+  const posB = swapIdx + 1;
+
+  await Promise.all([
+    supabase.from("lessons").update({ position: posB }).eq("id", current.id),
+    supabase.from("lessons").update({ position: posA }).eq("id", neighbor.id),
+  ]);
+
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
+  return { ok: true, data: { reordered: true } };
+}
+
+export async function teacherToggleLessonPublishedAction(params: {
+  courseId: string;
+  lessonId: string;
+  isPublished: boolean;
+}): Promise<ServiceResult<{ isPublished: boolean }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .update({ is_published: params.isPublished })
+    .eq("id", params.lessonId)
+    .eq("course_id", params.courseId)
+    .select("id, title")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Failed to update lesson visibility." };
+  }
+
+  if (params.isPublished) {
+    await notifyEnrolledCourseStudents({
+      courseId: params.courseId,
+      title: `Lesson Published: ${data.title}`,
+      body: `"${data.title}" is now available in your course.`,
+      type: "course",
+      actionUrl: `/student/courses/${params.courseId}/lessons/${data.id}`,
+    });
+  }
+
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
+  return { ok: true, data: { isPublished: params.isPublished } };
 }
 
 export async function teacherDeleteLessonAction(params: {
@@ -401,11 +682,145 @@ export async function teacherDeleteLessonAction(params: {
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
+  return { ok: true, data: { deleted: true } };
+}
+
+const saveLearningResourceSchema = z.object({
+  id: z.string().uuid().optional(),
+  courseId: z.string().uuid(),
+  chapterId: z.string().uuid().nullable().optional(),
+  lessonId: z.string().uuid().nullable().optional(),
+  title: z.string().trim().min(2).max(160),
+  description: z.string().trim().max(800).optional(),
+  resourceType: z.enum(["pdf", "document", "link", "slides", "archive", "other"]).default("pdf"),
+  storageBucket: z.string().trim().max(100).nullable().optional(),
+  storagePath: z.string().trim().max(500).nullable().optional(),
+  externalUrl: z.string().trim().max(1000).nullable().optional(),
+  fileName: z.string().trim().max(255).nullable().optional(),
+  fileSizeBytes: z.coerce.number().int().min(0).nullable().optional(),
+  mimeType: z.string().trim().max(120).nullable().optional(),
+  isPublished: z.boolean().default(true),
+});
+
+export async function teacherSaveLearningResourceAction(
+  input: z.infer<typeof saveLearningResourceSchema>,
+): Promise<ServiceResult<{ id: string }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = saveLearningResourceSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid resource details.",
+    };
+  }
+
+  if (!parsed.data.storagePath && !parsed.data.externalUrl) {
+    return {
+      ok: false,
+      error: "Upload a file or enter an external resource URL.",
+    };
+  }
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: parsed.data.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const payload = {
+    course_id: parsed.data.courseId,
+    chapter_id: parsed.data.chapterId ?? null,
+    lesson_id: parsed.data.lessonId ?? null,
+    title: parsed.data.title,
+    description: parsed.data.description || null,
+    resource_type: parsed.data.resourceType,
+    storage_bucket: parsed.data.storageBucket || null,
+    storage_path: parsed.data.storagePath || null,
+    external_url: parsed.data.externalUrl || null,
+    file_name: parsed.data.fileName || null,
+    file_size_bytes: parsed.data.fileSizeBytes ?? null,
+    mime_type: parsed.data.mimeType || null,
+    is_published: parsed.data.isPublished,
+  };
+
+  if (parsed.data.id) {
+    const { data, error } = await supabase
+      .from("learning_resources")
+      .update(payload)
+      .eq("id", parsed.data.id)
+      .eq("course_id", parsed.data.courseId)
+      .select("id")
+      .single();
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Failed to update learning resource." };
+    }
+    revalidatePath("/teacher/courses");
+    revalidatePath("/student/my-learning");
+    return { ok: true, data: { id: data.id } };
+  }
+
+  const { data, error } = await supabase
+    .from("learning_resources")
+    .insert({
+      ...payload,
+      uploaded_by: auth.data.userId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Failed to add learning resource." };
+  }
+
+  if (parsed.data.isPublished) {
+    await notifyEnrolledCourseStudents({
+      courseId: parsed.data.courseId,
+      title: `New Learning Resource: ${parsed.data.title}`,
+      body: `A new learning resource "${parsed.data.title}" was uploaded to your course.`,
+      type: "course",
+      actionUrl: `/student/my-learning?courseId=${parsed.data.courseId}`,
+    });
+  }
+
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
+  return { ok: true, data: { id: data.id } };
+}
+
+export async function teacherDeleteLearningResourceAction(params: {
+  resourceId: string;
+  courseId: string;
+}): Promise<ServiceResult<{ deleted: boolean }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("learning_resources")
+    .delete()
+    .eq("id", params.resourceId)
+    .eq("course_id", params.courseId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/my-learning");
   return { ok: true, data: { deleted: true } };
 }
 
 // -----------------------------------------------------------------------------
-// 2. SMART EXAM BUILDER ACTIONS
+// 2. SMART EXAM & AI QUIZ BUILDER ACTIONS
 // -----------------------------------------------------------------------------
 const saveExamSchema = z.object({
   id: z.string().uuid().optional(),
@@ -416,7 +831,7 @@ const saveExamSchema = z.object({
   title: z.string().trim().min(3).max(160),
   description: z.string().trim().max(4000).optional(),
   instructions: z.string().trim().max(4000).optional(),
-  durationMinutes: z.coerce.number().int().min(5).max(360).default(45),
+  durationMinutes: z.coerce.number().int().min(1).max(360).default(45),
   totalPoints: z.coerce.number().min(1).max(1000).default(100),
   passingScore: z.coerce.number().min(1).max(100).default(60),
   maxAttempts: z.coerce.number().int().min(1).max(10).default(1),
@@ -444,7 +859,7 @@ export async function teacherSaveExamAction(
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid examination parameters.",
+      error: parsed.error.issues[0]?.message ?? "Invalid quiz parameters.",
     };
   }
 
@@ -454,7 +869,7 @@ export async function teacherSaveExamAction(
     role: auth.data.role,
   });
   if (!allowed) {
-    return { ok: false, error: "You are not authorized to create exams for this course." };
+    return { ok: false, error: "You are not authorized to create quizzes for this course." };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -488,6 +903,12 @@ export async function teacherSaveExamAction(
   };
 
   if (parsed.data.id) {
+    const { data: prev } = await supabase
+      .from("exams")
+      .select("status")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+
     const { data, error } = await supabase
       .from("exams")
       .update(payload)
@@ -496,7 +917,17 @@ export async function teacherSaveExamAction(
       .single();
 
     if (error || !data) {
-      return { ok: false, error: error?.message ?? "Failed to update examination." };
+      return { ok: false, error: error?.message ?? "Failed to update quiz." };
+    }
+
+    if (parsed.data.status === "published" && prev?.status !== "published") {
+      await notifyEnrolledCourseStudents({
+        courseId: parsed.data.courseId,
+        title: `New Quiz Published: ${parsed.data.title}`,
+        body: `Quiz "${parsed.data.title}" (${parsed.data.durationMinutes} min) is now available.`,
+        type: "exam",
+        actionUrl: `/student/exams`,
+      });
     }
 
     await logTeacherAudit({
@@ -509,6 +940,7 @@ export async function teacherSaveExamAction(
 
     revalidatePath("/teacher");
     revalidatePath("/teacher/exams");
+    revalidatePath("/student/exams");
     return { ok: true, data: { id: data.id } };
   }
 
@@ -522,7 +954,17 @@ export async function teacherSaveExamAction(
     .single();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "Failed to create examination." };
+    return { ok: false, error: error?.message ?? "Failed to create quiz." };
+  }
+
+  if (parsed.data.status === "published") {
+    await notifyEnrolledCourseStudents({
+      courseId: parsed.data.courseId,
+      title: `New Quiz Published: ${parsed.data.title}`,
+      body: `Quiz "${parsed.data.title}" (${parsed.data.durationMinutes} min) is now available.`,
+      type: "exam",
+      actionUrl: `/student/exams`,
+    });
   }
 
   await logTeacherAudit({
@@ -535,6 +977,7 @@ export async function teacherSaveExamAction(
 
   revalidatePath("/teacher");
   revalidatePath("/teacher/exams");
+  revalidatePath("/student/exams");
   return { ok: true, data: { id: data.id } };
 }
 
@@ -685,6 +1128,127 @@ export async function teacherSaveQuestionAction(
   return { ok: true, data: { id: questionId } };
 }
 
+const saveGeneratedQuizBundleSchema = z.object({
+  courseId: z.string().uuid(),
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(4000).optional(),
+  instructions: z.string().trim().max(4000).optional(),
+  durationMinutes: z.coerce.number().int().min(1).max(360).default(30),
+  totalPoints: z.coerce.number().min(1).max(1000).default(100),
+  passingScore: z.coerce.number().min(1).max(100).default(60),
+  maxAttempts: z.coerce.number().int().min(1).max(10).default(1),
+  availableUntil: z.string().trim().nullable().optional(),
+  status: z.enum(["draft", "published"]).default("draft"),
+  questions: z
+    .array(
+      z.object({
+        questionType: z.enum([
+          "single_choice",
+          "multiple_choice",
+          "true_false",
+          "short_answer",
+          "essay",
+        ]),
+        difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+        prompt: z.string().trim().min(3).max(4000),
+        explanation: z.string().trim().max(3000).optional(),
+        points: z.coerce.number().min(0.5).max(500).default(5),
+        options: z.array(questionOptionSchema).default([]),
+      }),
+    )
+    .min(1, "At least one question is required to save a quiz."),
+});
+
+export async function teacherSaveGeneratedQuizAction(
+  input: z.infer<typeof saveGeneratedQuizBundleSchema>,
+): Promise<ServiceResult<{ examId: string; questionCount: number }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = saveGeneratedQuizBundleSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid quiz configuration.",
+    };
+  }
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: parsed.data.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) {
+    return { ok: false, error: "You do not own this course." };
+  }
+
+  const computedTotalPoints = Number(
+    parsed.data.questions
+      .reduce((sum, q) => sum + Number(q.points || 1), 0)
+      .toFixed(2),
+  );
+
+  const hasShortOrEssay = parsed.data.questions.some(
+    (q) => q.questionType === "short_answer" || q.questionType === "essay",
+  );
+
+  const examRes = await teacherSaveExamAction({
+    courseId: parsed.data.courseId,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    instructions:
+      parsed.data.instructions ||
+      "Answer every question carefully before the timer expires. Randomized question and option ordering is enabled.",
+    durationMinutes: parsed.data.durationMinutes,
+    totalPoints: computedTotalPoints || parsed.data.totalPoints,
+    passingScore: parsed.data.passingScore,
+    maxAttempts: parsed.data.maxAttempts,
+    availableUntil: parsed.data.availableUntil || null,
+    shuffleQuestions: true,
+    shuffleOptions: true,
+    strictProctoring: true,
+    cameraMonitoringEnabled: false,
+    allowAnswerReview: true,
+    retentionDays: 30,
+    showResultsImmediately: !hasShortOrEssay,
+    versionCount: 1,
+    assignedStudentIds: [],
+    status: parsed.data.status,
+  });
+
+  if (!examRes.ok) return examRes;
+
+  for (let i = 0; i < parsed.data.questions.length; i++) {
+    const q = parsed.data.questions[i]!;
+    const qRes = await teacherSaveQuestionAction({
+      examId: examRes.data.id,
+      courseId: parsed.data.courseId,
+      questionType: q.questionType,
+      difficulty: q.difficulty,
+      prompt: q.prompt,
+      explanation: q.explanation,
+      points: q.points,
+      positionOrder: i + 1,
+      isInBank: true,
+      options: q.options,
+    });
+    if (!qRes.ok) {
+      return { ok: false, error: `Question ${i + 1}: ${qRes.error}` };
+    }
+  }
+
+  revalidatePath("/teacher");
+  revalidatePath("/teacher/exams");
+  revalidatePath("/student/exams");
+  return {
+    ok: true,
+    data: {
+      examId: examRes.data.id,
+      questionCount: parsed.data.questions.length,
+    },
+  };
+}
+
 export async function teacherDeleteQuestionAction(params: {
   questionId: string;
   courseId: string;
@@ -742,7 +1306,7 @@ export async function teacherImportBankQuestionToExamAction(params: {
     return { ok: false, error: "Source question not found." };
   }
   if (targetExamRes.error || !targetExamRes.data) {
-    return { ok: false, error: "Target examination not found." };
+    return { ok: false, error: "Target quiz not found." };
   }
 
   const allowed = await verifyTeacherOwnsCourse({
@@ -751,7 +1315,7 @@ export async function teacherImportBankQuestionToExamAction(params: {
     role: auth.data.role,
   });
   if (!allowed) {
-    return { ok: false, error: "You do not own the target examination's course." };
+    return { ok: false, error: "You do not own the target quiz's course." };
   }
 
   const src = sourceQRes.data;
@@ -915,7 +1479,8 @@ export async function teacherSendStudentFeedbackAction(
     const { data: enrollments } = await supabase
       .from("course_enrollments")
       .select("student_id")
-      .eq("course_id", parsed.data.courseId);
+      .eq("course_id", parsed.data.courseId)
+      .neq("status", "dropped");
 
     recipientIds = Array.from(
       new Set((enrollments ?? []).map((e) => e.student_id)),
@@ -926,50 +1491,224 @@ export async function teacherSendStudentFeedbackAction(
     return { ok: false, error: "No enrolled students found for the selected target." };
   }
 
-  const { data: notif, error: notifErr } = await supabase
-    .from("notifications")
-    .insert({
-      title: parsed.data.title,
-      body: parsed.data.body,
-      notification_type: parsed.data.mode === "course" ? "course" : "message",
-      is_announcement: parsed.data.mode === "course",
-      target_scope: parsed.data.mode === "course" ? "course" : "direct",
-      course_id: parsed.data.courseId ?? null,
-      sender_id: auth.data.userId,
-      sent_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
+  const { error: rpcErr } = await supabase.rpc("dispatch_event_notification", {
+    p_title: parsed.data.title,
+    p_body: parsed.data.body,
+    p_type: parsed.data.mode === "course" ? "course" : "message",
+    p_recipient_ids: recipientIds,
+    p_target_scope: parsed.data.mode === "course" ? "class" : "individual",
+    p_course_id: parsed.data.courseId ?? undefined,
+    p_action_url: "/notifications",
+    p_is_announcement: parsed.data.mode === "course",
+  });
 
-  if (notifErr || !notif) {
-    return { ok: false, error: notifErr?.message ?? "Failed to create notification." };
-  }
-
-  const { error: recErr } = await supabase.from("notification_recipients").insert(
-    recipientIds.map((id) => ({
-      notification_id: notif.id,
-      recipient_id: id,
-      is_read: false,
-    })),
-  );
-
-  if (recErr) {
-    return { ok: false, error: recErr.message };
+  if (rpcErr) {
+    return { ok: false, error: rpcErr.message };
   }
 
   revalidatePath("/teacher");
   revalidatePath("/teacher/students");
+  revalidatePath("/notifications");
   return { ok: true, data: { recipientCount: recipientIds.length } };
 }
 
 // -----------------------------------------------------------------------------
-// 4. GRADING, AI ESSAY APPROVAL & RESULTS PUBLICATION ACTIONS
+// 4. ASSIGNMENTS MANAGEMENT & GRADING ACTIONS
+// -----------------------------------------------------------------------------
+const saveAssignmentSchema = z.object({
+  id: z.string().uuid().optional(),
+  courseId: z.string().uuid(),
+  lessonId: z.string().uuid().nullable().optional(),
+  title: z.string().trim().min(3, "Assignment title is required.").max(180),
+  description: z.string().trim().min(5, "Description is required.").max(5000),
+  instructions: z.string().trim().max(5000).optional(),
+  rubric: z.string().trim().max(5000).optional(),
+  maxPoints: z.coerce.number().min(1).max(1000).default(100),
+  dueAt: z.string().trim().nullable().optional(),
+  allowLateSubmissions: z.boolean().default(true),
+  submissionTypes: z.array(z.enum(["text", "file"])).min(1).default(["text", "file"]),
+  attachmentStoragePath: z.string().trim().max(500).nullable().optional(),
+  attachmentFileName: z.string().trim().max(255).nullable().optional(),
+  isPublished: z.boolean().default(false),
+});
+
+export async function teacherSaveAssignmentAction(
+  input: z.infer<typeof saveAssignmentSchema>,
+): Promise<ServiceResult<{ id: string }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = saveAssignmentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid assignment details.",
+    };
+  }
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: parsed.data.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) {
+    return { ok: false, error: "You do not own this course." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const payload = {
+    course_id: parsed.data.courseId,
+    lesson_id: parsed.data.lessonId ?? null,
+    title: parsed.data.title,
+    description: parsed.data.description,
+    instructions: parsed.data.instructions || null,
+    rubric: parsed.data.rubric || null,
+    max_points: parsed.data.maxPoints,
+    due_at: parsed.data.dueAt || null,
+    allow_late_submissions: parsed.data.allowLateSubmissions,
+    submission_types: parsed.data.submissionTypes,
+    attachment_storage_path: parsed.data.attachmentStoragePath || null,
+    attachment_file_name: parsed.data.attachmentFileName || null,
+    is_published: parsed.data.isPublished,
+  };
+
+  if (parsed.data.id) {
+    const { data: prev } = await supabase
+      .from("assignments")
+      .select("is_published")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+
+    const { data, error } = await supabase
+      .from("assignments")
+      .update(payload)
+      .eq("id", parsed.data.id)
+      .eq("course_id", parsed.data.courseId)
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Failed to update assignment." };
+    }
+
+    if (parsed.data.isPublished && !prev?.is_published) {
+      await notifyEnrolledCourseStudents({
+        courseId: parsed.data.courseId,
+        title: `New Assignment Published: ${parsed.data.title}`,
+        body: `"${parsed.data.title}" (${parsed.data.maxPoints} marks)${
+          parsed.data.dueAt ? ` — due ${parsed.data.dueAt.slice(0, 10)}` : ""
+        }.`,
+        type: "assignment",
+        actionUrl: `/student/assignments`,
+      });
+    }
+
+    revalidatePath("/teacher");
+    revalidatePath("/teacher/grading");
+    revalidatePath("/student/assignments");
+    return { ok: true, data: { id: data.id } };
+  }
+
+  const { data, error } = await supabase
+    .from("assignments")
+    .insert({
+      ...payload,
+      created_by: auth.data.userId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Failed to create assignment." };
+  }
+
+  if (parsed.data.isPublished) {
+    await notifyEnrolledCourseStudents({
+      courseId: parsed.data.courseId,
+      title: `New Assignment Published: ${parsed.data.title}`,
+      body: `"${parsed.data.title}" (${parsed.data.maxPoints} marks)${
+        parsed.data.dueAt ? ` — due ${parsed.data.dueAt.slice(0, 10)}` : ""
+      }.`,
+      type: "assignment",
+      actionUrl: `/student/assignments`,
+    });
+  }
+
+  await logTeacherAudit({
+    actorId: auth.data.userId,
+    action: "teacher.assignment.create",
+    entityType: "assignments",
+    entityId: data.id,
+    newValues: { title: parsed.data.title, isPublished: parsed.data.isPublished },
+  });
+
+  revalidatePath("/teacher");
+  revalidatePath("/teacher/grading");
+  revalidatePath("/student/assignments");
+  return { ok: true, data: { id: data.id } };
+}
+
+export async function teacherDeleteAssignmentAction(params: {
+  assignmentId: string;
+  courseId: string;
+}): Promise<ServiceResult<{ deleted: boolean }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("assignments")
+    .delete()
+    .eq("id", params.assignmentId)
+    .eq("course_id", params.courseId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/teacher/grading");
+  revalidatePath("/student/assignments");
+  return { ok: true, data: { deleted: true } };
+}
+
+export async function teacherGetAssignmentFileSignedUrlAction(params: {
+  storagePath: string;
+  courseId: string;
+}): Promise<ServiceResult<{ signedUrl: string }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.storage
+    .from("assignment-attachments")
+    .createSignedUrl(params.storagePath, 3600);
+
+  if (error || !data?.signedUrl) {
+    return { ok: false, error: error?.message ?? "Failed to create download link." };
+  }
+  return { ok: true, data: { signedUrl: data.signedUrl } };
+}
+
+// -----------------------------------------------------------------------------
+// 5. GRADING, AI ESSAY APPROVAL & RESULTS PUBLICATION ACTIONS
 // -----------------------------------------------------------------------------
 const gradeEssayAnswerSchema = z.object({
   answerId: z.string().uuid(),
   attemptId: z.string().uuid(),
   pointsAwarded: z.coerce.number().min(0).max(500),
   teacherFeedback: z.string().trim().max(3000).optional(),
+  publishResult: z.boolean().default(true),
 });
 
 export async function teacherGradeEssayAnswerAction(
@@ -995,17 +1734,17 @@ export async function teacherGradeEssayAnswerAction(
     .maybeSingle();
 
   if (attErr || !attempt) {
-    return { ok: false, error: "Exam attempt not found." };
+    return { ok: false, error: "Quiz attempt not found." };
   }
 
   const { data: exam, error: examErr } = await supabase
     .from("exams")
-    .select("id, course_id, total_points, passing_score")
+    .select("id, title, course_id, total_points, passing_score")
     .eq("id", attempt.exam_id)
     .maybeSingle();
 
   if (examErr || !exam) {
-    return { ok: false, error: "Examination not found." };
+    return { ok: false, error: "Quiz not found." };
   }
 
   const allowed = await verifyTeacherOwnsCourse({
@@ -1031,7 +1770,6 @@ export async function teacherGradeEssayAnswerAction(
     return { ok: false, error: updErr.message };
   }
 
-  // Record audit trail in essay_grade_history
   await supabase.from("essay_grade_history").insert({
     answer_id: parsed.data.answerId,
     attempt_id: parsed.data.attemptId,
@@ -1041,7 +1779,6 @@ export async function teacherGradeEssayAnswerAction(
     feedback: parsed.data.teacherFeedback || null,
   });
 
-  // Recalculate attempt & result totals
   const { data: allAnswers } = await supabase
     .from("student_answers")
     .select("points_awarded")
@@ -1064,7 +1801,7 @@ export async function teacherGradeEssayAnswerAction(
 
   const { data: existingResult } = await supabase
     .from("results")
-    .select("id")
+    .select("id, is_published")
     .eq("attempt_id", attempt.id)
     .maybeSingle();
 
@@ -1078,6 +1815,7 @@ export async function teacherGradeEssayAnswerAction(
         passed,
         graded_by: auth.data.userId,
         feedback: parsed.data.teacherFeedback || undefined,
+        is_published: parsed.data.publishResult,
       })
       .eq("id", existingResult.id);
   } else {
@@ -1092,12 +1830,27 @@ export async function teacherGradeEssayAnswerAction(
       passed,
       graded_by: auth.data.userId,
       feedback: parsed.data.teacherFeedback || null,
-      is_published: true,
+      is_published: parsed.data.publishResult,
+    });
+  }
+
+  if (parsed.data.publishResult) {
+    await supabase.rpc("dispatch_event_notification", {
+      p_title: `Quiz Grade Published: ${exam.title}`,
+      p_body: `Your quiz "${exam.title}" has been graded (${scorePercent}%).${
+        parsed.data.teacherFeedback ? " Teacher feedback is available." : ""
+      }`,
+      p_type: "grade",
+      p_recipient_ids: [attempt.student_id],
+      p_target_scope: "individual",
+      p_course_id: exam.course_id,
+      p_action_url: "/student/exams",
     });
   }
 
   revalidatePath("/teacher");
   revalidatePath("/teacher/grading");
+  revalidatePath("/student/exams");
   return { ok: true, data: { updatedScorePercent: scorePercent } };
 }
 
@@ -1111,7 +1864,7 @@ export async function teacherToggleResultPublishedAction(params: {
   const supabase = await createSupabaseServerClient();
   const { data: resultRow } = await supabase
     .from("results")
-    .select("id, course_id")
+    .select("id, course_id, exam_id, student_id, score_percent")
     .eq("id", params.resultId)
     .maybeSingle();
 
@@ -1138,7 +1891,26 @@ export async function teacherToggleResultPublishedAction(params: {
 
   if (error) return { ok: false, error: error.message };
 
+  if (params.isPublished) {
+    const { data: examRow } = await supabase
+      .from("exams")
+      .select("title")
+      .eq("id", resultRow.exam_id)
+      .maybeSingle();
+
+    await supabase.rpc("dispatch_event_notification", {
+      p_title: `Quiz Result Published: ${examRow?.title ?? "Quiz"}`,
+      p_body: `Your official quiz score (${Number(resultRow.score_percent ?? 0).toFixed(1)}%) is now published.`,
+      p_type: "grade",
+      p_recipient_ids: [resultRow.student_id],
+      p_target_scope: "individual",
+      p_course_id: resultRow.course_id,
+      p_action_url: "/student/exams",
+    });
+  }
+
   revalidatePath("/teacher/grading");
+  revalidatePath("/student/exams");
   return { ok: true, data: { isPublished: params.isPublished } };
 }
 
@@ -1146,11 +1918,12 @@ const gradeAssignmentSchema = z.object({
   submissionId: z.string().uuid(),
   gradePoints: z.coerce.number().min(0).max(1000),
   feedback: z.string().trim().max(3000).optional(),
+  publishGrade: z.boolean().default(true),
 });
 
 export async function teacherGradeAssignmentSubmissionAction(
   input: z.infer<typeof gradeAssignmentSchema>,
-): Promise<ServiceResult<{ graded: boolean }>> {
+): Promise<ServiceResult<{ graded: boolean; published: boolean }>> {
   const auth = await requireRole(["teacher", "admin"]);
   if (!auth.ok) return auth;
 
@@ -1165,7 +1938,7 @@ export async function teacherGradeAssignmentSubmissionAction(
   const supabase = await createSupabaseServerClient();
   const { data: submission } = await supabase
     .from("assignment_submissions")
-    .select("id, assignment_id")
+    .select("id, assignment_id, student_id")
     .eq("id", parsed.data.submissionId)
     .maybeSingle();
 
@@ -1175,7 +1948,7 @@ export async function teacherGradeAssignmentSubmissionAction(
 
   const { data: assignment } = await supabase
     .from("assignments")
-    .select("id, course_id")
+    .select("id, title, course_id, max_points")
     .eq("id", submission.assignment_id)
     .maybeSingle();
 
@@ -1192,20 +1965,76 @@ export async function teacherGradeAssignmentSubmissionAction(
     return { ok: false, error: "You do not own this course." };
   }
 
+  if (parsed.data.gradePoints > Number(assignment.max_points ?? 1000)) {
+    return {
+      ok: false,
+      error: `Grade cannot exceed maximum marks (${assignment.max_points}).`,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+
+  await supabase.from("assignment_grades").upsert(
+    {
+      submission_id: submission.id,
+      assignment_id: assignment.id,
+      course_id: assignment.course_id,
+      student_id: submission.student_id,
+      teacher_points: parsed.data.gradePoints,
+      teacher_feedback: parsed.data.feedback || null,
+      graded_by: auth.data.userId,
+      is_published: parsed.data.publishGrade,
+      published_at: parsed.data.publishGrade ? nowIso : null,
+      updated_at: nowIso,
+    },
+    { onConflict: "submission_id" },
+  );
+
+  // Only populate visible grade_points & feedback on assignment_submissions when teacher publishes!
   const { error } = await supabase
     .from("assignment_submissions")
     .update({
-      grade_points: parsed.data.gradePoints,
-      feedback: parsed.data.feedback || null,
-      status: "graded",
+      grade_points: parsed.data.publishGrade ? parsed.data.gradePoints : null,
+      feedback: parsed.data.publishGrade ? parsed.data.feedback || null : null,
+      is_grade_published: parsed.data.publishGrade,
+      status: parsed.data.publishGrade ? "graded" : "under_review",
       graded_by: auth.data.userId,
-      graded_at: new Date().toISOString(),
+      graded_at: nowIso,
     })
     .eq("id", parsed.data.submissionId);
 
   if (error) return { ok: false, error: error.message };
 
+  if (parsed.data.publishGrade) {
+    await supabase.rpc("dispatch_event_notification", {
+      p_title: `Assignment Grade Published: ${assignment.title}`,
+      p_body: `Your submission for "${assignment.title}" was graded (${parsed.data.gradePoints}/${assignment.max_points}).${
+        parsed.data.feedback ? " Teacher feedback is available." : ""
+      }`,
+      p_type: "grade",
+      p_recipient_ids: [submission.student_id],
+      p_target_scope: "individual",
+      p_course_id: assignment.course_id,
+      p_action_url: "/student/assignments",
+    });
+  }
+
+  await logTeacherAudit({
+    actorId: auth.data.userId,
+    action: "teacher.assignment.grade",
+    entityType: "assignment_submissions",
+    entityId: submission.id,
+    newValues: {
+      gradePoints: parsed.data.gradePoints,
+      published: parsed.data.publishGrade,
+    },
+  });
+
   revalidatePath("/teacher");
   revalidatePath("/teacher/grading");
-  return { ok: true, data: { graded: true } };
+  revalidatePath("/student/assignments");
+  return {
+    ok: true,
+    data: { graded: true, published: parsed.data.publishGrade },
+  };
 }

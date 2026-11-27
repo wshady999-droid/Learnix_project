@@ -244,15 +244,111 @@ export type Database = {
           },
         ]
       }
+      assignment_grades: {
+        Row: {
+          ai_evaluated_at: string | null
+          ai_suggested_explanation: string | null
+          ai_suggested_feedback: string | null
+          ai_suggested_points: number | null
+          assignment_id: string
+          course_id: string
+          created_at: string
+          graded_by: string | null
+          id: string
+          is_published: boolean
+          published_at: string | null
+          student_id: string
+          submission_id: string
+          teacher_feedback: string | null
+          teacher_points: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_evaluated_at?: string | null
+          ai_suggested_explanation?: string | null
+          ai_suggested_feedback?: string | null
+          ai_suggested_points?: number | null
+          assignment_id: string
+          course_id: string
+          created_at?: string
+          graded_by?: string | null
+          id?: string
+          is_published?: boolean
+          published_at?: string | null
+          student_id: string
+          submission_id: string
+          teacher_feedback?: string | null
+          teacher_points?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_evaluated_at?: string | null
+          ai_suggested_explanation?: string | null
+          ai_suggested_feedback?: string | null
+          ai_suggested_points?: number | null
+          assignment_id?: string
+          course_id?: string
+          created_at?: string
+          graded_by?: string | null
+          id?: string
+          is_published?: boolean
+          published_at?: string | null
+          student_id?: string
+          submission_id?: string
+          teacher_feedback?: string | null
+          teacher_points?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_grades_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_grades_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_grades_graded_by_fkey"
+            columns: ["graded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_grades_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_grades_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: true
+            referencedRelation: "assignment_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignment_submissions: {
         Row: {
           assignment_id: string
+          attachment_file_name: string | null
+          attachment_mime_type: string | null
           attachment_storage_path: string | null
           feedback: string | null
           grade_points: number | null
           graded_at: string | null
           graded_by: string | null
           id: string
+          is_grade_published: boolean
           status: Database["public"]["Enums"]["submission_status"]
           student_id: string
           submission_text: string | null
@@ -261,12 +357,15 @@ export type Database = {
         }
         Insert: {
           assignment_id: string
+          attachment_file_name?: string | null
+          attachment_mime_type?: string | null
           attachment_storage_path?: string | null
           feedback?: string | null
           grade_points?: number | null
           graded_at?: string | null
           graded_by?: string | null
           id?: string
+          is_grade_published?: boolean
           status?: Database["public"]["Enums"]["submission_status"]
           student_id: string
           submission_text?: string | null
@@ -275,12 +374,15 @@ export type Database = {
         }
         Update: {
           assignment_id?: string
+          attachment_file_name?: string | null
+          attachment_mime_type?: string | null
           attachment_storage_path?: string | null
           feedback?: string | null
           grade_points?: number | null
           graded_at?: string | null
           graded_by?: string | null
           id?: string
+          is_grade_published?: boolean
           status?: Database["public"]["Enums"]["submission_status"]
           student_id?: string
           submission_text?: string | null
@@ -314,6 +416,7 @@ export type Database = {
       assignments: {
         Row: {
           allow_late_submissions: boolean
+          attachment_file_name: string | null
           attachment_storage_path: string | null
           course_id: string
           created_at: string
@@ -321,14 +424,18 @@ export type Database = {
           description: string
           due_at: string | null
           id: string
+          instructions: string | null
           is_published: boolean
           lesson_id: string | null
           max_points: number
+          rubric: string | null
+          submission_types: string[]
           title: string
           updated_at: string
         }
         Insert: {
           allow_late_submissions?: boolean
+          attachment_file_name?: string | null
           attachment_storage_path?: string | null
           course_id: string
           created_at?: string
@@ -336,14 +443,18 @@ export type Database = {
           description: string
           due_at?: string | null
           id?: string
+          instructions?: string | null
           is_published?: boolean
           lesson_id?: string | null
           max_points?: number
+          rubric?: string | null
+          submission_types?: string[]
           title: string
           updated_at?: string
         }
         Update: {
           allow_late_submissions?: boolean
+          attachment_file_name?: string | null
           attachment_storage_path?: string | null
           course_id?: string
           created_at?: string
@@ -351,9 +462,12 @@ export type Database = {
           description?: string
           due_at?: string | null
           id?: string
+          instructions?: string | null
           is_published?: boolean
           lesson_id?: string | null
           max_points?: number
+          rubric?: string | null
+          submission_types?: string[]
           title?: string
           updated_at?: string
         }
@@ -525,6 +639,50 @@ export type Database = {
           {
             foreignKeyName: "audit_logs_actor_id_fkey"
             columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -965,7 +1123,12 @@ export type Database = {
           course_id: string
           created_at: string
           id: string
+          improvement_suggestions: string | null
           is_published: boolean
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+          moderation_status: string
           rating: number
           student_id: string
           updated_at: string
@@ -975,7 +1138,12 @@ export type Database = {
           course_id: string
           created_at?: string
           id?: string
+          improvement_suggestions?: string | null
           is_published?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
           rating: number
           student_id: string
           updated_at?: string
@@ -985,7 +1153,12 @@ export type Database = {
           course_id?: string
           created_at?: string
           id?: string
+          improvement_suggestions?: string | null
           is_published?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
           rating?: number
           student_id?: string
           updated_at?: string
@@ -996,6 +1169,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_reviews_moderated_by_fkey"
+            columns: ["moderated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1010,12 +1190,17 @@ export type Database = {
       courses: {
         Row: {
           category: string
+          category_id: string | null
           class_id: string | null
           code: string
           completion_requirements: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          deletion_reason: string | null
           department_id: string | null
           description: string | null
+          duration_unit: string
           educational_level_id: string | null
           estimated_hours: number
           id: string
@@ -1034,12 +1219,17 @@ export type Database = {
         }
         Insert: {
           category: string
+          category_id?: string | null
           class_id?: string | null
           code: string
           completion_requirements?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_reason?: string | null
           department_id?: string | null
           description?: string | null
+          duration_unit?: string
           educational_level_id?: string | null
           estimated_hours?: number
           id?: string
@@ -1058,12 +1248,17 @@ export type Database = {
         }
         Update: {
           category?: string
+          category_id?: string | null
           class_id?: string | null
           code?: string
           completion_requirements?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deletion_reason?: string | null
           department_id?: string | null
           description?: string | null
+          duration_unit?: string
           educational_level_id?: string | null
           estimated_hours?: number
           id?: string
@@ -1082,10 +1277,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "courses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "courses_class_id_fkey"
             columns: ["class_id"]
             isOneToOne: false
             referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "courses_deleted_by_fkey"
+            columns: ["deleted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1607,6 +1816,98 @@ export type Database = {
           },
         ]
       }
+      learning_resources: {
+        Row: {
+          chapter_id: string | null
+          course_id: string
+          created_at: string
+          description: string | null
+          external_url: string | null
+          file_name: string | null
+          file_size_bytes: number | null
+          id: string
+          is_published: boolean
+          lesson_id: string | null
+          mime_type: string | null
+          position: number
+          resource_type: string
+          storage_bucket: string | null
+          storage_path: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          chapter_id?: string | null
+          course_id: string
+          created_at?: string
+          description?: string | null
+          external_url?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          is_published?: boolean
+          lesson_id?: string | null
+          mime_type?: string | null
+          position?: number
+          resource_type?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          chapter_id?: string | null
+          course_id?: string
+          created_at?: string
+          description?: string | null
+          external_url?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          is_published?: boolean
+          lesson_id?: string | null
+          mime_type?: string | null
+          position?: number
+          resource_type?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_resources_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_resources_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_resources_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_resources_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lesson_notes: {
         Row: {
           content: string
@@ -2064,7 +2365,11 @@ export type Database = {
           preferred_locale: string
           preferred_theme: string
           role: Database["public"]["Enums"]["user_role"]
+          specialization: string | null
           status: Database["public"]["Enums"]["account_status"]
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -2082,7 +2387,11 @@ export type Database = {
           preferred_locale?: string
           preferred_theme?: string
           role?: Database["public"]["Enums"]["user_role"]
+          specialization?: string | null
           status?: Database["public"]["Enums"]["account_status"]
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -2100,7 +2409,11 @@ export type Database = {
           preferred_locale?: string
           preferred_theme?: string
           role?: Database["public"]["Enums"]["user_role"]
+          specialization?: string | null
           status?: Database["public"]["Enums"]["account_status"]
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2116,6 +2429,13 @@ export type Database = {
             columns: ["educational_level_id"]
             isOneToOne: false
             referencedRelation: "educational_levels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_suspended_by_fkey"
+            columns: ["suspended_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2370,6 +2690,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      security_events: {
+        Row: {
+          created_at: string
+          description: string | null
+          email: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          severity: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          severity?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          severity?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "security_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       student_answers: {
         Row: {
@@ -2631,7 +2998,12 @@ export type Database = {
           course_id: string | null
           created_at: string
           id: string
+          improvement_suggestions: string | null
           is_published: boolean
+          moderated_at: string | null
+          moderated_by: string | null
+          moderation_reason: string | null
+          moderation_status: string
           rating: number
           student_id: string
           teacher_id: string
@@ -2642,7 +3014,12 @@ export type Database = {
           course_id?: string | null
           created_at?: string
           id?: string
+          improvement_suggestions?: string | null
           is_published?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
           rating: number
           student_id: string
           teacher_id: string
@@ -2653,7 +3030,12 @@ export type Database = {
           course_id?: string | null
           created_at?: string
           id?: string
+          improvement_suggestions?: string | null
           is_published?: boolean
+          moderated_at?: string | null
+          moderated_by?: string | null
+          moderation_reason?: string | null
+          moderation_status?: string
           rating?: number
           student_id?: string
           teacher_id?: string
@@ -2665,6 +3047,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teacher_reviews_moderated_by_fkey"
+            columns: ["moderated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -2811,6 +3200,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      dispatch_event_notification: {
+        Args: {
+          p_action_url?: string
+          p_body: string
+          p_course_id?: string
+          p_is_announcement?: boolean
+          p_metadata?: Json
+          p_recipient_ids: string[]
+          p_target_scope?: string
+          p_title: string
+          p_type: Database["public"]["Enums"]["notification_type"]
+        }
+        Returns: string
+      }
+      get_student_exam_payload: {
+        Args: { p_attempt_id: string }
+        Returns: Json
+      }
       issue_my_course_certificate: {
         Args: { p_course_id: string }
         Returns: {
@@ -2857,6 +3264,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      verify_certificate: {
+        Args: { p_code_or_hash: string }
+        Returns: {
+          certificate_number: string
+          course_code: string
+          course_title: string
+          final_score: number
+          is_revoked: boolean
+          issued_at: string
+          student_name: string
+          verification_hash: string
+        }[]
+      }
     }
     Enums: {
       account_status: "active" | "suspended" | "pending"
@@ -2874,6 +3294,8 @@ export type Database = {
         | "grade"
         | "message"
         | "attendance"
+        | "review"
+        | "security"
       question_difficulty: "easy" | "medium" | "hard"
       question_type:
         | "single_choice"
@@ -2882,7 +3304,13 @@ export type Database = {
         | "short_answer"
         | "essay"
       request_status: "pending" | "approved" | "rejected"
-      submission_status: "submitted" | "graded" | "returned" | "late"
+      submission_status:
+        | "submitted"
+        | "graded"
+        | "returned"
+        | "late"
+        | "draft"
+        | "under_review"
       user_role: "admin" | "teacher" | "student"
       violation_severity: "low" | "medium" | "high" | "critical"
     }
@@ -3027,6 +3455,8 @@ export const Constants = {
         "grade",
         "message",
         "attendance",
+        "review",
+        "security",
       ],
       question_difficulty: ["easy", "medium", "hard"],
       question_type: [
@@ -3037,7 +3467,14 @@ export const Constants = {
         "essay",
       ],
       request_status: ["pending", "approved", "rejected"],
-      submission_status: ["submitted", "graded", "returned", "late"],
+      submission_status: [
+        "submitted",
+        "graded",
+        "returned",
+        "late",
+        "draft",
+        "under_review",
+      ],
       user_role: ["admin", "teacher", "student"],
       violation_severity: ["low", "medium", "high", "critical"],
     },

@@ -9,19 +9,20 @@ export async function GET(request: Request) {
 
   if (code.length < 6 || code.length > 128) {
     return NextResponse.json(
-      { ok: false, error: "Enter a valid certificate number or verification hash." },
+      {
+        ok: false,
+        error: "Enter a valid certificate number or verification hash.",
+      },
       { status: 400 },
     );
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: cert, error } = await supabase
-    .from("certificates")
-    .select(
-      "certificate_number, verification_hash, final_score, issued_at, revoked_at, course_id, student_id",
-    )
-    .or(`certificate_number.eq.${code},verification_hash.eq.${code}`)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("verify_certificate", {
+    p_code_or_hash: code,
+  });
+
+  const cert = Array.isArray(data) ? data[0] : data;
 
   if (error || !cert) {
     return NextResponse.json(
@@ -34,31 +35,18 @@ export async function GET(request: Request) {
     );
   }
 
-  const [courseRes, profileRes] = await Promise.all([
-    supabase
-      .from("courses")
-      .select("code, title")
-      .eq("id", cert.course_id)
-      .maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", cert.student_id)
-      .maybeSingle(),
-  ]);
-
   return NextResponse.json(
     {
       ok: true,
       data: {
         certificateNumber: cert.certificate_number,
         verificationHash: cert.verification_hash,
-        studentName: profileRes.data?.full_name || "Learnix Graduate",
-        courseCode: courseRes.data?.code || "COURSE",
-        courseTitle: courseRes.data?.title || "Certified Course",
+        studentName: cert.student_name || "Learnix Graduate",
+        courseCode: cert.course_code || "COURSE",
+        courseTitle: cert.course_title || "Certified Course",
         finalScore: cert.final_score,
         issuedAt: cert.issued_at,
-        isRevoked: Boolean(cert.revoked_at),
+        isRevoked: Boolean(cert.is_revoked),
       },
     },
     {

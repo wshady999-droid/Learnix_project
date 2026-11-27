@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -12,17 +13,19 @@ import {
   YAxis,
 } from "recharts";
 import {
-  AlertTriangle,
   Award,
   BookOpenCheck,
+  Calendar,
   CheckCircle2,
   Clock,
+  FileText,
   TrendingUp,
 } from "lucide-react";
 
 import { EmptyState } from "@/components/feedback/empty-state";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -30,6 +33,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -41,6 +45,14 @@ import {
 import { getStudentDictionary } from "@/i18n/student-dictionaries";
 import type { StudentPerformanceAndGrowthData } from "@/services/student/queries";
 
+type DatePreset =
+  | "today"
+  | "last_2_days"
+  | "last_7_days"
+  | "last_30_days"
+  | "all_time"
+  | "custom";
+
 interface StudentPerformanceClientProps {
   data: StudentPerformanceAndGrowthData;
 }
@@ -51,14 +63,118 @@ export function StudentPerformanceClient({
   const { locale } = useLocale();
   const t = getStudentDictionary(locale);
 
-  const overallExamAverage =
-    data.results.length > 0
+  const [preset, setPreset] = useState<DatePreset>("all_time");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
+
+  const dateBounds = useMemo(() => {
+    const now = new Date();
+    if (preset === "all_time") {
+      return { startMs: 0, endMs: Number.POSITIVE_INFINITY };
+    }
+    if (preset === "today") {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      return { startMs: start.getTime(), endMs: Number.POSITIVE_INFINITY };
+    }
+    if (preset === "last_2_days") {
+      return {
+        startMs: now.getTime() - 2 * 24 * 60 * 60 * 1000,
+        endMs: Number.POSITIVE_INFINITY,
+      };
+    }
+    if (preset === "last_7_days") {
+      return {
+        startMs: now.getTime() - 7 * 24 * 60 * 60 * 1000,
+        endMs: Number.POSITIVE_INFINITY,
+      };
+    }
+    if (preset === "last_30_days") {
+      return {
+        startMs: now.getTime() - 30 * 24 * 60 * 60 * 1000,
+        endMs: Number.POSITIVE_INFINITY,
+      };
+    }
+    const startMs = customStart ? new Date(`${customStart}T00:00:00`).getTime() : 0;
+    const endMs = customEnd
+      ? new Date(`${customEnd}T23:59:59`).getTime()
+      : Number.POSITIVE_INFINITY;
+    return { startMs, endMs };
+  }, [preset, customStart, customEnd]);
+
+  function inRange(iso: string | null | undefined): boolean {
+    if (!iso) return preset === "all_time";
+    const ms = new Date(iso).getTime();
+    return ms >= dateBounds.startMs && ms <= dateBounds.endMs;
+  }
+
+  const filteredResults = useMemo(
+    () => data.results.filter((r) => inRange(r.graded_at)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.results, dateBounds],
+  );
+
+  const filteredAssignmentGrades = useMemo(
+    () => data.assignmentGrades.filter((g) => inRange(g.gradedAt)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.assignmentGrades, dateBounds],
+  );
+
+  const filteredStudySessions = useMemo(
+    () => data.studySessions.filter((s) => inRange(s.started_at)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.studySessions, dateBounds],
+  );
+
+  const filteredCompletedLessons = useMemo(
+    () => data.completedLessons.filter((l) => inRange(l.completedAt)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.completedLessons, dateBounds],
+  );
+
+  const quizAverage =
+    filteredResults.length > 0
       ? Number(
           (
-            data.results.reduce(
+            filteredResults.reduce(
               (sum, r) => sum + Number(r.score_percent ?? 0),
               0,
-            ) / data.results.length
+            ) / filteredResults.length
+          ).toFixed(1),
+        )
+      : 0;
+
+  const assignmentAverage =
+    filteredAssignmentGrades.length > 0
+      ? Number(
+          (
+            filteredAssignmentGrades.reduce(
+              (sum, g) => sum + g.scorePercent,
+              0,
+            ) / filteredAssignmentGrades.length
+          ).toFixed(1),
+        )
+      : 0;
+
+  const combinedScores = [
+    ...filteredResults.map((r) => Number(r.score_percent ?? 0)),
+    ...filteredAssignmentGrades.map((g) => g.scorePercent),
+  ];
+  const overallAverageGrade =
+    combinedScores.length > 0
+      ? Number(
+          (
+            combinedScores.reduce((a, b) => a + b, 0) / combinedScores.length
+          ).toFixed(1),
+        )
+      : 0;
+
+  const overallCourseProgress =
+    data.enrolledCourses.length > 0
+      ? Number(
+          (
+            data.enrolledCourses.reduce((s, c) => s + c.progressPercent, 0) /
+            data.enrolledCourses.length
           ).toFixed(1),
         )
       : 0;
@@ -67,74 +183,136 @@ export function StudentPerformanceClient({
     (c) => c.progressPercent >= 100 || c.enrollmentStatus === "completed",
   ).length;
 
-  const totalStudyHours = Number(
-    (
-      data.studySessions.reduce(
-        (sum, s) => sum + Number(s.duration_seconds ?? 0),
-        0,
-      ) / 3600
-    ).toFixed(1),
+  const studyMinutes = Math.round(
+    filteredStudySessions.reduce(
+      (sum, s) => sum + Number(s.duration_seconds ?? 0),
+      0,
+    ) / 60,
   );
 
-  const examsPassedCount = data.results.filter((r) => r.passed).length;
+  const trendSeries = useMemo(() => {
+    const items = [
+      ...filteredResults.map((r) => ({
+        date: r.graded_at,
+        label: `Quiz: ${r.examTitle.slice(0, 14)}`,
+        score: Number(r.score_percent ?? 0),
+      })),
+      ...filteredAssignmentGrades.map((g) => ({
+        date: g.gradedAt,
+        label: `Asg: ${g.assignmentTitle.slice(0, 14)}`,
+        score: g.scorePercent,
+      })),
+    ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const kpiCards = [
-    {
-      label: t.performance.overallExamAverage,
-      value: `${overallExamAverage}%`,
-      icon: TrendingUp,
-      highlight: true,
-    },
-    {
-      label: t.performance.completedCoursesCount,
-      value: completedCoursesCount,
-      icon: BookOpenCheck,
-    },
-    {
-      label: t.performance.totalStudyHours,
-      value: `${totalStudyHours}h`,
-      icon: Clock,
-    },
-    {
-      label: t.performance.examsPassedCount,
-      value: `${examsPassedCount} / ${data.results.length}`,
-      icon: Award,
-    },
-  ];
-
-  const examHistoryChart = [...data.results]
-    .reverse()
-    .map((r, idx) => ({
-      exam: `${idx + 1}. ${r.examTitle.slice(0, 14)}`,
-      score: Number(r.score_percent ?? 0),
+    return items.map((it, idx) => ({
+      name: `${idx + 1}. ${it.label}`,
+      score: it.score,
     }));
+  }, [filteredResults, filteredAssignmentGrades]);
 
   const courseComparisonChart = data.enrolledCourses.map((c) => ({
     course: c.code || c.title.slice(0, 14),
     progress: c.progressPercent,
-    examAverage: c.averageExamScore,
+    quizAvg: c.averageExamScore,
+    assignmentAvg: c.averageAssignmentScore,
   }));
 
-  const strengths = data.enrolledCourses.filter(
-    (c) => c.averageExamScore >= 75 || c.progressPercent >= 75,
-  );
-  const subjectsNeedingRevision = data.enrolledCourses.filter(
-    (c) =>
-      (c.averageExamScore > 0 && c.averageExamScore < 75) ||
-      c.progressPercent < 50,
-  );
+  const presets: Array<{ id: DatePreset; label: string }> = [
+    { id: "today", label: "Today" },
+    { id: "last_2_days", label: "Last 2 Days" },
+    { id: "last_7_days", label: "Last 7 Days" },
+    { id: "last_30_days", label: "Last 30 Days" },
+    { id: "all_time", label: "All Time" },
+    { id: "custom", label: "Custom Range" },
+  ];
+
+  const kpiCards = [
+    {
+      label: "Overall Progress",
+      value: `${overallCourseProgress}%`,
+      sub: `${completedCoursesCount}/${data.enrolledCourses.length} courses completed`,
+      icon: BookOpenCheck,
+      highlight: true,
+    },
+    {
+      label: "Overall Average Grade",
+      value: `${overallAverageGrade}%`,
+      sub: `Quiz ${quizAverage}% • Asg ${assignmentAverage}%`,
+      icon: TrendingUp,
+    },
+    {
+      label: "Completed Lessons",
+      value: filteredCompletedLessons.length,
+      sub: "In selected period",
+      icon: CheckCircle2,
+    },
+    {
+      label: "Learning Activity",
+      value: studyMinutes >= 60 ? `${(studyMinutes / 60).toFixed(1)}h` : `${studyMinutes}m`,
+      sub: `${filteredStudySessions.length} study sessions`,
+      icon: Clock,
+    },
+  ];
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {t.performance.title}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t.performance.subtitle}
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {t.performance.title}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Real-time analytics across course completion, quiz scores, assignment grades, and study activity.
+          </p>
+        </div>
+
+        {/* Date Filter Pills */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {presets.map((p) => (
+            <Button
+              key={p.id}
+              type="button"
+              size="sm"
+              variant={preset === p.id ? "gold" : "outline"}
+              onClick={() => setPreset(p.id)}
+              className="text-xs"
+            >
+              {p.id === "custom" && <Calendar className="mr-1 size-3.5" />}
+              {p.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
+      {preset === "custom" && (
+        <Card className="border-gold-primary/40 bg-gold-primary/5">
+          <CardContent className="flex flex-wrap items-center gap-4 py-3 text-xs">
+            <span className="font-semibold text-foreground">
+              Custom Date Range:
+            </span>
+            <div className="flex items-center gap-2">
+              <span>From</span>
+              <Input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="h-8 w-40 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span>To</span>
+              <Input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="h-8 w-40 text-xs"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpiCards.map((item) => {
           const Icon = item.icon;
@@ -155,8 +333,11 @@ export function StudentPerformanceClient({
                   <p className="mt-1 text-xl font-bold text-foreground">
                     {item.value}
                   </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {item.sub}
+                  </p>
                 </div>
-                <div className="rounded-lg bg-gold-primary/15 p-2 text-gold-foreground">
+                <div className="rounded-lg bg-gold-primary/15 p-2.5 text-gold-foreground">
                   <Icon className="size-4" />
                 </div>
               </CardContent>
@@ -165,40 +346,45 @@ export function StudentPerformanceClient({
         })}
       </div>
 
-      {/* Charts: Exam Score History & Course Completion vs Exam Mastery */}
+      {/* Charts: Performance Trends & Course Completion vs Quiz/Assignment Mastery */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {t.performance.gradesChartTitle}
-            </CardTitle>
+            <CardTitle className="text-base">Performance Trends</CardTitle>
             <CardDescription>
-              {t.performance.gradesChartDescription}
+              Chronological quiz & assignment scores in the selected date window.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {examHistoryChart.length === 0 ? (
+            {trendSeries.length === 0 ? (
               <EmptyState
                 icon={Award}
-                title={t.common.noRecordsTitle}
-                description={t.common.noRecordsDescription}
+                title="No graded assessments in this range"
+                description="Try expanding the date filter above or complete an upcoming quiz or assignment."
               />
             ) : (
               <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
-                  <LineChart data={examHistoryChart}>
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={260}
+                >
+                  <LineChart data={trendSeries}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="rgba(115,115,115,0.2)"
                     />
-                    <XAxis dataKey="exam" fontSize={12} />
+                    <XAxis dataKey="name" fontSize={11} />
                     <YAxis fontSize={12} domain={[0, 100]} />
                     <Tooltip />
                     <Line
                       type="monotone"
                       dataKey="score"
-                      stroke="#A88945"
+                      name="Score (%)"
+                      stroke="#10b981"
                       strokeWidth={2.5}
+                      dot={{ r: 4, fill: "#10b981" }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -210,10 +396,10 @@ export function StudentPerformanceClient({
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {t.performance.progressComparisonTitle}
+              Course Completion, Quiz & Assignment Averages
             </CardTitle>
             <CardDescription>
-              {t.performance.progressComparisonDescription}
+              Per-course breakdown across all enrolled courses.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -225,7 +411,12 @@ export function StudentPerformanceClient({
               />
             ) : (
               <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={260}>
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={260}
+                >
                   <BarChart data={courseComparisonChart}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -237,13 +428,19 @@ export function StudentPerformanceClient({
                     <Bar
                       dataKey="progress"
                       name="Completion (%)"
-                      fill="#202124"
+                      fill="#10b981"
                       radius={[6, 6, 0, 0]}
                     />
                     <Bar
-                      dataKey="examAverage"
-                      name="Exam Average (%)"
-                      fill="#A88945"
+                      dataKey="quizAvg"
+                      name="Quiz Avg (%)"
+                      fill="#34d399"
+                      radius={[6, 6, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="assignmentAvg"
+                      name="Assignment Avg (%)"
+                      fill="#0ea5e9"
                       radius={[6, 6, 0, 0]}
                     />
                   </BarChart>
@@ -254,36 +451,51 @@ export function StudentPerformanceClient({
         </Card>
       </div>
 
-      {/* Strengths & Subjects Needing Revision */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Quiz Grades & Assignment Grades Tables */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <CheckCircle2 className="size-4 text-emerald-500" />
-              <span>{t.performance.strengthsTitle}</span>
+              <Award className="size-4 text-gold-foreground" />
+              <span>Quiz Grades ({filteredResults.length})</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2.5 text-xs">
-            {strengths.length === 0 ? (
-              <p className="text-muted-foreground">
-                Complete lessons and exams with 75% or higher to highlight your academic strengths.
-              </p>
+          <CardContent>
+            {filteredResults.length === 0 ? (
+              <EmptyState
+                icon={Award}
+                title="No quiz grades in range"
+                description="Completed and published quiz scores will appear here."
+              />
             ) : (
-              strengths.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-border/80 p-3"
-                >
-                  <div>
-                    <p className="font-semibold text-foreground">{c.title}</p>
-                    <p className="text-muted-foreground">
-                      Progress: {c.progressPercent}% • Exam Avg:{" "}
-                      {c.averageExamScore}%
-                    </p>
-                  </div>
-                  <Badge variant="gold">Strong</Badge>
-                </div>
-              ))
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Quiz</TableHead>
+                    <TableHead>Course</TableHead>
+                    <TableHead>Score</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredResults.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-semibold text-foreground">
+                        {r.examTitle}
+                      </TableCell>
+                      <TableCell className="text-xs">{r.courseTitle}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {Number(r.score_percent).toFixed(1)}%
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={r.passed ? "gold" : "destructive"}>
+                          {r.passed ? "Passed" : "Needs Retake"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
@@ -291,90 +503,50 @@ export function StudentPerformanceClient({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="size-4 text-gold-foreground" />
-              <span>{t.performance.weaknessesRevisionTitle}</span>
+              <FileText className="size-4 text-gold-foreground" />
+              <span>
+                Assignment Grades ({filteredAssignmentGrades.length})
+              </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2.5 text-xs">
-            {subjectsNeedingRevision.length === 0 ? (
-              <p className="text-muted-foreground">
-                All enrolled subjects are progressing above the revision threshold.
-              </p>
+          <CardContent>
+            {filteredAssignmentGrades.length === 0 ? (
+              <EmptyState
+                icon={FileText}
+                title="No assignment grades in range"
+                description="Approved and published assignment grades will appear here."
+              />
             ) : (
-              subjectsNeedingRevision.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-border/80 p-3"
-                >
-                  <div>
-                    <p className="font-semibold text-foreground">{c.title}</p>
-                    <p className="text-muted-foreground">
-                      Progress: {c.progressPercent}% • Exam Avg:{" "}
-                      {c.averageExamScore}%
-                    </p>
-                  </div>
-                  <Badge variant="outline">Review Recommended</Badge>
-                </div>
-              ))
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Assignment</TableHead>
+                    <TableHead>Course</TableHead>
+                    <TableHead>Marks</TableHead>
+                    <TableHead>Score</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAssignmentGrades.map((g) => (
+                    <TableRow key={g.id}>
+                      <TableCell className="font-semibold text-foreground">
+                        {g.assignmentTitle}
+                      </TableCell>
+                      <TableCell className="text-xs">{g.courseTitle}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {g.earnedPoints} / {g.maxPoints}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="gold">{g.scorePercent}%</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Official Examination Grades Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {t.performance.examGradesTableTitle}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {data.results.length === 0 ? (
-            <EmptyState
-              icon={Award}
-              title={t.common.noRecordsTitle}
-              description={t.common.noRecordsDescription}
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Examination</TableHead>
-                  <TableHead>Course</TableHead>
-                  <TableHead>Marks</TableHead>
-                  <TableHead>Score (%)</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead>Teacher Feedback</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.results.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-semibold text-foreground">
-                      {r.examTitle}
-                    </TableCell>
-                    <TableCell>{r.courseTitle}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {Number(r.earned_points)} / {Number(r.total_points)}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {Number(r.score_percent).toFixed(1)}%
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={r.passed ? "gold" : "destructive"}>
-                        {r.passed ? "Passed" : "Needs Retake"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-sm text-xs text-muted-foreground">
-                      {r.feedback || "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

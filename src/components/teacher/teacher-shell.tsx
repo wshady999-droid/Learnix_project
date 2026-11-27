@@ -6,11 +6,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Award,
+  BarChart3,
+  Bell,
   BookOpen,
   ClipboardCheck,
   FileCheck2,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   Settings,
   Sparkles,
   Star,
@@ -115,6 +118,12 @@ export function TeacherShell({
         title: teacherT.nav.groupIntelligence,
         items: [
           {
+            id: "teacher-messages",
+            label: "Messages",
+            href: "/messages",
+            icon: MessageSquare,
+          },
+          {
             id: "teacher-ai-assistant",
             label: teacherT.nav.aiAssistant,
             href: "/teacher/ai-assistant",
@@ -122,10 +131,28 @@ export function TeacherShell({
             badge: "AI",
           },
           {
+            id: "teacher-analytics",
+            label: "Analytics",
+            href: "/teacher/analytics",
+            icon: BarChart3,
+          },
+          {
             id: "teacher-ratings",
             label: teacherT.nav.ratings,
             href: "/teacher/ratings",
             icon: Star,
+          },
+          {
+            id: "teacher-notifications",
+            label: "Notifications",
+            href: "/notifications",
+            icon: Bell,
+          },
+          {
+            id: "teacher-profile",
+            label: "Profile",
+            href: "/profile",
+            icon: User,
           },
         ],
       },

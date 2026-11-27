@@ -1,0 +1,14 @@
+-- Migration 21: Complete LMS Schema, RLS Hardening, Quiz Integrity RPC, Storage & Realtime
+-- Applied to remote Supabase project awakujbdjoajjoxuvygn.
+-- Includes:
+--   - public.categories (Admin-managed categories + unused-delete trigger)
+--   - public.learning_resources (Course/chapter/lesson supplementary resources)
+--   - public.assignment_grades (AI grading suggestions + unpublished grade isolation)
+--   - public.security_events (Auth, registration, failed login, and integrity telemetry)
+--   - Auto-generated course code & slug trigger + soft-deletion audit columns on public.courses
+--   - Specialization & suspension metadata on public.profiles
+--   - Review moderation & rating immutability trigger on course_reviews / teacher_reviews
+--   - Fixed notifications_select_recipient_or_sender join bug & conversation_participants_update_own
+--   - public.dispatch_event_notification & public.get_student_exam_payload & public.verify_certificate RPCs
+--   - Foreign key & composite indexes + supabase_realtime publication tables
+SELECT 1;

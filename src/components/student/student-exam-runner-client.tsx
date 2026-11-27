@@ -786,26 +786,8 @@ export function StudentExamRunnerClient({
                     <p className="text-xs text-destructive">{cameraError}</p>
                   )}
                   <p className="text-[11px] text-muted-foreground">
-                    Monitoring is active strictly during this session. Retention:{" "}
-                    {data.exam.retention_days} days.
+                    Focus changes and repeated tab switches are logged for instructor review. Browser indicators assist integrity review and do not automatically invalidate your progress.
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full text-xs"
-                    onClick={() => {
-                      toast.info(
-                        "Camera & phone-use indicator check logged for teacher review.",
-                      );
-                      void recordViolation("possible_phone_indicator", "low", {
-                        source: "ai_camera_monitor_check",
-                        note: "Uncertain indicator logged for teacher review; exam progress preserved.",
-                      });
-                    }}
-                  >
-                    <Smartphone className="size-3.5" />
-                    <span>{t.exams.simulatePhoneFlagButton}</span>
-                  </Button>
                 </CardContent>
               </Card>
             )}

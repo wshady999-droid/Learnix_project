@@ -71,8 +71,48 @@ const signupUnionSchema = z.discriminatedUnion("accountType", [
   teacherSignupServerSchema,
 ]);
 
+async function recordSecurityEvent(params: {
+  userId?: string | null;
+  email?: string | null;
+  eventType: string;
+  severity?: "info" | "low" | "medium" | "high" | "critical";
+  description?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    const headerStore = await headers();
+    const userAgent = headerStore.get("user-agent") ?? "unknown";
+    const ipAddress =
+      headerStore.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      headerStore.get("x-real-ip") ??
+      null;
+
+    after(async () => {
+      try {
+        const serviceClient = createSupabaseServiceRoleClient();
+        const client = serviceClient ?? (await createSupabaseServerClient());
+        await client.from("security_events").insert({
+          user_id: params.userId ?? null,
+          email: params.email ?? null,
+          event_type: params.eventType,
+          severity: params.severity ?? "info",
+          description: params.description ?? null,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+          metadata: (params.metadata ?? {}) as Json,
+        });
+      } catch {
+        // Non-blocking security telemetry
+      }
+    });
+  } catch {
+    // Non-blocking security telemetry
+  }
+}
+
 async function recordLoginActivity(params: {
   userId: string;
+  email?: string | null;
   action: string;
   details?: Record<string, string | boolean | null>;
 }) {
@@ -86,10 +126,23 @@ async function recordLoginActivity(params: {
     const fingerprint = `${userAgent.slice(0, 120)}`;
     const supabase = await createSupabaseServerClient();
 
-    // Schedule non-critical telemetry after the HTTP response finishes
-    // so login/signup responses return immediately without waiting on 2 extra DB round-trips.
     after(async () => {
       try {
+        const secType =
+          params.action === "auth.login_password"
+            ? "login_success"
+            : params.action === "auth.login_blocked_suspended"
+              ? "login_blocked_suspended"
+              : params.action === "auth.password_updated"
+                ? "password_changed"
+                : params.action === "auth.logout"
+                  ? "logout"
+                  : params.action.includes("signup")
+                    ? "signup"
+                    : params.action;
+        const severity =
+          params.action === "auth.login_blocked_suspended" ? "high" : "info";
+
         await Promise.all([
           supabase.from("audit_logs").insert({
             actor_id: params.userId,
@@ -99,6 +152,16 @@ async function recordLoginActivity(params: {
             ip_address: ipAddress,
             user_agent: userAgent,
             new_values: (params.details ?? {}) as Json,
+          }),
+          supabase.from("security_events").insert({
+            user_id: params.userId,
+            email: params.email ?? null,
+            event_type: secType,
+            severity,
+            description: `Authentication event: ${params.action}`,
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            metadata: (params.details ?? {}) as Json,
           }),
           supabase.from("user_devices").upsert(
             {
@@ -178,6 +241,12 @@ export async function signInWithPasswordAction(
         };
       }
     } else {
+      await recordSecurityEvent({
+        email: parsed.data.email,
+        eventType: "login_failed",
+        severity: "medium",
+        description: `Failed password login attempt for ${parsed.data.email}`,
+      });
       return {
         ok: false,
         error: "INVALID_CREDENTIALS",
@@ -508,6 +577,7 @@ const updatePersonalProfileSchema = z.object({
     .optional()
     .transform((v) => (v ? v.replace(/[\s()-]/g, "") : "")),
   bio: z.string().trim().max(500).optional(),
+  specialization: z.string().trim().max(140).optional(),
   avatarUrl: z.string().url().nullable().optional(),
 });
 
@@ -538,6 +608,7 @@ export async function updatePersonalProfileAction(
     country_code: string;
     phone: string | null;
     bio: string | null;
+    specialization?: string | null;
     avatar_url?: string | null;
   } = {
     full_name: parsed.data.fullName,
@@ -545,6 +616,10 @@ export async function updatePersonalProfileAction(
     phone: formattedPhone,
     bio: parsed.data.bio || null,
   };
+
+  if (parsed.data.specialization !== undefined) {
+    updatePayload.specialization = parsed.data.specialization || null;
+  }
 
   if (parsed.data.avatarUrl !== undefined) {
     updatePayload.avatar_url = parsed.data.avatarUrl;
@@ -563,6 +638,9 @@ export async function updatePersonalProfileAction(
   });
 
   revalidatePath("/profile");
+  revalidatePath("/student/profile");
+  revalidatePath("/teacher");
+  revalidatePath("/admin");
   return { ok: true, data: { updated: true } };
 }
 

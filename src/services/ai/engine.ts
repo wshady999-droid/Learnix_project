@@ -1782,6 +1782,86 @@ export function getVerifiedPlatformHelpContext(): {
  * Never exposes keys to the client; returns structured error metadata (`providerFailed`, `errorStatus`, `errorCode`)
  * so callers can enforce strict grounding and never generate ungrounded fallback answers when the provider fails.
  */
+function buildServerGeminiRequest(apiKey: string, model: string): {
+  url: string;
+  headers: Record<string, string>;
+} {
+  const cleanModel = encodeURIComponent(model.trim());
+  if (apiKey.startsWith("AQ.")) {
+    return {
+      url: `https://aiplatform.googleapis.com/v1/publishers/google/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+  }
+  return {
+    url: `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`,
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+  };
+}
+
+/**
+ * Invokes the centralized Supabase Edge Function (`learnix-ai`) which reads
+ * `AI_PROVIDER`, `GEMINI_API_KEY`, and `GEMINI_MODEL` from Supabase Edge Function Secrets.
+ */
+async function invokeLearnixAiEdgeFunction(
+  payload: Record<string, unknown>,
+): Promise<{
+  ok: boolean;
+  text?: string;
+  raw?: unknown;
+  provider?: string;
+  secretMissing?: boolean;
+  errorCode?: string;
+  status?: number;
+}> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase.functions.invoke("learnix-ai", {
+      body: payload,
+    });
+
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("EDGE_SECRET_NOT_SET") || msg.includes("503")) {
+        return { ok: false, secretMissing: true, errorCode: "EDGE_SECRET_NOT_SET" };
+      }
+      return { ok: false, errorCode: "EDGE_INVOKE_ERROR" };
+    }
+
+    const parsed = data as {
+      ok?: boolean;
+      text?: string;
+      raw?: unknown;
+      provider?: string;
+      errorCode?: string;
+      status?: number;
+    } | null;
+
+    if (!parsed || parsed.ok !== true) {
+      return {
+        ok: false,
+        secretMissing: parsed?.errorCode === "EDGE_SECRET_NOT_SET",
+        errorCode: parsed?.errorCode ?? "EDGE_PROVIDER_FAILED",
+        status: parsed?.status,
+      };
+    }
+
+    return {
+      ok: true,
+      text: parsed.text,
+      raw: parsed.raw,
+      provider: parsed.provider ?? "edge:gemini",
+    };
+  } catch {
+    return { ok: false, secretMissing: true, errorCode: "EDGE_UNREACHABLE" };
+  }
+}
+
 export async function callServerAiProvider(params: {
   systemInstruction: string;
   userPrompt: string;
@@ -1796,40 +1876,60 @@ export async function callServerAiProvider(params: {
   errorStatus?: number;
   errorCode?: string;
 }> {
-  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
-  const openAiKey = (process.env.OPENAI_API_KEY ?? "").trim();
   const mediaParts = params.mediaParts ?? [];
 
-  let lastFailure: { status?: number; code: string } | null = null;
+  // 0. Primary: Centralized Supabase Edge Function (`learnix-ai`) backed by Edge Function Secrets
+  const edgeRes = await invokeLearnixAiEdgeFunction({
+    mode: "generate",
+    systemInstruction: params.systemInstruction,
+    userPrompt: params.userPrompt,
+    jsonMode: params.jsonMode ?? false,
+    mediaParts,
+  });
 
-  // 1. Try Google Gemini API (server-side only — native multimodal support for text, images, audio, and PDFs)
+  if (edgeRes.ok && edgeRes.text?.trim()) {
+    return {
+      text: edgeRes.text.trim(),
+      provider: edgeRes.provider ?? "edge:gemini:gemini-2.5-flash",
+    };
+  }
+
+  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+  const openAiKey = (process.env.OPENAI_API_KEY ?? "").trim();
+
+  let lastFailure: { status?: number; code: string } | null =
+    !edgeRes.ok && !edgeRes.secretMissing && edgeRes.errorCode
+      ? { status: edgeRes.status, code: edgeRes.errorCode }
+      : null;
+
+  // 1. Server-only Gemini API fallback (supports both Vertex Express AQ.* and AI Studio AIza* keys)
   if (
     geminiKey &&
     !geminiKey.toLowerCase().includes("your_gemini_api_key")
   ) {
-    const model = (process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
-    try {
-      const userParts: Array<Record<string, unknown>> = [
-        { text: params.userPrompt },
-      ];
+    const preferredModel = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+    const candidateModels = Array.from(
+      new Set([preferredModel, "gemini-2.5-flash", "gemini-2.0-flash"]),
+    );
 
-      for (const media of mediaParts) {
-        userParts.push({
-          inline_data: {
-            mime_type: media.mimeType,
-            data: media.base64Data,
-          },
-        });
-      }
+    const userParts: Array<Record<string, unknown>> = [
+      { text: params.userPrompt },
+    ];
+    for (const media of mediaParts) {
+      userParts.push({
+        inline_data: {
+          mime_type: media.mimeType,
+          data: media.base64Data,
+        },
+      });
+    }
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        {
+    for (const model of candidateModels) {
+      try {
+        const reqCfg = buildServerGeminiRequest(geminiKey, model);
+        const res = await fetch(reqCfg.url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": geminiKey,
-          },
+          headers: reqCfg.headers,
           body: JSON.stringify({
             system_instruction: {
               parts: [{ text: params.systemInstruction }],
@@ -1843,35 +1943,45 @@ export async function callServerAiProvider(params: {
             },
           }),
           signal: AbortSignal.timeout(35000),
-        },
-      );
+        });
 
-      if (res.ok) {
-        const json = (await res.json()) as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ text?: string }> };
-          }>;
-        };
-        const text = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-        if (text) {
-          return { text, provider: `gemini:${model}` };
+        if (res.ok) {
+          const json = (await res.json()) as {
+            candidates?: Array<{
+              content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+            }>;
+          };
+          const text = (json.candidates?.[0]?.content?.parts ?? [])
+            .filter((p) => p.thought !== true)
+            .map((p) => p.text ?? "")
+            .join("\n")
+            .trim();
+          if (text) {
+            return { text, provider: `gemini:${model}` };
+          }
+          lastFailure = {
+            status: res.status,
+            code: "GEMINI_EMPTY_CANDIDATE",
+          };
+          break;
+        } else if (res.status === 404) {
+          lastFailure = { status: 404, code: `GEMINI_MODEL_404_${model}` };
+          continue;
+        } else {
+          lastFailure = {
+            status: res.status,
+            code: `GEMINI_HTTP_${res.status}`,
+          };
+          break;
         }
+      } catch (err) {
+        const errName =
+          err instanceof Error && err.name ? err.name : "NETWORK_ERROR";
         lastFailure = {
-          status: res.status,
-          code: "GEMINI_EMPTY_CANDIDATE",
+          code: `GEMINI_${errName.toUpperCase()}`,
         };
-      } else {
-        lastFailure = {
-          status: res.status,
-          code: `GEMINI_HTTP_${res.status}`,
-        };
+        break;
       }
-    } catch (err) {
-      const errName =
-        err instanceof Error && err.name ? err.name : "NETWORK_ERROR";
-      lastFailure = {
-        code: `GEMINI_${errName.toUpperCase()}`,
-      };
     }
   }
 
@@ -2065,7 +2175,7 @@ export async function runGeminiStudentAgentLoop(params: {
   errorCode?: string;
 }> {
   const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
-  const model = (process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
+  const model = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
   const maxIterations = Math.min(Math.max(params.maxIterations ?? 4, 1), 6);
   const fetchFn = params.customFetch ?? fetch;
 
@@ -2078,20 +2188,9 @@ export async function runGeminiStudentAgentLoop(params: {
   const collectedCitations: AiCitation[] = [];
   const executedCallCache = new Map<string, GeminiAgentToolExecutionOutcome>();
 
-  if (
-    !geminiKey ||
-    geminiKey.toLowerCase().includes("your_gemini_api_key")
-  ) {
-    return {
-      text: "",
-      provider: "gemini-unconfigured",
-      calledTools,
-      toolOutcomes,
-      citations: collectedCitations,
-      providerFailed: true,
-      errorCode: "GEMINI_KEY_NOT_CONFIGURED",
-    };
-  }
+  const hasLocalKey =
+    Boolean(geminiKey) &&
+    !geminiKey.toLowerCase().includes("your_gemini_api_key");
 
   // Build multi-turn Gemini `contents` array from recent conversation history + current turn
   const contents: Array<{
@@ -2124,61 +2223,9 @@ export async function runGeminiStudentAgentLoop(params: {
     parts: currentTurnParts,
   });
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     try {
-      const res = await fetchFn(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": geminiKey,
-        },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: params.systemInstruction }],
-          },
-          contents,
-          tools: [
-            {
-              functionDeclarations: params.tools,
-            },
-          ],
-          toolConfig: {
-            functionCallingConfig: {
-              mode: "AUTO",
-            },
-          },
-          generationConfig: {
-            temperature: 0.2,
-          },
-        }),
-        signal: AbortSignal.timeout(35000),
-      });
-
-      if (!res.ok) {
-        const statusCode = res.status;
-        const categorizedCode =
-          statusCode === 503 || statusCode === 429
-            ? `GEMINI_TEMPORARY_UNAVAILABLE_HTTP_${statusCode}`
-            : statusCode === 401 || statusCode === 403
-              ? `GEMINI_AUTH_CONFIG_HTTP_${statusCode}`
-              : statusCode === 400 || statusCode === 404
-                ? `GEMINI_INVALID_REQUEST_HTTP_${statusCode}`
-                : `GEMINI_HTTP_${statusCode}`;
-        return {
-          text: "",
-          provider: "provider-error-fallback",
-          calledTools,
-          toolOutcomes,
-          citations: collectedCitations,
-          providerFailed: true,
-          errorStatus: statusCode,
-          errorCode: categorizedCode,
-        };
-      }
-
-      const json = (await res.json()) as {
+      let json: {
         candidates?: Array<{
           content?: {
             role?: string;
@@ -2196,7 +2243,112 @@ export async function runGeminiStudentAgentLoop(params: {
             >;
           };
         }>;
-      };
+      } | null = null;
+      let resolvedProvider = `gemini:${model}`;
+
+      // 1. Primary: Invoke Supabase Edge Function (`learnix-ai` using Edge Function Secrets) unless customFetch is injected for tests
+      if (!params.customFetch) {
+        const edgeTurn = await invokeLearnixAiEdgeFunction({
+          mode: "agent_turn",
+          systemInstruction: params.systemInstruction,
+          contents,
+          tools: params.tools,
+        });
+
+        if (edgeTurn.ok && edgeTurn.raw) {
+          json = edgeTurn.raw as typeof json;
+          resolvedProvider = edgeTurn.provider ?? "edge:gemini:gemini-2.5-flash";
+        } else if (!edgeTurn.secretMissing && !hasLocalKey) {
+          return {
+            text: "",
+            provider: "provider-error-fallback",
+            calledTools,
+            toolOutcomes,
+            citations: collectedCitations,
+            providerFailed: true,
+            errorStatus: edgeTurn.status,
+            errorCode: edgeTurn.errorCode ?? "EDGE_AGENT_ERROR",
+          };
+        }
+      }
+
+      // 2. Fallback: Server-only GEMINI_API_KEY (supports both AQ.* Vertex Express and AI Studio keys)
+      if (!json) {
+        if (!hasLocalKey) {
+          return {
+            text: "",
+            provider: "gemini-unconfigured",
+            calledTools,
+            toolOutcomes,
+            citations: collectedCitations,
+            providerFailed: true,
+            errorCode: "GEMINI_KEY_NOT_CONFIGURED",
+          };
+        }
+
+        const candidateModels = Array.from(
+          new Set([model, "gemini-2.5-flash", "gemini-2.0-flash"]),
+        );
+        let lastStatus = 500;
+        for (const candidateModel of candidateModels) {
+          const reqCfg = buildServerGeminiRequest(geminiKey, candidateModel);
+          const res = await fetchFn(reqCfg.url, {
+            method: "POST",
+            headers: reqCfg.headers,
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: params.systemInstruction }],
+              },
+              contents,
+              tools: [
+                {
+                  functionDeclarations: params.tools,
+                },
+              ],
+              toolConfig: {
+                functionCallingConfig: {
+                  mode: "AUTO",
+                },
+              },
+              generationConfig: {
+                temperature: 0.2,
+              },
+            }),
+            signal: AbortSignal.timeout(35000),
+          });
+
+          lastStatus = res.status;
+          if (res.ok) {
+            json = (await res.json()) as typeof json;
+            resolvedProvider = `gemini:${candidateModel}`;
+            break;
+          }
+          if (res.status !== 404) {
+            break;
+          }
+        }
+
+        if (!json) {
+          const categorizedCode =
+            lastStatus === 503 || lastStatus === 429
+              ? `GEMINI_TEMPORARY_UNAVAILABLE_HTTP_${lastStatus}`
+              : lastStatus === 401 || lastStatus === 403
+                ? `GEMINI_AUTH_CONFIG_HTTP_${lastStatus}`
+                : lastStatus === 400 || lastStatus === 404
+                  ? `GEMINI_INVALID_REQUEST_HTTP_${lastStatus}`
+                  : `GEMINI_HTTP_${lastStatus}`;
+          return {
+            text: "",
+            provider: "provider-error-fallback",
+            calledTools,
+            toolOutcomes,
+            citations: collectedCitations,
+            providerFailed: true,
+            errorStatus: lastStatus,
+            errorCode: categorizedCode,
+          };
+        }
+      }
 
       const candidateParts = json.candidates?.[0]?.content?.parts ?? [];
       if (candidateParts.length === 0) {
@@ -2207,7 +2359,7 @@ export async function runGeminiStudentAgentLoop(params: {
           toolOutcomes,
           citations: collectedCitations,
           providerFailed: true,
-          errorStatus: res.status,
+          errorStatus: 200,
           errorCode: "GEMINI_EMPTY_CANDIDATE",
         };
       }
@@ -2242,7 +2394,7 @@ export async function runGeminiStudentAgentLoop(params: {
         if (finalText) {
           return {
             text: finalText,
-            provider: `gemini:${model}`,
+            provider: resolvedProvider,
             calledTools,
             toolOutcomes,
             citations: collectedCitations,

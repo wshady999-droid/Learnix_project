@@ -116,7 +116,7 @@ export function StudentProfileClient({ data }: StudentProfileClientProps) {
       </div>
 
       {/* Full Profile Settings (Avatar upload, Personal Info, Password, Language, Theme, Notifications) */}
-      <ProfileSettingsClient profile={data.profile} teacherRequest={null} />
+      <ProfileSettingsClient profile={data.profile} teacherRequest={null} embedded />
     </div>
   );
 }

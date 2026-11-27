@@ -333,6 +333,7 @@ const submitCourseReviewSchema = z.object({
   courseId: z.string().uuid(),
   rating: z.coerce.number().int().min(1).max(5),
   comment: z.string().trim().max(2500).optional(),
+  improvementSuggestions: z.string().trim().max(2000).optional(),
 });
 
 export async function studentSaveCourseReviewAction(
@@ -352,7 +353,6 @@ export async function studentSaveCourseReviewAction(
   const supabase = await createSupabaseServerClient();
   const studentId = auth.data.userId;
 
-  // Enforce completed-course eligibility on the server
   const { data: enrollment } = await supabase
     .from("course_enrollments")
     .select("status, progress_percent")
@@ -372,7 +372,6 @@ export async function studentSaveCourseReviewAction(
     };
   }
 
-  // Upsert on (course_id, student_id) prevents duplicates and allows policy-compliant edits
   const { data: existing } = await supabase
     .from("course_reviews")
     .select("id")
@@ -386,6 +385,7 @@ export async function studentSaveCourseReviewAction(
       .update({
         rating: parsed.data.rating,
         comment: parsed.data.comment || null,
+        improvement_suggestions: parsed.data.improvementSuggestions || null,
       })
       .eq("id", existing.id)
       .eq("student_id", studentId)
@@ -396,6 +396,8 @@ export async function studentSaveCourseReviewAction(
       return { ok: false, error: error?.message ?? "Failed to update course rating." };
     }
     revalidatePath("/student/ratings");
+    revalidatePath("/student/my-learning");
+    revalidatePath("/student/courses");
     return { ok: true, data: { reviewId: data.id } };
   }
 
@@ -406,7 +408,9 @@ export async function studentSaveCourseReviewAction(
       student_id: studentId,
       rating: parsed.data.rating,
       comment: parsed.data.comment || null,
+      improvement_suggestions: parsed.data.improvementSuggestions || null,
       is_published: true,
+      moderation_status: "approved",
     })
     .select("id")
     .single();
@@ -415,7 +419,30 @@ export async function studentSaveCourseReviewAction(
     return { ok: false, error: error?.message ?? "Failed to submit course rating." };
   }
 
+  // Notify course teacher of new review
+  const { data: courseRow } = await supabase
+    .from("courses")
+    .select("title, teacher_id")
+    .eq("id", parsed.data.courseId)
+    .maybeSingle();
+  if (courseRow?.teacher_id) {
+    await supabase.rpc("dispatch_event_notification", {
+      p_recipient_ids: [courseRow.teacher_id],
+      p_type: "review",
+      p_title: `New Course Review (${parsed.data.rating}★)`,
+      p_body: `A student rated "${courseRow.title}" ${parsed.data.rating}/5 stars.`,
+      p_course_id: parsed.data.courseId,
+      p_action_url: "/teacher/ratings",
+      p_metadata: { reviewId: data.id },
+      p_is_announcement: false,
+      p_target_scope: "individual",
+    });
+  }
+
   revalidatePath("/student/ratings");
+  revalidatePath("/student/my-learning");
+  revalidatePath("/student/courses");
+  revalidatePath("/teacher/ratings");
   return { ok: true, data: { reviewId: data.id } };
 }
 
@@ -424,6 +451,7 @@ const submitTeacherReviewSchema = z.object({
   teacherId: z.string().uuid(),
   rating: z.coerce.number().int().min(1).max(5),
   comment: z.string().trim().max(2500).optional(),
+  improvementSuggestions: z.string().trim().max(2000).optional(),
 });
 
 export async function studentSaveTeacherReviewAction(
@@ -457,6 +485,7 @@ export async function studentSaveTeacherReviewAction(
       .update({
         rating: parsed.data.rating,
         comment: parsed.data.comment || null,
+        improvement_suggestions: parsed.data.improvementSuggestions || null,
       })
       .eq("id", existing.id)
       .eq("student_id", studentId)
@@ -467,6 +496,8 @@ export async function studentSaveTeacherReviewAction(
       return { ok: false, error: error?.message ?? "Failed to update teacher rating." };
     }
     revalidatePath("/student/ratings");
+    revalidatePath("/student/my-learning");
+    revalidatePath("/teacher/ratings");
     return { ok: true, data: { reviewId: data.id } };
   }
 
@@ -478,7 +509,9 @@ export async function studentSaveTeacherReviewAction(
       course_id: parsed.data.courseId,
       rating: parsed.data.rating,
       comment: parsed.data.comment || null,
+      improvement_suggestions: parsed.data.improvementSuggestions || null,
       is_published: true,
+      moderation_status: "approved",
     })
     .select("id")
     .single();
@@ -487,7 +520,21 @@ export async function studentSaveTeacherReviewAction(
     return { ok: false, error: error?.message ?? "Failed to submit teacher rating." };
   }
 
+  await supabase.rpc("dispatch_event_notification", {
+    p_recipient_ids: [parsed.data.teacherId],
+    p_type: "review",
+    p_title: `New Instructor Rating (${parsed.data.rating}★)`,
+    p_body: `A student submitted a ${parsed.data.rating}/5 instructor rating.`,
+    p_course_id: parsed.data.courseId,
+    p_action_url: "/teacher/ratings",
+    p_metadata: { reviewId: data.id },
+    p_is_announcement: false,
+    p_target_scope: "individual",
+  });
+
   revalidatePath("/student/ratings");
+  revalidatePath("/student/my-learning");
+  revalidatePath("/teacher/ratings");
   return { ok: true, data: { reviewId: data.id } };
 }
 
@@ -801,4 +848,230 @@ export async function studentSubmitExamAttemptAction(params: {
       isPublished: Boolean(data.is_published),
     },
   };
+}
+
+
+// -----------------------------------------------------------------------------
+// 6. STUDENT ASSIGNMENT DRAFT & SUBMISSION ACTION
+// -----------------------------------------------------------------------------
+const saveAssignmentSubmissionSchema = z.object({
+  assignmentId: z.string().uuid(),
+  submissionText: z.string().trim().max(25000).optional(),
+  attachmentStoragePath: z.string().trim().max(500).nullable().optional(),
+  attachmentFileName: z.string().trim().max(240).nullable().optional(),
+  attachmentMimeType: z.string().trim().max(140).nullable().optional(),
+  isDraft: z.boolean().default(false),
+});
+
+export async function studentSaveAssignmentSubmissionAction(
+  input: z.infer<typeof saveAssignmentSubmissionSchema>,
+): Promise<ServiceResult<{ submissionId: string; status: string }>> {
+  const auth = await requireRole(["student", "teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = saveAssignmentSubmissionSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid submission payload.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const studentId = auth.data.userId;
+  const studentName =
+    auth.data.fullName?.trim() || auth.data.email || "Student";
+
+  const { data: asg, error: asgErr } = await supabase
+    .from("assignments")
+    .select("*")
+    .eq("id", parsed.data.assignmentId)
+    .maybeSingle();
+
+  if (asgErr || !asg || !asg.is_published) {
+    return {
+      ok: false,
+      error: asgErr?.message ?? "Assignment not found or unavailable.",
+    };
+  }
+
+  const cleanText = parsed.data.submissionText?.trim() || null;
+  const cleanPath = parsed.data.attachmentStoragePath || null;
+
+  if (!parsed.data.isDraft && !cleanText && !cleanPath) {
+    return {
+      ok: false,
+      error: "Please write an answer or upload an assignment file before submitting.",
+    };
+  }
+
+  const now = new Date();
+  const isPastDue = Boolean(asg.due_at && new Date(asg.due_at) < now);
+
+  if (!parsed.data.isDraft && isPastDue && !asg.allow_late_submissions) {
+    return {
+      ok: false,
+      error: "The deadline for this assignment has passed and late submissions are closed.",
+    };
+  }
+
+  const nextStatus: "draft" | "submitted" | "late" = parsed.data.isDraft
+    ? "draft"
+    : isPastDue
+      ? "late"
+      : "submitted";
+
+  const { data: existing } = await supabase
+    .from("assignment_submissions")
+    .select("id, is_grade_published, status")
+    .eq("assignment_id", asg.id)
+    .eq("student_id", studentId)
+    .maybeSingle();
+
+  if (existing?.is_grade_published || existing?.status === "graded") {
+    return {
+      ok: false,
+      error: "This assignment has already been graded and locked.",
+    };
+  }
+
+  let submissionId = existing?.id ?? "";
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from("assignment_submissions")
+      .update({
+        submission_text: cleanText,
+        attachment_storage_path: cleanPath,
+        attachment_file_name: parsed.data.attachmentFileName ?? null,
+        attachment_mime_type: parsed.data.attachmentMimeType ?? null,
+        status: nextStatus,
+        submitted_at: now.toISOString(),
+      })
+      .eq("id", existing.id)
+      .eq("student_id", studentId)
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message ?? "Failed to update assignment submission.",
+      };
+    }
+    submissionId = data.id;
+  } else {
+    const { data, error } = await supabase
+      .from("assignment_submissions")
+      .insert({
+        assignment_id: asg.id,
+        student_id: studentId,
+        submission_text: cleanText,
+        attachment_storage_path: cleanPath,
+        attachment_file_name: parsed.data.attachmentFileName ?? null,
+        attachment_mime_type: parsed.data.attachmentMimeType ?? null,
+        status: nextStatus,
+        submitted_at: now.toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return {
+        ok: false,
+        error: error?.message ?? "Failed to save assignment submission.",
+      };
+    }
+    submissionId = data.id;
+  }
+
+  if (!parsed.data.isDraft) {
+    const { data: courseRow } = await supabase
+      .from("courses")
+      .select("teacher_id, title")
+      .eq("id", asg.course_id)
+      .maybeSingle();
+
+    if (courseRow?.teacher_id) {
+      await supabase.rpc("dispatch_event_notification", {
+        p_recipient_ids: [courseRow.teacher_id],
+        p_type: "assignment",
+        p_title: `Assignment Submitted: ${asg.title}`,
+        p_body: `${studentName} submitted "${asg.title}"${nextStatus === "late" ? " (Late)" : ""}.`,
+        p_course_id: asg.course_id,
+        p_action_url: "/teacher/grading",
+        p_metadata: { assignmentId: asg.id, submissionId },
+        p_is_announcement: false,
+        p_target_scope: "individual",
+      });
+    }
+  }
+
+  revalidatePath("/student");
+  revalidatePath("/student/assignments");
+  revalidatePath("/teacher");
+  revalidatePath("/teacher/grading");
+  return { ok: true, data: { submissionId, status: nextStatus } };
+}
+
+export async function studentToggleLessonCompletionAction(params: {
+  courseId: string;
+  lessonId: string;
+  completed: boolean;
+}): Promise<ServiceResult<{ courseProgressPercent: number }>> {
+  const auth = await requireRole(["student", "teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const supabase = await createSupabaseServerClient();
+  const studentId = auth.data.userId;
+  const nowIso = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from("lesson_progress")
+    .select("id")
+    .eq("lesson_id", params.lessonId)
+    .eq("student_id", studentId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("lesson_progress")
+      .update({
+        is_completed: params.completed,
+        completed_at: params.completed ? nowIso : null,
+      })
+      .eq("id", existing.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase.from("lesson_progress").insert({
+      course_id: params.courseId,
+      lesson_id: params.lessonId,
+      student_id: studentId,
+      is_completed: params.completed,
+      completed_at: params.completed ? nowIso : null,
+      watched_seconds: params.completed ? 60 : 0,
+    });
+    if (error) return { ok: false, error: error.message };
+  }
+
+  const { data: enr } = await supabase
+    .from("course_enrollments")
+    .select("progress_percent")
+    .eq("course_id", params.courseId)
+    .eq("student_id", studentId)
+    .maybeSingle();
+
+  const pct = Number(enr?.progress_percent ?? 0);
+  if (pct >= 100) {
+    await supabase.rpc("issue_my_course_certificate", {
+      p_course_id: params.courseId,
+    });
+  }
+
+  revalidatePath("/student");
+  revalidatePath("/student/my-learning");
+  revalidatePath("/student/courses");
+  revalidatePath(`/student/courses/${params.lessonId}`);
+  revalidatePath("/student/performance");
+  return { ok: true, data: { courseProgressPercent: pct } };
 }

@@ -15,6 +15,8 @@ export interface AdminOverviewData {
   suspendedUsers: number;
   pendingTeacherRequests: number;
   totalExaminations: number;
+  totalAssignments: number;
+  totalReviews: number;
   totalEnrollments: number;
   completedEnrollments: number;
   activeEnrollments: number;
@@ -41,6 +43,9 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
     archivedCoursesCountRes,
     teacherReqsRes,
     examsCountRes,
+    assignmentsCountRes,
+    courseReviewsCountRes,
+    teacherReviewsCountRes,
     completedEnrCountRes,
     activeEnrCountRes,
     droppedEnrCountRes,
@@ -70,20 +75,26 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
     supabase
       .from("courses")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .eq("status", "published"),
     supabase
       .from("courses")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .eq("status", "draft"),
     supabase
       .from("courses")
       .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
       .eq("status", "archived"),
     supabase
       .from("teacher_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending"),
     supabase.from("exams").select("id", { count: "exact", head: true }),
+    supabase.from("assignments").select("id", { count: "exact", head: true }),
+    supabase.from("course_reviews").select("id", { count: "exact", head: true }),
+    supabase.from("teacher_reviews").select("id", { count: "exact", head: true }),
     supabase
       .from("course_enrollments")
       .select("id", { count: "exact", head: true })
@@ -127,6 +138,9 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
   const droppedEnrollments = droppedEnrCountRes.count ?? 0;
   const totalEnrollments = completedEnrollments + activeEnrollments + droppedEnrollments;
 
+  const totalReviews =
+    (courseReviewsCountRes.count ?? 0) + (teacherReviewsCountRes.count ?? 0);
+
   const completionRatePercent =
     totalEnrollments > 0
       ? Number(((completedEnrollments / totalEnrollments) * 100).toFixed(1))
@@ -145,6 +159,8 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
       suspendedUsers,
       pendingTeacherRequests: teacherReqsRes.count ?? 0,
       totalExaminations: examsCountRes.count ?? 0,
+      totalAssignments: assignmentsCountRes.count ?? 0,
+      totalReviews,
       totalEnrollments,
       completedEnrollments,
       activeEnrollments,
@@ -157,6 +173,7 @@ export async function getAdminOverviewData(): Promise<ServiceResult<AdminOvervie
 }
 
 export interface AdminUsersManagementData {
+  currentAdminId: string;
   profiles: Array<TableRow<"profiles">>;
   teacherRequests: Array<TableRow<"teacher_requests">>;
   permissions: Array<TableRow<"permissions">>;
@@ -212,6 +229,7 @@ export async function getAdminUsersManagementData(): Promise<
   return {
     ok: true,
     data: {
+      currentAdminId: adminCheck.data.userId,
       profiles: profilesRes.data ?? [],
       teacherRequests: requestsRes.data ?? [],
       permissions: permissionsRes.data ?? [],
@@ -275,6 +293,11 @@ export async function getAdminDepartmentsData(): Promise<ServiceResult<AdminDepa
   };
 }
 
+export interface AdminCategoryItem {
+  category: TableRow<"categories">;
+  coursesCount: number;
+}
+
 export interface AdminCourseManagementItem {
   course: TableRow<"courses">;
   teacherName: string;
@@ -286,6 +309,7 @@ export interface AdminCourseManagementItem {
 
 export interface AdminCoursesData {
   courses: AdminCourseManagementItem[];
+  categories: AdminCategoryItem[];
   teachers: Array<Pick<TableRow<"profiles">, "id" | "full_name" | "email">>;
   departments: Array<TableRow<"departments">>;
 }
@@ -296,13 +320,18 @@ export async function getAdminCoursesData(): Promise<ServiceResult<AdminCoursesD
 
   const supabase = await createSupabaseServerClient();
 
-  const [coursesRes, profilesRes, enrollmentsRes, reviewsRes, deptsRes] = await Promise.all([
-    supabase.from("courses").select("*").order("created_at", { ascending: false }),
-    supabase.from("profiles").select("id, full_name, email, role"),
-    supabase.from("course_enrollments").select("course_id"),
-    supabase.from("course_reviews").select("course_id, rating"),
-    supabase.from("departments").select("*").order("name", { ascending: true }),
-  ]);
+  const [coursesRes, categoriesRes, profilesRes, enrollmentsRes, reviewsRes, deptsRes] =
+    await Promise.all([
+      supabase.from("courses").select("*").order("created_at", { ascending: false }),
+      supabase.from("categories").select("*").order("name", { ascending: true }),
+      supabase.from("profiles").select("id, full_name, email, role"),
+      supabase.from("course_enrollments").select("course_id"),
+      supabase
+        .from("course_reviews")
+        .select("course_id, rating")
+        .eq("moderation_status", "approved"),
+      supabase.from("departments").select("*").order("name", { ascending: true }),
+    ]);
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
   if (profilesRes.error) return { ok: false, error: profilesRes.error.message };
@@ -327,7 +356,9 @@ export async function getAdminCoursesData(): Promise<ServiceResult<AdminCoursesD
     ratingsAgg.set(r.course_id, curr);
   }
 
-  const courses: AdminCourseManagementItem[] = (coursesRes.data ?? []).map((course) => {
+  const allCourses = coursesRes.data ?? [];
+
+  const courses: AdminCourseManagementItem[] = allCourses.map((course) => {
     const teacher = profilesMap.get(course.teacher_id);
     const ratingInfo = ratingsAgg.get(course.id);
     return {
@@ -343,6 +374,19 @@ export async function getAdminCoursesData(): Promise<ServiceResult<AdminCoursesD
     };
   });
 
+  const categories: AdminCategoryItem[] = (categoriesRes.data ?? []).map((cat) => {
+    const coursesCount = allCourses.filter(
+      (c) =>
+        !c.deleted_at &&
+        (c.category_id === cat.id ||
+          c.category.toLowerCase() === cat.name.toLowerCase()),
+    ).length;
+    return {
+      category: cat,
+      coursesCount,
+    };
+  });
+
   const teachers = (profilesRes.data ?? []).filter(
     (p) => p.role === "teacher" || p.role === "admin",
   );
@@ -351,6 +395,7 @@ export async function getAdminCoursesData(): Promise<ServiceResult<AdminCoursesD
     ok: true,
     data: {
       courses,
+      categories,
       teachers,
       departments: deptsRes.data ?? [],
     },
@@ -386,7 +431,11 @@ export async function getAdminScheduleAndAttendanceData(): Promise<
       .select("*")
       .order("recorded_at", { ascending: false }),
     supabase.from("classes").select("*").order("code", { ascending: true }),
-    supabase.from("courses").select("id, title, code").order("title", { ascending: true }),
+    supabase
+      .from("courses")
+      .select("id, title, code")
+      .is("deleted_at", null)
+      .order("title", { ascending: true }),
     supabase.from("profiles").select("id, full_name, email, role"),
   ]);
 
@@ -413,12 +462,26 @@ export async function getAdminScheduleAndAttendanceData(): Promise<
 export interface AdminAnalyticsReportData {
   results: Array<TableRow<"results">>;
   exams: Array<Pick<TableRow<"exams">, "id" | "title" | "course_id" | "passing_score">>;
-  courses: Array<Pick<TableRow<"courses">, "id" | "title" | "code" | "category" | "teacher_id" | "class_id">>;
+  courses: Array<
+    Pick<
+      TableRow<"courses">,
+      "id" | "title" | "code" | "category" | "teacher_id" | "class_id" | "status"
+    >
+  >;
   enrollments: Array<TableRow<"course_enrollments">>;
+  assignments: Array<Pick<TableRow<"assignments">, "id" | "title" | "course_id" | "max_points">>;
+  assignmentSubmissions: Array<
+    Pick<
+      TableRow<"assignment_submissions">,
+      "id" | "assignment_id" | "student_id" | "grade_points" | "status" | "submitted_at"
+    >
+  >;
   classes: Array<Pick<TableRow<"classes">, "id" | "name" | "code">>;
   teacherReviews: Array<TableRow<"teacher_reviews">>;
   courseReviews: Array<TableRow<"course_reviews">>;
-  profiles: Array<Pick<TableRow<"profiles">, "id" | "full_name" | "email" | "role">>;
+  profiles: Array<
+    Pick<TableRow<"profiles">, "id" | "full_name" | "email" | "role" | "status" | "created_at">
+  >;
 }
 
 export async function getAdminAnalyticsReportData(): Promise<
@@ -434,6 +497,8 @@ export async function getAdminAnalyticsReportData(): Promise<
     examsRes,
     coursesRes,
     enrollmentsRes,
+    assignmentsRes,
+    assignmentSubsRes,
     classesRes,
     tReviewsRes,
     cReviewsRes,
@@ -443,12 +508,21 @@ export async function getAdminAnalyticsReportData(): Promise<
     supabase.from("exams").select("id, title, course_id, passing_score"),
     supabase
       .from("courses")
-      .select("id, title, code, category, teacher_id, class_id"),
+      .select("id, title, code, category, teacher_id, class_id, status")
+      .is("deleted_at", null),
     supabase.from("course_enrollments").select("*"),
+    supabase.from("assignments").select("id, title, course_id, max_points"),
+    supabase
+      .from("assignment_submissions")
+      .select("id, assignment_id, student_id, grade_points, status, submitted_at")
+      .neq("status", "draft"),
     supabase.from("classes").select("id, name, code"),
-    supabase.from("teacher_reviews").select("*"),
-    supabase.from("course_reviews").select("*"),
-    supabase.from("profiles").select("id, full_name, email, role"),
+    supabase.from("teacher_reviews").select("*").eq("moderation_status", "approved"),
+    supabase.from("course_reviews").select("*").eq("moderation_status", "approved"),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role, status, created_at")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (resultsRes.error) return { ok: false, error: resultsRes.error.message };
@@ -467,6 +541,8 @@ export async function getAdminAnalyticsReportData(): Promise<
       exams: examsRes.data ?? [],
       courses: coursesRes.data ?? [],
       enrollments: enrollmentsRes.data ?? [],
+      assignments: assignmentsRes.data ?? [],
+      assignmentSubmissions: assignmentSubsRes.data ?? [],
       classes: classesRes.data ?? [],
       teacherReviews: tReviewsRes.data ?? [],
       courseReviews: cReviewsRes.data ?? [],
@@ -476,12 +552,24 @@ export async function getAdminAnalyticsReportData(): Promise<
 }
 
 export interface AdminSecurityControlData {
+  securityEvents: Array<TableRow<"security_events">>;
+  examViolations: Array<
+    TableRow<"exam_violations"> & {
+      studentName: string;
+      studentEmail: string;
+    }
+  >;
   auditLogs: Array<TableRow<"audit_logs">>;
   devices: Array<TableRow<"user_devices">>;
   roles: Array<TableRow<"roles">>;
   permissions: Array<TableRow<"permissions">>;
   rolePermissions: Array<TableRow<"role_permissions">>;
-  profiles: Array<Pick<TableRow<"profiles">, "id" | "full_name" | "email" | "role" | "status">>;
+  profiles: Array<
+    Pick<
+      TableRow<"profiles">,
+      "id" | "full_name" | "email" | "role" | "status" | "suspension_reason" | "suspended_at"
+    >
+  >;
 }
 
 export async function getAdminSecurityControlData(): Promise<
@@ -492,22 +580,43 @@ export async function getAdminSecurityControlData(): Promise<
 
   const supabase = await createSupabaseServerClient();
 
-  const [auditRes, devicesRes, rolesRes, permsRes, rolePermsRes, profilesRes] =
-    await Promise.all([
-      supabase
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200),
-      supabase
-        .from("user_devices")
-        .select("*")
-        .order("last_active_at", { ascending: false }),
-      supabase.from("roles").select("*").order("code", { ascending: true }),
-      supabase.from("permissions").select("*").order("code", { ascending: true }),
-      supabase.from("role_permissions").select("*"),
-      supabase.from("profiles").select("id, full_name, email, role, status"),
-    ]);
+  const [
+    secEventsRes,
+    violationsRes,
+    auditRes,
+    devicesRes,
+    rolesRes,
+    permsRes,
+    rolePermsRes,
+    profilesRes,
+  ] = await Promise.all([
+    supabase
+      .from("security_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("exam_violations")
+      .select("*")
+      .order("occurred_at", { ascending: false })
+      .limit(150),
+    supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("user_devices")
+      .select("*")
+      .order("last_active_at", { ascending: false }),
+    supabase.from("roles").select("*").order("code", { ascending: true }),
+    supabase.from("permissions").select("*").order("code", { ascending: true }),
+    supabase.from("role_permissions").select("*"),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role, status, suspension_reason, suspended_at")
+      .order("created_at", { ascending: false }),
+  ]);
 
   if (auditRes.error) return { ok: false, error: auditRes.error.message };
   if (devicesRes.error) return { ok: false, error: devicesRes.error.message };
@@ -516,9 +625,21 @@ export async function getAdminSecurityControlData(): Promise<
   if (rolePermsRes.error) return { ok: false, error: rolePermsRes.error.message };
   if (profilesRes.error) return { ok: false, error: profilesRes.error.message };
 
+  const profilesMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
+  const examViolations = (violationsRes.data ?? []).map((v) => {
+    const stu = profilesMap.get(v.student_id);
+    return {
+      ...v,
+      studentName: stu?.full_name || stu?.email || "Student",
+      studentEmail: stu?.email || "",
+    };
+  });
+
   return {
     ok: true,
     data: {
+      securityEvents: secEventsRes.data ?? [],
+      examViolations,
       auditLogs: auditRes.data ?? [],
       devices: devicesRes.data ?? [],
       roles: rolesRes.data ?? [],
@@ -529,8 +650,14 @@ export async function getAdminSecurityControlData(): Promise<
   };
 }
 
+export interface AdminNotificationHistoryRow extends TableRow<"notifications"> {
+  deliveredCount: number;
+  readCount: number;
+}
+
 export interface AdminNotificationsData {
-  notifications: Array<TableRow<"notifications">>;
+  notifications: Array<AdminNotificationHistoryRow>;
+  contactMessages: Array<TableRow<"contact_messages">>;
   departments: Array<Pick<TableRow<"departments">, "id" | "name" | "code">>;
   classes: Array<Pick<TableRow<"classes">, "id" | "name" | "code">>;
   profiles: Array<Pick<TableRow<"profiles">, "id" | "full_name" | "email" | "role">>;
@@ -544,29 +671,199 @@ export async function getAdminNotificationsData(): Promise<
 
   const supabase = await createSupabaseServerClient();
 
-  const [notifsRes, deptsRes, classesRes, profilesRes] = await Promise.all([
-    supabase
-      .from("notifications")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase.from("departments").select("id, name, code").order("name", { ascending: true }),
-    supabase.from("classes").select("id, name, code").order("code", { ascending: true }),
-    supabase.from("profiles").select("id, full_name, email, role"),
-  ]);
+  const [notifsRes, contactsRes, deptsRes, classesRes, profilesRes] =
+    await Promise.all([
+      supabase
+        .from("notifications")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("contact_messages")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50),
+      supabase
+        .from("departments")
+        .select("id, name, code")
+        .order("name", { ascending: true }),
+      supabase
+        .from("classes")
+        .select("id, name, code")
+        .order("code", { ascending: true }),
+      supabase.from("profiles").select("id, full_name, email, role"),
+    ]);
 
   if (notifsRes.error) return { ok: false, error: notifsRes.error.message };
   if (deptsRes.error) return { ok: false, error: deptsRes.error.message };
   if (classesRes.error) return { ok: false, error: classesRes.error.message };
   if (profilesRes.error) return { ok: false, error: profilesRes.error.message };
 
+  const notifList = notifsRes.data ?? [];
+  const notifIds = notifList.map((n) => n.id);
+
+  const recipientsRes =
+    notifIds.length > 0
+      ? await supabase
+          .from("notification_recipients")
+          .select("notification_id, is_read")
+          .in("notification_id", notifIds)
+      : { data: [] as Array<{ notification_id: string; is_read: boolean }> };
+
+  const statsMap = new Map<string, { delivered: number; read: number }>();
+  for (const row of recipientsRes.data ?? []) {
+    const curr = statsMap.get(row.notification_id) ?? { delivered: 0, read: 0 };
+    curr.delivered += 1;
+    if (row.is_read) curr.read += 1;
+    statsMap.set(row.notification_id, curr);
+  }
+
+  const notifications: Array<AdminNotificationHistoryRow> = notifList.map((n) => {
+    const st = statsMap.get(n.id) ?? { delivered: 0, read: 0 };
+    return {
+      ...n,
+      deliveredCount: st.delivered,
+      readCount: st.read,
+    };
+  });
+
   return {
     ok: true,
     data: {
-      notifications: notifsRes.data ?? [],
+      notifications,
+      contactMessages: contactsRes.data ?? [],
       departments: deptsRes.data ?? [],
       classes: classesRes.data ?? [],
       profiles: profilesRes.data ?? [],
+    },
+  };
+}
+
+export interface AdminModeratedReviewItem {
+  id: string;
+  reviewType: "course" | "teacher";
+  courseId: string | null;
+  courseTitle: string;
+  teacherId: string | null;
+  teacherName: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  rating: number;
+  comment: string | null;
+  improvementSuggestions: string | null;
+  moderationStatus: string;
+  moderationReason: string | null;
+  isPublished: boolean;
+  createdAt: string;
+}
+
+export interface AdminReviewsModerationData {
+  reviews: Array<AdminModeratedReviewItem>;
+  courses: Array<{ id: string; title: string; code: string }>;
+  teachers: Array<{ id: string; name: string }>;
+}
+
+export async function getAdminReviewsModerationData(): Promise<
+  ServiceResult<AdminReviewsModerationData>
+> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const supabase = await createSupabaseServerClient();
+
+  const [courseReviewsRes, teacherReviewsRes, coursesRes, profilesRes] =
+    await Promise.all([
+      supabase
+        .from("course_reviews")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("teacher_reviews")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase.from("courses").select("id, title, code, teacher_id"),
+      supabase.from("profiles").select("id, full_name, email, role"),
+    ]);
+
+  if (courseReviewsRes.error) {
+    return { ok: false, error: courseReviewsRes.error.message };
+  }
+  if (teacherReviewsRes.error) {
+    return { ok: false, error: teacherReviewsRes.error.message };
+  }
+
+  const coursesMap = new Map((coursesRes.data ?? []).map((c) => [c.id, c]));
+  const profilesMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
+
+  const combined: Array<AdminModeratedReviewItem> = [
+    ...(courseReviewsRes.data ?? []).map((cr) => {
+      const course = coursesMap.get(cr.course_id);
+      const teacher = course ? profilesMap.get(course.teacher_id) : undefined;
+      const student = profilesMap.get(cr.student_id);
+      return {
+        id: cr.id,
+        reviewType: "course" as const,
+        courseId: cr.course_id,
+        courseTitle: course?.title ?? "Course",
+        teacherId: course?.teacher_id ?? null,
+        teacherName: teacher?.full_name || teacher?.email || "Instructor",
+        studentId: cr.student_id,
+        studentName: student?.full_name || student?.email || "Student",
+        studentEmail: student?.email || "",
+        rating: cr.rating,
+        comment: cr.comment,
+        improvementSuggestions: cr.improvement_suggestions,
+        moderationStatus: cr.moderation_status,
+        moderationReason: cr.moderation_reason,
+        isPublished: cr.is_published,
+        createdAt: cr.created_at,
+      };
+    }),
+    ...(teacherReviewsRes.data ?? []).map((tr) => {
+      const course = tr.course_id ? coursesMap.get(tr.course_id) : undefined;
+      const teacher = profilesMap.get(tr.teacher_id);
+      const student = profilesMap.get(tr.student_id);
+      return {
+        id: tr.id,
+        reviewType: "teacher" as const,
+        courseId: tr.course_id,
+        courseTitle: course?.title ?? "General",
+        teacherId: tr.teacher_id,
+        teacherName: teacher?.full_name || teacher?.email || "Instructor",
+        studentId: tr.student_id,
+        studentName: student?.full_name || student?.email || "Student",
+        studentEmail: student?.email || "",
+        rating: tr.rating,
+        comment: tr.comment,
+        improvementSuggestions: tr.improvement_suggestions,
+        moderationStatus: tr.moderation_status,
+        moderationReason: tr.moderation_reason,
+        isPublished: tr.is_published,
+        createdAt: tr.created_at,
+      };
+    }),
+  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const courses = (coursesRes.data ?? []).map((c) => ({
+    id: c.id,
+    title: c.title,
+    code: c.code,
+  }));
+
+  const teachers = (profilesRes.data ?? [])
+    .filter((p) => p.role === "teacher")
+    .map((t) => ({
+      id: t.id,
+      name: t.full_name || t.email,
+    }));
+
+  return {
+    ok: true,
+    data: {
+      reviews: combined,
+      courses,
+      teachers,
     },
   };
 }

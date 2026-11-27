@@ -12,6 +12,7 @@ import {
   CalendarClock,
   LayoutDashboard,
   LogOut,
+  MessageSquareWarning,
   Settings,
   ShieldAlert,
   User,
@@ -100,6 +101,12 @@ export function AdminShell({
             href: "/admin/courses",
             icon: BookOpen,
             mobilePrimary: true,
+          },
+          {
+            id: "admin-reviews",
+            label: "Reviews Moderation",
+            href: "/admin/reviews",
+            icon: MessageSquareWarning,
           },
           {
             id: "admin-schedule",

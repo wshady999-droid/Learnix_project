@@ -109,8 +109,15 @@ export function AppSidebar({
   const pathname = usePathname();
   const { state, isCompact, toggle } = useSidebar();
   
-  // التعديل هنا: بنجيب اسم القسم من الرابط
-  const currentRole = pathname.split("/")[1] || "student";
+  const seg = pathname.split("/")[1] || "";
+  const currentRole =
+    seg === "admin" || seg === "teacher" || seg === "student"
+      ? seg
+      : sections[0]?.id.startsWith("admin")
+        ? "admin"
+        : sections[0]?.id.startsWith("teacher")
+          ? "teacher"
+          : "student";
 
   return (
     <TooltipProvider delayDuration={120}>
@@ -208,8 +215,15 @@ export function MobileNavDrawer({
   const pathname = usePathname();
   const { mobileOpen, setMobileOpen } = useSidebar();
   
-  // التعديل هنا: بنجيب اسم القسم من الرابط
-  const currentRole = pathname.split("/")[1] || "student";
+  const seg = pathname.split("/")[1] || "";
+  const currentRole =
+    seg === "admin" || seg === "teacher" || seg === "student"
+      ? seg
+      : sections[0]?.id.startsWith("admin")
+        ? "admin"
+        : sections[0]?.id.startsWith("teacher")
+          ? "teacher"
+          : "student";
 
   return (
     <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

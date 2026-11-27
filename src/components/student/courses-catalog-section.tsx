@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
   BookOpen,
   CheckCircle2,
   Clock,
+  Eye,
   RefreshCw,
   Search,
   Sparkles,
+  Star,
   Tag,
   User,
+  Users,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,12 +29,12 @@ import {
 import { COURSE_CATEGORIES } from "@/lib/constants/categories";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_CATEGORIES = ["All", ...COURSE_CATEGORIES] as const;
-
 export interface CoursesCatalogSectionProps {
   initialCourses?: CatalogCourseItem[];
+  availableCategories?: string[];
   enrolledCourseIds?: ReadonlySet<string>;
   onSelectCourse?: (course: CatalogCourseItem, isEnrolled: boolean) => void;
+  onInspectCourse?: (course: CatalogCourseItem, isEnrolled: boolean) => void;
   isSubmitting?: boolean;
   searchQuery?: string;
   onSearchQueryChange?: (value: string) => void;
@@ -39,18 +42,22 @@ export interface CoursesCatalogSectionProps {
 
 export function CoursesCatalogSection({
   initialCourses,
+  availableCategories,
   enrolledCourseIds,
   onSelectCourse,
+  onInspectCourse,
   isSubmitting = false,
   searchQuery,
   onSearchQueryChange,
 }: CoursesCatalogSectionProps) {
   const { courses, loading, error, refetch } = useCoursesCatalog(initialCourses);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [enrollmentFilter, setEnrollmentFilter] = useState<
+    "all" | "enrolled" | "available"
+  >("all");
   const [internalSearch, setInternalSearch] = useState<string>("");
-  
+
   const scrollRef = useRef<HTMLDivElement>(null);
-  const isHoveredRef = useRef(false);
   const isDraggingRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
@@ -66,14 +73,30 @@ export function CoursesCatalogSection({
     }
   }
 
-  const categories = useMemo(() => [...DEFAULT_CATEGORIES], []);
+  const categories = useMemo(() => {
+    const set = new Set<string>(
+      availableCategories && availableCategories.length > 0
+        ? availableCategories
+        : [...COURSE_CATEGORIES],
+    );
+    for (const c of courses) {
+      if (c.category?.trim()) {
+        set.add(c.category.trim());
+      }
+    }
+    return ["All", ...Array.from(set)];
+  }, [availableCategories, courses]);
 
   const filteredCourses = useMemo(() => {
     const q = activeSearch.trim().toLowerCase();
     return courses.filter((course) => {
+      const isEnrolled = enrolledCourseIds?.has(course.id) ?? false;
+      if (enrollmentFilter === "enrolled" && !isEnrolled) return false;
+      if (enrollmentFilter === "available" && isEnrolled) return false;
+
       const matchesCategory =
         selectedCategory === "All" ||
-        course.category.trim() === selectedCategory;
+        course.category.trim().toLowerCase() === selectedCategory.toLowerCase();
 
       if (!matchesCategory) return false;
       if (!q) return true;
@@ -92,34 +115,7 @@ export function CoursesCatalogSection({
         teacherName.includes(q)
       );
     });
-  }, [courses, selectedCategory, activeSearch]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    let animationFrameId: number;
-    const scrollSpeed = 0.8;
-
-    const scroll = () => {
-      if (!isHoveredRef.current && !isDraggingRef.current && el) {
-        el.scrollLeft += scrollSpeed;
-        if (el.scrollLeft >= el.scrollWidth - el.clientWidth - 1) {
-          el.scrollLeft = 0;
-        }
-      }
-      animationFrameId = requestAnimationFrame(scroll);
-    };
-
-    animationFrameId = requestAnimationFrame(scroll);
-    return () => cancelAnimationFrame(animationFrameId);
-  }, []);
-
-  const handleMouseEnter = () => { isHoveredRef.current = true; };
-  const handleMouseLeave = () => {
-    isHoveredRef.current = false;
-    isDraggingRef.current = false;
-  };
+  }, [courses, selectedCategory, activeSearch, enrollmentFilter, enrolledCourseIds]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!scrollRef.current) return;
@@ -132,32 +128,26 @@ export function CoursesCatalogSection({
     if (!isDraggingRef.current || !scrollRef.current) return;
     e.preventDefault();
     const x = e.pageX - scrollRef.current.offsetLeft;
-    const walk = (x - startXRef.current) * 1.5; 
+    const walk = (x - startXRef.current) * 1.5;
     scrollRef.current.scrollLeft = scrollLeftRef.current - walk;
   };
 
-  const handleMouseUp = () => {
+  const stopDrag = () => {
     isDraggingRef.current = false;
   };
 
   return (
-    <section aria-label="Courses Catalog" className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        
+    <section aria-label="Courses Catalog" className="space-y-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div
           ref={scrollRef}
           role="tablist"
           aria-label="Course categories"
-          className="relative flex w-full items-center gap-2 overflow-x-auto pb-2 lg:pb-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing"
-          style={{
-            maskImage: "linear-gradient(to right, transparent, black 5%, black 95%, transparent)",
-            WebkitMaskImage: "linear-gradient(to right, transparent, black 5%, black 95%, transparent)",
-          }}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
+          className="relative flex w-full cursor-grab items-center gap-2 overflow-x-auto pb-2 active:cursor-grabbing lg:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onMouseLeave={stopDrag}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
+          onMouseUp={stopDrag}
         >
           {categories.map((category) => {
             const isActive =
@@ -172,14 +162,14 @@ export function CoursesCatalogSection({
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-200",
                   isActive
-                    ? "border-[#10b981] bg-[#10b981] text-white shadow-[0_4px_14px_rgba(16,185,129,0.35)]" // التعديل هنا: غيرنا الذهبي للأخضر
-                    : "border-border bg-white/20 backdrop-blur-md text-muted-foreground hover:border-[#10b981]/60 hover:text-foreground dark:bg-[#121a19]",
+                    ? "border-[#10b981] bg-[#10b981] text-white shadow-[0_4px_14px_rgba(16,185,129,0.35)]"
+                    : "border-border bg-white/20 text-muted-foreground backdrop-blur-md hover:border-[#10b981]/60 hover:text-foreground dark:bg-[#121a19]",
                 )}
               >
                 <Tag
                   className={cn(
                     "size-3.5",
-                    isActive ? "text-white" : "text-[#10b981]", // التعديل هنا
+                    isActive ? "text-white" : "text-[#10b981]",
                   )}
                   aria-hidden="true"
                 />
@@ -189,17 +179,45 @@ export function CoursesCatalogSection({
           })}
         </div>
 
-        {searchQuery === undefined && (
-          <div className="relative w-full shrink-0 lg:w-72">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={activeSearch}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Search courses or teachers..."
-              className="pl-9 bg-white/20 backdrop-blur-md dark:bg-[#121a19]"
-            />
-          </div>
-        )}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {enrolledCourseIds && (
+            <div className="inline-flex rounded-xl border border-border bg-white/20 p-1 backdrop-blur-md dark:bg-[#121a19]">
+              {(
+                [
+                  { id: "all", label: "All" },
+                  { id: "available", label: "Not Enrolled" },
+                  { id: "enrolled", label: "Enrolled" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setEnrollmentFilter(opt.id)}
+                  className={cn(
+                    "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
+                    enrollmentFilter === opt.id
+                      ? "bg-[#10b981] text-white"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {searchQuery === undefined && (
+            <div className="relative w-full sm:w-64">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={activeSearch}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search courses or teachers..."
+                className="bg-white/20 pl-9 backdrop-blur-md dark:bg-[#121a19]"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {loading && courses.length === 0 && (
@@ -211,7 +229,7 @@ export function CoursesCatalogSection({
           {Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}
-              className="flex h-[380px] flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-white/20 backdrop-blur-md dark:bg-[#121a19] p-5 shadow-sm"
+              className="flex h-[390px] flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-white/20 p-5 shadow-sm backdrop-blur-md dark:bg-[#121a19]"
             >
               <div className="flex items-center justify-between">
                 <Skeleton className="h-6 w-28 rounded-full" />
@@ -255,7 +273,7 @@ export function CoursesCatalogSection({
       )}
 
       {!loading && !error && filteredCourses.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-white/20 backdrop-blur-md dark:bg-[#121a19] p-12 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-white/20 p-12 text-center backdrop-blur-md dark:bg-[#121a19]">
           <span className="inline-flex size-12 items-center justify-center rounded-full border border-[#10b981]/40 bg-[#10b981]/15 text-[#10b981]">
             <BookOpen className="size-6" aria-hidden="true" />
           </span>
@@ -264,23 +282,20 @@ export function CoursesCatalogSection({
               No Courses Found
             </h3>
             <p className="max-w-md text-xs text-muted-foreground">
-              {selectedCategory !== "All" || activeSearch.trim()
-                ? `No published courses matched "${selectedCategory}"${activeSearch.trim() ? ` and "${activeSearch.trim()}"` : ""}.`
-                : "No published courses are available in the catalog right now."}
+              No published courses matched your current filters.
             </p>
           </div>
-          {(selectedCategory !== "All" || activeSearch.trim()) && (
-            <Button
-              variant="gold"
-              size="sm"
-              onClick={() => {
-                setSelectedCategory("All");
-                handleSearchChange("");
-              }}
-            >
-              Reset Filters
-            </Button>
-          )}
+          <Button
+            variant="gold"
+            size="sm"
+            onClick={() => {
+              setSelectedCategory("All");
+              setEnrollmentFilter("all");
+              handleSearchChange("");
+            }}
+          >
+            Reset Filters
+          </Button>
         </div>
       )}
 
@@ -292,23 +307,18 @@ export function CoursesCatalogSection({
               course.teacher.full_name ||
               course.teacher.email ||
               "Learnix Instructor";
-            const priceLabel =
-              course.price === null || course.price === 0
-                ? "Free"
-                : `$${course.price.toFixed(2)}`;
-
             const coverImageSrc =
               course.thumbnail_url && course.thumbnail_url.trim()
                 ? course.thumbnail_url.trim()
                 : course.image_url || "/learnix-hero.jpg";
 
             return (
-              <div key={course.id} className="h-[380px] w-full">
+              <div key={course.id} className="h-[395px] w-full">
                 <TiltedCard
                   imageSrc={coverImageSrc}
                   altText={course.title}
                   captionText="Click card to flip for details"
-                  containerHeight="380px"
+                  containerHeight="395px"
                   containerWidth="100%"
                   imageHeight="100%"
                   imageWidth="100%"
@@ -317,23 +327,41 @@ export function CoursesCatalogSection({
                   showTooltip={true}
                   displayOverlayContent={true}
                   overlayContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-[#090A10]/95 via-[#090A10]/55 to-black/30 p-5 text-white">
+                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-[#090A10]/95 via-[#090A10]/60 to-black/30 p-5 text-white">
                       <div className="flex items-center justify-between gap-2">
                         <Badge className="border border-[#10b981]/60 bg-[#11131F]/85 px-3 py-1 text-[11px] font-semibold text-[#10b981] backdrop-blur-md">
                           <Tag className="mr-1 size-3" aria-hidden="true" />
                           {course.category}
                         </Badge>
+
+                        {isEnrolled ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs">
+                            <CheckCircle2 className="size-3" />
+                            Enrolled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
+                            Available
+                          </span>
+                        )}
                       </div>
+
                       <div className="space-y-3">
                         <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded bg-[#10b981]/20 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#34d399] uppercase">
                               {course.code}
                             </span>
-                            {isEnrolled && (
-                              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                                <CheckCircle2 className="size-3" />
-                                Enrolled
+                            {(course.reviewCount ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                <Star className="size-3 fill-amber-300 text-amber-300" />
+                                {course.ratingAvg} ({course.reviewCount})
+                              </span>
+                            )}
+                            {typeof course.enrollmentCount === "number" && (
+                              <span className="inline-flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/85">
+                                <Users className="size-3" />
+                                {course.enrollmentCount} students
                               </span>
                             )}
                           </div>
@@ -341,6 +369,7 @@ export function CoursesCatalogSection({
                             {course.title}
                           </h3>
                         </div>
+
                         <div className="flex items-center justify-between border-t border-white/15 pt-3 text-xs text-white/90">
                           <div className="flex min-w-0 items-center gap-2">
                             {course.teacher.avatar_url ? (
@@ -368,7 +397,7 @@ export function CoursesCatalogSection({
                     </div>
                   }
                   backContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-white/20 p-6 text-foreground backdrop-blur-md border border-white/20 dark:bg-[#121a19] dark:border-[#353644]">
+                    <div className="flex h-full w-full flex-col justify-between border border-white/20 bg-white/25 p-6 text-foreground backdrop-blur-md dark:border-[#353644] dark:bg-[#121a19]">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <Badge
@@ -378,18 +407,22 @@ export function CoursesCatalogSection({
                             <Sparkles className="mr-1 size-3" aria-hidden="true" />
                             {course.category}
                           </Badge>
-                          <span className="rounded-full border border-[#10b981]/45 bg-[#10b981]/15 px-3 py-0.5 font-mono text-xs font-bold text-[#047857] dark:text-[#34d399]">
-                            {priceLabel}
+                          <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-foreground">
+                            <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                            {(course.reviewCount ?? 0) > 0
+                              ? `${course.ratingAvg}/5 (${course.reviewCount})`
+                              : "New"}
                           </span>
                         </div>
                         <h3 className="line-clamp-2 text-base font-bold text-foreground">
                           {course.title}
                         </h3>
-                        <p className="line-clamp-5 text-xs leading-relaxed text-muted-foreground">
+                        <p className="line-clamp-4 text-xs leading-relaxed text-muted-foreground">
                           {course.description}
                         </p>
                       </div>
-                      <div className="space-y-4 border-t border-white/20 pt-3.5 dark:border-[#252630]">
+
+                      <div className="space-y-3 border-t border-white/20 pt-3 dark:border-[#252630]">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1.5 font-medium">
                             <User
@@ -408,23 +441,48 @@ export function CoursesCatalogSection({
                             <span>{course.duration}</span>
                           </span>
                         </div>
-                        <Button
-                          type="button"
-                          variant="gold"
-                          size="sm"
-                          disabled={isSubmitting}
-                          data-no-flip="true"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectCourse?.(course, isEnrolled);
-                          }}
-                          className="w-full justify-center gap-2 font-semibold"
-                        >
-                          <span>
-                            {isEnrolled ? "View Course" : "Enroll Now"}
-                          </span>
-                          <ArrowRight className="size-3.5" aria-hidden="true" />
-                        </Button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {onInspectCourse && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              data-no-flip="true"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onInspectCourse(course, isEnrolled);
+                              }}
+                              className="justify-center gap-1.5 text-xs"
+                            >
+                              <Eye className="size-3.5" />
+                              <span>Details</span>
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="gold"
+                            size="sm"
+                            disabled={isSubmitting}
+                            data-no-flip="true"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectCourse?.(course, isEnrolled);
+                            }}
+                            className={cn(
+                              "justify-center gap-1.5 font-semibold",
+                              !onInspectCourse && "col-span-2",
+                            )}
+                          >
+                            <span>
+                              {isEnrolled ? "Open Course" : "Enroll Now"}
+                            </span>
+                            <ArrowRight
+                              className="size-3.5"
+                              aria-hidden="true"
+                            />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   }

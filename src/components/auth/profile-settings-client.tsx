@@ -58,6 +58,7 @@ export interface NotificationPreferencesShape {
 interface ProfileSettingsClientProps {
   profile: ProfileRow;
   teacherRequest: TeacherRequestRow | null;
+  embedded?: boolean;
 }
 
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"];
@@ -95,6 +96,7 @@ function parseNotificationPrefs(raw: unknown): NotificationPreferencesShape {
 export function ProfileSettingsClient({
   profile,
   teacherRequest,
+  embedded = false,
 }: ProfileSettingsClientProps) {
   const router = useRouter();
   const { locale, setLocale, t } = useLocale();
@@ -109,6 +111,9 @@ export function ProfileSettingsClient({
     extractNationalDigits(profile.phone, profile.country_code),
   );
   const [bio, setBio] = useState(profile.bio ?? "");
+  const [specialization, setSpecialization] = useState(
+    profile.specialization ?? "",
+  );
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -202,6 +207,7 @@ export function ProfileSettingsClient({
       countryIso2,
       phone,
       bio,
+      specialization,
       avatarUrl,
     });
 
@@ -269,15 +275,29 @@ export function ProfileSettingsClient({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <UserAccountBar
-        fullName={fullName || profile.full_name}
-        email={profile.email}
-        role={profile.role}
-        avatarUrl={avatarUrl}
-      />
+    <div
+      className={
+        embedded
+          ? "w-full text-foreground"
+          : "flex min-h-dvh flex-col bg-background text-foreground"
+      }
+    >
+      {!embedded && (
+        <UserAccountBar
+          fullName={fullName || profile.full_name}
+          email={profile.email}
+          role={profile.role}
+          avatarUrl={avatarUrl}
+        />
+      )}
 
-      <main className="mx-auto w-full max-w-4xl flex-1 space-y-8 px-4 py-10 sm:px-6 lg:px-8">
+      <div
+        className={
+          embedded
+            ? "w-full space-y-8"
+            : "mx-auto w-full max-w-4xl flex-1 space-y-8 px-4 py-10 sm:px-6 lg:px-8"
+        }
+      >
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -411,6 +431,20 @@ export function ProfileSettingsClient({
                   />
                 </div>
               </div>
+
+              {profile.role === "teacher" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="profile-specialization">
+                    Academic Specialization
+                  </Label>
+                  <Input
+                    id="profile-specialization"
+                    value={specialization}
+                    onChange={(e) => setSpecialization(e.target.value)}
+                    placeholder="e.g., Full-Stack Web Engineering, Machine Learning, Cybersecurity"
+                  />
+                </div>
+              )}
 
               <div className="grid gap-2">
                 <Label htmlFor="profile-bio">{authT.profile.bioLabel}</Label>
@@ -597,7 +631,7 @@ export function ProfileSettingsClient({
             </form>
           </CardContent>
         </Card>
-      </main>
+      </div>
     </div>
   );
 }

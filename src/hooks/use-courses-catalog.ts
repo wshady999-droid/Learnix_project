@@ -11,6 +11,14 @@ export interface CatalogCourseTeacher {
   email?: string | null;
 }
 
+export interface CatalogApprovedReview {
+  id: string;
+  studentName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
 export interface CatalogCourseItem {
   id: string;
   code: string;
@@ -25,15 +33,14 @@ export interface CatalogCourseItem {
   estimated_hours: number;
   teacher_id: string;
   teacher: CatalogCourseTeacher;
+  ratingAvg?: number;
+  reviewCount?: number;
+  enrollmentCount?: number;
+  approvedReviews?: CatalogApprovedReview[];
 }
 
 const DEFAULT_COURSE_COVER = "/learnix-hero.jpg";
 
-/**
- * Fetches all published courses from Supabase along with the instructor's
- * `full_name` and `avatar_url` from `public.profiles` (joined via `teacher_id`).
- * Supports both schema variants (`thumbnail_url` / `image_url`, `estimated_hours` / `duration`, optional `price`).
- */
 export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
   const supabase = createSupabaseBrowserClient();
 
@@ -49,6 +56,7 @@ export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
       thumbnail_url,
       category,
       estimated_hours,
+      duration_unit,
       teacher_id,
       status,
       teacher:profiles!courses_teacher_id_fkey (
@@ -60,6 +68,7 @@ export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
     `,
     )
     .eq("status", "published")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (coursesError) {
@@ -67,36 +76,59 @@ export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
   }
 
   const rows = coursesData ?? [];
+  const courseIds = rows.map((r) => r.id);
 
-  // Fallback teacher resolution if foreign-key alias is not expanded or teacher profile wasn't embedded
-  const missingTeacherIds = Array.from(
-    new Set(
-      rows
-        .filter((row) => !row.teacher)
-        .map((row) => row.teacher_id)
-        .filter(Boolean),
-    ),
-  );
+  const [reviewsRes, missingTeacherProfilesRes] = await Promise.all([
+    courseIds.length > 0
+      ? supabase
+          .from("course_reviews")
+          .select("id, course_id, student_id, rating, comment, created_at")
+          .in("course_id", courseIds)
+          .eq("is_published", true)
+          .eq("moderation_status", "approved")
+          .order("created_at", { ascending: false })
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            course_id: string;
+            student_id: string;
+            rating: number;
+            comment: string | null;
+            created_at: string;
+          }>,
+        }),
+    (() => {
+      const missingTeacherIds = Array.from(
+        new Set(
+          rows
+            .filter((row) => !row.teacher)
+            .map((row) => row.teacher_id)
+            .filter(Boolean),
+        ),
+      );
+      if (missingTeacherIds.length === 0) {
+        return Promise.resolve({ data: [] as CatalogCourseTeacher[] });
+      }
+      return supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url, email")
+        .in("id", missingTeacherIds);
+    })(),
+  ]);
 
   const fallbackTeacherMap = new Map<string, CatalogCourseTeacher>();
-  if (missingTeacherIds.length > 0) {
-    const { data: profilesData } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url, email")
-      .in("id", missingTeacherIds);
-
-    for (const prof of profilesData ?? []) {
-      fallbackTeacherMap.set(prof.id, {
-        id: prof.id,
-        full_name: prof.full_name,
-        avatar_url: prof.avatar_url,
-        email: prof.email,
-      });
-    }
+  for (const prof of missingTeacherProfilesRes.data ?? []) {
+    fallbackTeacherMap.set(prof.id, {
+      id: prof.id,
+      full_name: prof.full_name,
+      avatar_url: prof.avatar_url,
+      email: prof.email,
+    });
   }
 
+  const allReviews = reviewsRes.data ?? [];
+
   return rows.map((row) => {
-    const rawRecord = row as Record<string, unknown>;
     const rawTeacher = Array.isArray(row.teacher) ? row.teacher[0] : row.teacher;
     const resolvedTeacher: CatalogCourseTeacher = rawTeacher
       ? {
@@ -112,25 +144,28 @@ export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
         };
 
     const rawThumbnail =
-      (typeof row.thumbnail_url === "string" && row.thumbnail_url.trim()) ||
-      (typeof rawRecord.image_url === "string" && rawRecord.image_url.trim()) ||
-      null;
+      typeof row.thumbnail_url === "string" && row.thumbnail_url.trim()
+        ? row.thumbnail_url.trim()
+        : null;
     const imageUrl = rawThumbnail || DEFAULT_COURSE_COVER;
 
     const hours = Number(row.estimated_hours ?? 0);
-    const customDuration =
-      typeof rawRecord.duration === "string" && rawRecord.duration.trim()
-        ? rawRecord.duration.trim()
-        : hours > 0
-          ? `${hours} ${hours === 1 ? "hour" : "hours"}`
-          : "Self-paced";
+    const unit = row.duration_unit === "days" ? "day" : "hour";
+    const duration =
+      hours > 0
+        ? `${hours} ${hours === 1 ? unit : `${unit}s`}`
+        : "Self-paced";
 
-    const rawPrice =
-      typeof rawRecord.price === "number"
-        ? rawRecord.price
-        : typeof rawRecord.price === "string" && rawRecord.price.trim() !== ""
-          ? Number(rawRecord.price)
-          : null;
+    const courseRevs = allReviews.filter((r) => r.course_id === row.id);
+    const ratingAvg =
+      courseRevs.length > 0
+        ? Number(
+            (
+              courseRevs.reduce((s, r) => s + Number(r.rating), 0) /
+              courseRevs.length
+            ).toFixed(1),
+          )
+        : 0;
 
     return {
       id: row.id,
@@ -140,25 +175,42 @@ export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
       description:
         row.description ||
         row.subtitle ||
-        "Comprehensive academic course with structured modules, interactive lessons, and smart examinations.",
+        "Comprehensive academic course with structured modules, interactive lessons, and smart assessments.",
       thumbnail_url: rawThumbnail,
       image_url: imageUrl,
       category: row.category || "General",
-      price: Number.isFinite(rawPrice) ? rawPrice : null,
-      duration: customDuration,
+      price: null,
+      duration,
       estimated_hours: hours,
       teacher_id: row.teacher_id,
       teacher: resolvedTeacher,
+      ratingAvg,
+      reviewCount: courseRevs.length,
+      approvedReviews: courseRevs.slice(0, 10).map((r) => ({
+        id: r.id,
+        studentName: "Verified Student",
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.created_at,
+      })),
     };
   });
 }
 
 export function useCoursesCatalog(initialCourses?: CatalogCourseItem[]) {
+  const hasInitial = initialCourses !== undefined;
   const [courses, setCourses] = useState<CatalogCourseItem[]>(
     initialCourses ?? [],
   );
-  const [loading, setLoading] = useState<boolean>(!initialCourses);
+  const [loading, setLoading] = useState<boolean>(!hasInitial);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialCourses !== undefined) {
+      setCourses(initialCourses);
+      setLoading(false);
+    }
+  }, [initialCourses]);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -178,8 +230,10 @@ export function useCoursesCatalog(initialCourses?: CatalogCourseItem[]) {
   }, []);
 
   useEffect(() => {
-    let active = true;
+    // Performance fix: skip redundant client query when Server Component already supplied initialCourses
+    if (hasInitial) return;
 
+    let active = true;
     async function load() {
       setLoading(true);
       setError(null);
@@ -204,11 +258,10 @@ export function useCoursesCatalog(initialCourses?: CatalogCourseItem[]) {
     }
 
     void load();
-
     return () => {
       active = false;
     };
-  }, []);
+  }, [hasInitial]);
 
   return {
     courses,

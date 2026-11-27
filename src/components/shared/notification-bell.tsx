@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,11 +22,13 @@ interface BellItem {
   title: string;
   body: string;
   category: string;
+  actionUrl: string | null;
   isRead: boolean;
   createdAt: string;
 }
 
 export function NotificationBell() {
+  const router = useRouter();
   const [items, setItems] = useState<BellItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -35,12 +38,8 @@ export function NotificationBell() {
     const supabase = createSupabaseBrowserClient();
     let uid = userIdRef.current;
     if (!uid) {
-      const { data: sessionData } = await supabase.auth.getSession();
-      uid = sessionData.session?.user?.id ?? null;
-      if (!uid) {
-        const { data: userData } = await supabase.auth.getUser();
-        uid = userData.user?.id ?? null;
-      }
+      const { data: userData } = await supabase.auth.getUser();
+      uid = userData.user?.id ?? null;
       userIdRef.current = uid;
     }
     if (!uid) return null;
@@ -48,11 +47,11 @@ export function NotificationBell() {
     const { data: recipients } = await supabase
       .from("notification_recipients")
       .select(
-        "id, notification_id, is_read, created_at, notifications(id, title, body, notification_type)",
+        "id, notification_id, is_read, created_at, notifications(id, title, body, notification_type, action_url)",
       )
       .eq("recipient_id", uid)
       .order("created_at", { ascending: false })
-      .limit(12);
+      .limit(15);
 
     const recList = recipients ?? [];
     if (recList.length === 0) {
@@ -71,6 +70,7 @@ export function NotificationBell() {
           title: n.title,
           body: n.body,
           category: n.notification_type,
+          actionUrl: n.action_url,
           isRead: r.is_read,
           createdAt: r.created_at,
         };
@@ -130,11 +130,18 @@ export function NotificationBell() {
     });
   }
 
-  function handleMarkSingleRead(recipientId: string, isRead: boolean) {
-    if (isRead || isPending) return;
+  function handleItemClick(item: BellItem) {
     startTransition(async () => {
-      await sharedMarkNotificationReadAction({ recipientId });
-      await loadNotifications();
+      if (!item.isRead) {
+        await sharedMarkNotificationReadAction({
+          recipientId: item.recipientId,
+          isRead: true,
+        });
+        await loadNotifications();
+      }
+      if (item.actionUrl) {
+        router.push(item.actionUrl);
+      }
     });
   }
 
@@ -183,18 +190,18 @@ export function NotificationBell() {
             items.map((item) => (
               <div
                 key={item.recipientId}
-                role={item.isRead ? undefined : "button"}
-                tabIndex={item.isRead ? undefined : 0}
-                onClick={() => handleMarkSingleRead(item.recipientId, item.isRead)}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleItemClick(item)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    handleMarkSingleRead(item.recipientId, item.isRead);
+                    handleItemClick(item);
                   }
                 }}
                 className={
                   item.isRead
-                    ? "rounded-lg p-2.5 text-xs text-muted-foreground"
+                    ? "cursor-pointer rounded-lg p-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
                     : "cursor-pointer rounded-lg border border-gold-primary/40 bg-gold-primary/5 p-2.5 text-xs text-foreground transition-colors hover:bg-gold-primary/10"
                 }
               >
@@ -205,6 +212,9 @@ export function NotificationBell() {
                   </Badge>
                 </div>
                 <p className="mt-1 line-clamp-2 text-[11px]">{item.body}</p>
+                <p className="mt-1 font-mono text-[10px] opacity-70">
+                  {item.createdAt.slice(0, 16).replace("T", " ")}
+                </p>
               </div>
             ))
           )}
@@ -212,17 +222,25 @@ export function NotificationBell() {
         <DropdownMenuSeparator />
         <div className="flex items-center justify-between px-3 py-2 text-[11px]">
           <Link
-            href="/calendar"
-            className="font-medium text-gold-foreground hover:underline"
+            href="/notifications"
+            className="font-semibold text-gold-foreground hover:underline"
           >
-            Smart Calendar
+            All & Preferences
           </Link>
-          <Link
-            href="/messages"
-            className="font-medium text-gold-foreground hover:underline"
-          >
-            Messages
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/calendar"
+              className="font-medium text-muted-foreground hover:text-foreground"
+            >
+              Calendar
+            </Link>
+            <Link
+              href="/messages"
+              className="font-medium text-muted-foreground hover:text-foreground"
+            >
+              Messages
+            </Link>
+          </div>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

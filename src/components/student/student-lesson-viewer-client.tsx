@@ -58,6 +58,7 @@ export function StudentLessonViewerClient({
   const lastTrackedSecondRef = useRef<number>(
     Number(data.progress?.last_position_seconds ?? 0),
   );
+  const sessionMountedAtRef = useRef<number>(Date.now());
   const [activeTab, setActiveTab] = useState<
     "overview" | "notes" | "quiz" | "related"
   >("overview");
@@ -80,13 +81,21 @@ export function StudentLessonViewerClient({
     const currentVideoSec = videoRef.current
       ? Math.round(videoRef.current.currentTime)
       : Number(resumePosition) || 0;
+    const elapsedSec = Math.max(
+      15,
+      Math.min(
+        3600,
+        Math.round((Date.now() - sessionMountedAtRef.current) / 1000),
+      ),
+    );
+    sessionMountedAtRef.current = Date.now();
 
     startTransition(async () => {
       const res = await studentUpdateLessonProgressAction({
         courseId: data.course.id,
         lessonId: data.lesson.id,
         lastPositionSeconds: currentVideoSec,
-        watchedSecondsDelta: 120,
+        watchedSecondsDelta: elapsedSec,
         isCompleted: markComplete,
       });
 
@@ -157,7 +166,7 @@ export function StudentLessonViewerClient({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <Button asChild variant="ghost" size="sm" className="-ml-2">
-            <Link href="/student/courses">
+            <Link href={`/student/my-learning?courseId=${data.course.id}`}>
               <ArrowLeft className="size-4" />
               <span>{t.lessonViewer.backToCourses}</span>
             </Link>
@@ -227,7 +236,8 @@ export function StudentLessonViewerClient({
                   onTimeUpdate={() => {
                     if (videoRef.current) {
                       const sec = Math.round(videoRef.current.currentTime);
-                      if (sec !== lastTrackedSecondRef.current) {
+                      // Throttle state updates to every 5 seconds to avoid per-second component re-renders
+                      if (Math.abs(sec - lastTrackedSecondRef.current) >= 5) {
                         lastTrackedSecondRef.current = sec;
                         setResumePosition(String(sec));
                         setNoteTimestamp(String(sec));
@@ -372,6 +382,45 @@ export function StudentLessonViewerClient({
                     </Button>
                   )}
                 </div>
+
+                {data.learningResources.length > 0 && (
+                  <div className="space-y-2 border-t border-border/70 pt-3">
+                    <p className="text-xs font-semibold text-foreground">
+                      Supplementary Learning Resources
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {data.learningResources.map((res) => {
+                        const href = res.signedUrl || res.externalUrl;
+                        return (
+                          <div
+                            key={res.id}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-border/70 p-2.5 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-foreground">
+                                {res.title}
+                              </p>
+                              <p className="text-[11px] capitalize text-muted-foreground">
+                                {res.resourceType}
+                              </p>
+                            </div>
+                            {href && (
+                              <Button asChild variant="outline" size="sm">
+                                <a href={href} target="_blank" rel="noreferrer">
+                                  {res.signedUrl ? (
+                                    <Download className="size-3.5" />
+                                  ) : (
+                                    <ExternalLink className="size-3.5" />
+                                  )}
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

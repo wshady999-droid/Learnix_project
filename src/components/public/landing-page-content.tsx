@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useEffect, useState } from "react";
+import { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useTheme } from "next-themes";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -36,6 +35,7 @@ import {
 
 import { EmptyState } from "@/components/feedback/empty-state";
 import { useLocale } from "@/components/i18n/locale-provider";
+import { useTheme } from "@/components/theme/theme-provider";
 import { PublicFooter } from "@/components/public/public-footer";
 import { PublicNavbar } from "@/components/public/public-navbar";
 import { Badge } from "@/components/ui/badge";
@@ -97,30 +97,8 @@ type ContactFormValues = z.infer<ReturnType<typeof buildContactSchema>>;
 
 export function LandingPageContent() {
   const { t, locale } = useLocale();
-  const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    const checkTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    checkTheme();
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.attributeName === "class") {
-          checkTheme();
-        }
-      });
-    });
-    observer.observe(document.documentElement, { attributes: true });
-    return () => observer.disconnect();
-  }, [mounted]);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   const contactSchema = useMemo(
     () => buildContactSchema(t.contact.form.validation),
@@ -170,7 +148,6 @@ export function LandingPageContent() {
   }
 
   const heroImageSrc = useMemo(() => {
-    if (!mounted) return "/en-light.png"; 
     const currentTheme = isDark ? "dark" : "light";
     const isArabic = locale === "ar";
 
@@ -179,7 +156,7 @@ export function LandingPageContent() {
     } else {
       return currentTheme === "dark" ? "/en-dark.png" : "/en-light.png";
     }
-  }, [locale, isDark, mounted]);
+  }, [locale, isDark]);
 
   const features = [
     { icon: BookOpen, label: t.features?.items?.[0]?.title || "Online Courses" },
@@ -187,10 +164,6 @@ export function LandingPageContent() {
     { icon: Users, label: t.features?.items?.[4]?.title || "Expert Instructors" },
     { icon: ShieldCheck, label: t.features?.items?.[5]?.title || "Secure & Reliable" },
   ];
-
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <div className="flex min-h-dvh flex-col bg-[#FAF9F4] text-[#0a1f1d] dark:bg-[#0a1f1d] dark:text-[#FAF9F4]">

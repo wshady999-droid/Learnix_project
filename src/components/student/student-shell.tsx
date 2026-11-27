@@ -6,14 +6,18 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   BarChart3,
+  Bell,
   BookOpen,
   ClipboardCheck,
+  FileText,
   GraduationCap,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   Orbit,
   Settings,
   Sparkles,
+  Star,
   User,
 } from "lucide-react";
 
@@ -64,11 +68,11 @@ export function StudentShell({
     () => [
       {
         id: "student-learning",
-        title: "LEARNING",
+        title: studentT.nav.groupLearning,
         items: [
           {
             id: "student-overview",
-            label: "Overview",
+            label: studentT.nav.overview,
             href: "/student",
             icon: LayoutDashboard,
             exact: true,
@@ -83,14 +87,20 @@ export function StudentShell({
           },
           {
             id: "student-my-learning",
-            label: "My Learning",
+            label: studentT.nav.courses,
             href: "/student/my-learning",
             icon: Orbit,
             mobilePrimary: true,
           },
           {
+            id: "student-assignments",
+            label: "Assignments",
+            href: "/student/assignments",
+            icon: FileText,
+          },
+          {
             id: "student-exams",
-            label: "Exams",
+            label: studentT.nav.exams,
             href: "/student/exams",
             icon: ClipboardCheck,
             mobilePrimary: true,
@@ -99,22 +109,32 @@ export function StudentShell({
       },
       {
         id: "student-intelligence",
-        title: "AI & PROGRESS",
+        title: studentT.nav.groupGrowth,
         items: [
           {
+            id: "student-messages",
+            label: "Messages",
+            href: "/messages",
+            icon: MessageSquare,
+          },
+          {
             id: "student-ai-assistant",
-            label: "AI Study Assistant",
+            label: studentT.nav.aiAssistant,
             href: "/student/ai-assistant",
             icon: Sparkles,
             badge: "AI",
-            mobilePrimary: true,
+          },
+          {
+            id: "student-ratings",
+            label: studentT.nav.ratings,
+            href: "/student/ratings",
+            icon: Star,
           },
           {
             id: "student-performance",
-            label: "Performance",
+            label: studentT.nav.performance,
             href: "/student/performance",
             icon: BarChart3,
-            mobilePrimary: true,
           },
         ],
       },
@@ -123,15 +143,21 @@ export function StudentShell({
         title: "ACCOUNT",
         items: [
           {
+            id: "student-notifications",
+            label: "Notifications",
+            href: "/notifications",
+            icon: Bell,
+          },
+          {
             id: "student-profile",
-            label: "Profile",
+            label: studentT.nav.profile,
             href: "/student/profile",
             icon: User,
           },
         ],
       },
     ],
-    [],
+    [studentT.nav],
   );
 
   async function handleSignOut() {

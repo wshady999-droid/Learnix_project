@@ -33,6 +33,29 @@ async function logAdminAudit(params: {
   }
 }
 
+async function logSecurityEvent(params: {
+  userId?: string | null;
+  email?: string | null;
+  eventType: string;
+  severity: "info" | "warning" | "high" | "critical";
+  description: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    const supabase = await createSupabaseServerClient();
+    await supabase.from("security_events").insert({
+      user_id: params.userId ?? null,
+      email: params.email ?? null,
+      event_type: params.eventType,
+      severity: params.severity,
+      description: params.description,
+      metadata: (params.metadata ?? {}) as Json,
+    });
+  } catch {
+    // Non-blocking security event write
+  }
+}
+
 function getOptionalServiceRoleClient() {
   return createSupabaseServiceRoleClient();
 }
@@ -69,7 +92,7 @@ export async function adminCreateUserAccountAction(
     return {
       ok: false,
       error:
-        "Server configuration incomplete: SUPABASE_SERVICE_ROLE_KEY is missing in .env.local. Paste your service_role key in .env.local and restart the server.",
+        "Server configuration incomplete: SUPABASE_SERVICE_ROLE_KEY is missing in .env.local.",
     };
   }
 
@@ -89,7 +112,6 @@ export async function adminCreateUserAccountAction(
   }
   const createdUserId = data.user.id;
 
-  // Update authoritative profile role, department, and level as Admin
   const { error: profileError } = await supabase
     .from("profiles")
     .update({
@@ -106,18 +128,29 @@ export async function adminCreateUserAccountAction(
     return { ok: false, error: profileError.message };
   }
 
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.user_created",
-    entityType: "profiles",
-    entityId: createdUserId,
-    newValues: {
+  await Promise.all([
+    logAdminAudit({
+      actorId: adminCheck.data.userId,
+      action: "admin.user_created",
+      entityType: "profiles",
+      entityId: createdUserId,
+      newValues: {
+        email: parsed.data.email,
+        role: parsed.data.role,
+      },
+    }),
+    logSecurityEvent({
+      userId: createdUserId,
       email: parsed.data.email,
-      role: parsed.data.role,
-    },
-  });
+      eventType: "registration",
+      severity: "info",
+      description: `Admin created ${parsed.data.role} account (${parsed.data.email}).`,
+      metadata: { createdBy: adminCheck.data.userId },
+    }),
+  ]);
 
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
   return { ok: true, data: { userId: createdUserId } };
 }
 
@@ -149,6 +182,14 @@ export async function adminBulkImportUsersAction(
     return { ok: false, error: "Bulk import is limited to 200 accounts per batch." };
   }
 
+  const serviceClient = getOptionalServiceRoleClient();
+  if (!serviceClient) {
+    return {
+      ok: false,
+      error: "SUPABASE_SERVICE_ROLE_KEY is required in .env.local for bulk user creation.",
+    };
+  }
+
   const supabase = await createSupabaseServerClient();
   const [deptsRes, levelsRes] = await Promise.all([
     supabase.from("departments").select("id, code"),
@@ -165,41 +206,67 @@ export async function adminBulkImportUsersAction(
   let importedCount = 0;
   const failures: Array<{ email: string; reason: string }> = [];
 
-  for (const rawRow of rows) {
-    const parsed = bulkImportItemSchema.safeParse(rawRow);
-    if (!parsed.success) {
-      failures.push({
-        email: rawRow.email || "unknown",
-        reason: parsed.error.issues[0]?.message ?? "Validation error",
-      });
-      continue;
-    }
+  // Process in concurrent batches of 5 for fast throughput without overloading Auth
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const slice = rows.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      slice.map(async (rawRow) => {
+        const parsed = bulkImportItemSchema.safeParse(rawRow);
+        if (!parsed.success) {
+          failures.push({
+            email: rawRow.email || "unknown",
+            reason: parsed.error.issues[0]?.message ?? "Validation error",
+          });
+          return;
+        }
+        const row = parsed.data;
+        const tempPassword = `Lrx!${Math.random().toString(36).slice(2, 8)}A9#`;
+        const departmentId = row.departmentCode
+          ? (deptByCode.get(row.departmentCode.toLowerCase()) ?? null)
+          : null;
+        const educationalLevelId = row.levelCode
+          ? (levelByCode.get(row.levelCode.toLowerCase()) ?? null)
+          : null;
 
-    const row = parsed.data;
-    // Generate a strong compliant temporary password; user can rotate via password reset
-    const tempPassword = `Lrx!${Math.random().toString(36).slice(2, 8)}A9#`;
-    const departmentId = row.departmentCode
-      ? (deptByCode.get(row.departmentCode.toLowerCase()) ?? null)
-      : null;
-    const educationalLevelId = row.levelCode
-      ? (levelByCode.get(row.levelCode.toLowerCase()) ?? null)
-      : null;
+        const { data: created, error: authErr } =
+          await serviceClient.auth.admin.createUser({
+            email: row.email,
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: {
+              full_name: row.fullName,
+              phone: row.phone || "",
+            },
+          });
 
-    const createRes = await adminCreateUserAccountAction({
-      fullName: row.fullName,
-      email: row.email,
-      password: tempPassword,
-      role: row.role,
-      phone: row.phone,
-      departmentId,
-      educationalLevelId,
-    });
+        if (authErr || !created.user) {
+          failures.push({
+            email: row.email,
+            reason: authErr?.message ?? "Failed to create Auth user",
+          });
+          return;
+        }
 
-    if (!createRes.ok) {
-      failures.push({ email: row.email, reason: createRes.error });
-    } else {
-      importedCount += 1;
-    }
+        const { error: profErr } = await supabase
+          .from("profiles")
+          .update({
+            full_name: row.fullName,
+            role: row.role,
+            phone: row.phone || null,
+            department_id: departmentId,
+            educational_level_id: educationalLevelId,
+            status: "active",
+          })
+          .eq("id", created.user.id);
+
+        if (profErr) {
+          failures.push({ email: row.email, reason: profErr.message });
+          return;
+        }
+        importedCount += 1;
+      }),
+    );
   }
 
   await logAdminAudit({
@@ -210,6 +277,7 @@ export async function adminBulkImportUsersAction(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
   return { ok: true, data: { importedCount, failures } };
 }
 
@@ -237,39 +305,151 @@ export async function adminChangeUserRoleAction(params: {
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
   return { ok: true, data: { updated: true } };
 }
 
 export async function adminChangeUserStatusAction(params: {
   targetUserId: string;
   status: "active" | "suspended";
+  reason?: string;
 }): Promise<ServiceResult<{ updated: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
 
   if (params.targetUserId === adminCheck.data.userId && params.status === "suspended") {
-    return { ok: false, error: "You cannot suspend your own active administrator account." };
+    return {
+      ok: false,
+      error: "You cannot suspend your own active administrator account.",
+    };
+  }
+
+  const trimmedReason = (params.reason ?? "").trim();
+  if (params.status === "suspended" && trimmedReason.length < 3) {
+    return {
+      ok: false,
+      error: "A suspension reason (at least 3 characters) is required.",
+    };
   }
 
   const supabase = await createSupabaseServerClient();
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("email, full_name")
+    .eq("id", params.targetUserId)
+    .maybeSingle();
+
+  const nowIso = new Date().toISOString();
   const { error } = await supabase
     .from("profiles")
-    .update({ status: params.status })
+    .update({
+      status: params.status,
+      suspension_reason: params.status === "suspended" ? trimmedReason : null,
+      suspended_at: params.status === "suspended" ? nowIso : null,
+      suspended_by: params.status === "suspended" ? adminCheck.data.userId : null,
+    })
     .eq("id", params.targetUserId);
 
   if (error) return { ok: false, error: error.message };
 
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action:
-      params.status === "suspended" ? "admin.user_suspended" : "admin.user_activated",
-    entityType: "profiles",
-    entityId: params.targetUserId,
-    newValues: { status: params.status },
-  });
+  await Promise.all([
+    logAdminAudit({
+      actorId: adminCheck.data.userId,
+      action:
+        params.status === "suspended"
+          ? "admin.user_suspended"
+          : "admin.user_activated",
+      entityType: "profiles",
+      entityId: params.targetUserId,
+      newValues: {
+        status: params.status,
+        reason: trimmedReason || null,
+      },
+    }),
+    logSecurityEvent({
+      userId: params.targetUserId,
+      email: targetProfile?.email ?? null,
+      eventType:
+        params.status === "suspended"
+          ? "account_suspended"
+          : "account_reactivated",
+      severity: params.status === "suspended" ? "high" : "info",
+      description:
+        params.status === "suspended"
+          ? `Account suspended by admin. Reason: ${trimmedReason}`
+          : "Account reactivated by admin.",
+      metadata: {
+        actorId: adminCheck.data.userId,
+        reason: trimmedReason || null,
+      },
+    }),
+  ]);
 
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/security");
   return { ok: true, data: { updated: true } };
+}
+
+export async function adminDeleteUserAccountAction(params: {
+  targetUserId: string;
+}): Promise<ServiceResult<{ deleted: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  if (params.targetUserId === adminCheck.data.userId) {
+    return {
+      ok: false,
+      error: "You cannot delete your own active administrator account.",
+    };
+  }
+
+  const serviceClient = getOptionalServiceRoleClient();
+  if (!serviceClient) {
+    return {
+      ok: false,
+      error:
+        "SUPABASE_SERVICE_ROLE_KEY is required in .env.local to permanently delete Auth accounts.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("email, full_name, role")
+    .eq("id", params.targetUserId)
+    .maybeSingle();
+
+  const { error } = await serviceClient.auth.admin.deleteUser(params.targetUserId);
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  await Promise.all([
+    logAdminAudit({
+      actorId: adminCheck.data.userId,
+      action: "admin.user_deleted",
+      entityType: "profiles",
+      entityId: params.targetUserId,
+      newValues: {
+        email: targetProfile?.email ?? null,
+        role: targetProfile?.role ?? null,
+      },
+    }),
+    logSecurityEvent({
+      userId: null,
+      email: targetProfile?.email ?? null,
+      eventType: "account_deleted",
+      severity: "high",
+      description: `Account ${targetProfile?.email ?? params.targetUserId} permanently deleted by admin.`,
+      metadata: { actorId: adminCheck.data.userId },
+    }),
+  ]);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/security");
+  return { ok: true, data: { deleted: true } };
 }
 
 export async function adminSendPasswordResetEmailAction(
@@ -352,11 +532,332 @@ export async function adminReviewTeacherRequestAction(params: {
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
   return { ok: true, data: { reviewed: true } };
 }
 
 // -----------------------------------------------------------------------------
-// 2. DEPARTMENT, LEVEL, CLASS & ASSIGNMENT ACTIONS
+// 2. CATEGORIES & COURSE GOVERNANCE ACTIONS
+// -----------------------------------------------------------------------------
+const saveCategorySchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(2, "Category name is required.").max(120),
+  description: z.string().trim().max(500).optional(),
+  isActive: z.boolean().default(true),
+});
+
+export async function adminSaveCategoryAction(
+  input: z.infer<typeof saveCategorySchema>,
+): Promise<ServiceResult<{ id: string }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const parsed = saveCategorySchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid category details.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const slug = parsed.data.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  if (parsed.data.id) {
+    const { data: oldCat } = await supabase
+      .from("categories")
+      .select("name")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+
+    const { data, error } = await supabase
+      .from("categories")
+      .update({
+        name: parsed.data.name,
+        slug: slug || "category",
+        description: parsed.data.description || null,
+        is_active: parsed.data.isActive,
+      })
+      .eq("id", parsed.data.id)
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Failed to update category." };
+    }
+
+    // Keep linked courses' category label synchronized
+    if (oldCat && oldCat.name !== parsed.data.name) {
+      await supabase
+        .from("courses")
+        .update({ category: parsed.data.name })
+        .eq("category_id", parsed.data.id);
+    }
+
+    await logAdminAudit({
+      actorId: adminCheck.data.userId,
+      action: "admin.category_updated",
+      entityType: "categories",
+      entityId: data.id,
+      newValues: { name: parsed.data.name, isActive: parsed.data.isActive },
+    });
+
+    revalidatePath("/admin/courses");
+    revalidatePath("/teacher/courses");
+    revalidatePath("/student/courses");
+    return { ok: true, data: { id: data.id } };
+  }
+
+  const { data, error } = await supabase
+    .from("categories")
+    .insert({
+      name: parsed.data.name,
+      slug: `${slug || "category"}-${Math.floor(100 + Math.random() * 900)}`,
+      description: parsed.data.description || null,
+      is_active: parsed.data.isActive,
+      created_by: adminCheck.data.userId,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Failed to create category." };
+  }
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: "admin.category_created",
+    entityType: "categories",
+    entityId: data.id,
+    newValues: { name: parsed.data.name },
+  });
+
+  revalidatePath("/admin/courses");
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/courses");
+  return { ok: true, data: { id: data.id } };
+}
+
+export async function adminDeleteCategoryAction(
+  categoryId: string,
+): Promise<ServiceResult<{ deleted: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const supabase = await createSupabaseServerClient();
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("id", categoryId)
+    .maybeSingle();
+
+  if (!cat) {
+    return { ok: false, error: "Category not found." };
+  }
+
+  const { count } = await supabase
+    .from("courses")
+    .select("id", { count: "exact", head: true })
+    .is("deleted_at", null)
+    .or(`category_id.eq.${categoryId},category.ilike.${cat.name}`);
+
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `Cannot delete "${cat.name}" because ${count} active course(s) use it.`,
+    };
+  }
+
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", categoryId);
+
+  if (error) return { ok: false, error: error.message };
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: "admin.category_deleted",
+    entityType: "categories",
+    entityId: categoryId,
+    newValues: { name: cat.name },
+  });
+
+  revalidatePath("/admin/courses");
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/courses");
+  return { ok: true, data: { deleted: true } };
+}
+
+export async function adminUpdateCourseStatusAction(params: {
+  courseId: string;
+  status: "draft" | "published" | "archived";
+}): Promise<ServiceResult<{ updated: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("courses")
+    .update({
+      status: params.status,
+      published_at:
+        params.status === "published" ? new Date().toISOString() : undefined,
+    })
+    .eq("id", params.courseId);
+
+  if (error) return { ok: false, error: error.message };
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: `admin.course_status_${params.status}`,
+    entityType: "courses",
+    entityId: params.courseId,
+    newValues: { status: params.status },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/courses");
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student/courses");
+  return { ok: true, data: { updated: true } };
+}
+
+export async function adminSoftDeleteCourseAction(params: {
+  courseId: string;
+  reason: string;
+}): Promise<ServiceResult<{ removed: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const trimmedReason = params.reason.trim();
+  if (trimmedReason.length < 5) {
+    return {
+      ok: false,
+      error: "Please provide a clear deletion reason (at least 5 characters).",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: course } = await supabase
+    .from("courses")
+    .select("id, title, code, teacher_id")
+    .eq("id", params.courseId)
+    .maybeSingle();
+
+  if (!course) {
+    return { ok: false, error: "Course not found." };
+  }
+
+  // Soft-delete so historical enrollments, grades, and certificates remain intact
+  const { error } = await supabase
+    .from("courses")
+    .update({
+      status: "archived",
+      deleted_at: new Date().toISOString(),
+      deleted_by: adminCheck.data.userId,
+      deletion_reason: trimmedReason,
+    })
+    .eq("id", params.courseId);
+
+  if (error) return { ok: false, error: error.message };
+
+  // Notify course instructor with mandatory reason
+  await supabase.rpc("dispatch_event_notification", {
+    p_title: `Course Removed by Administration: ${course.title}`,
+    p_body: `Your course "${course.title}" (${course.code}) was removed from active listings. Reason: ${trimmedReason}`,
+    p_type: "course",
+    p_recipient_ids: [course.teacher_id],
+    p_target_scope: "individual",
+    p_action_url: "/notifications",
+    p_is_announcement: true,
+  });
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: "admin.course_removed",
+    entityType: "courses",
+    entityId: course.id,
+    newValues: {
+      title: course.title,
+      code: course.code,
+      reason: trimmedReason,
+    },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/courses");
+  revalidatePath("/teacher");
+  revalidatePath("/teacher/courses");
+  revalidatePath("/student");
+  revalidatePath("/student/courses");
+  return { ok: true, data: { removed: true } };
+}
+
+export async function adminRestoreCourseAction(
+  courseId: string,
+): Promise<ServiceResult<{ restored: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("courses")
+    .update({
+      status: "draft",
+      deleted_at: null,
+      deleted_by: null,
+      deletion_reason: null,
+    })
+    .eq("id", courseId);
+
+  if (error) return { ok: false, error: error.message };
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: "admin.course_restored",
+    entityType: "courses",
+    entityId: courseId,
+  });
+
+  revalidatePath("/admin/courses");
+  revalidatePath("/teacher/courses");
+  return { ok: true, data: { restored: true } };
+}
+
+export async function adminAssignCourseTeacherAction(params: {
+  courseId: string;
+  teacherId: string;
+}): Promise<ServiceResult<{ updated: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("courses")
+    .update({ teacher_id: params.teacherId })
+    .eq("id", params.courseId);
+
+  if (error) return { ok: false, error: error.message };
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: "admin.course_teacher_reassigned",
+    entityType: "courses",
+    entityId: params.courseId,
+    newValues: { teacherId: params.teacherId },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/courses");
+  return { ok: true, data: { updated: true } };
+}
+
+// -----------------------------------------------------------------------------
+// 3. DEPARTMENT, LEVEL, CLASS & ASSIGNMENT ACTIONS
 // -----------------------------------------------------------------------------
 const departmentSchema = z.object({
   id: z.string().uuid().optional(),
@@ -374,7 +875,10 @@ export async function adminSaveDepartmentAction(
 
   const parsed = departmentSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid department input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid department input.",
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -417,7 +921,6 @@ export async function adminDeleteDepartmentAction(
 
   const supabase = await createSupabaseServerClient();
 
-  // Safe deletion check: prevent deleting a department with active classes
   const { count: classCount } = await supabase
     .from("classes")
     .select("id", { count: "exact", head: true })
@@ -426,7 +929,8 @@ export async function adminDeleteDepartmentAction(
   if ((classCount ?? 0) > 0) {
     return {
       ok: false,
-      error: "Cannot delete department while classes are assigned to it. Reassign or remove its classes first.",
+      error:
+        "Cannot delete department while classes are assigned to it. Reassign or remove its classes first.",
     };
   }
 
@@ -461,7 +965,10 @@ export async function adminSaveEducationalLevelAction(
 
   const parsed = educationalLevelSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid educational level." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid educational level.",
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -536,7 +1043,10 @@ export async function adminSaveClassAction(
 
   const parsed = classSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid class configuration." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid class configuration.",
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -645,66 +1155,6 @@ export async function adminDeleteStudentTeacherAssignmentAction(
 }
 
 // -----------------------------------------------------------------------------
-// 3. COURSE GOVERNANCE ACTIONS
-// -----------------------------------------------------------------------------
-export async function adminUpdateCourseStatusAction(params: {
-  courseId: string;
-  status: "draft" | "published" | "archived";
-}): Promise<ServiceResult<{ updated: true }>> {
-  const adminCheck = await requireRole(["admin"]);
-  if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("courses")
-    .update({
-      status: params.status,
-      published_at: params.status === "published" ? new Date().toISOString() : null,
-    })
-    .eq("id", params.courseId);
-
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: `admin.course_status_${params.status}`,
-    entityType: "courses",
-    entityId: params.courseId,
-    newValues: { status: params.status },
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { updated: true } };
-}
-
-export async function adminAssignCourseTeacherAction(params: {
-  courseId: string;
-  teacherId: string;
-}): Promise<ServiceResult<{ updated: true }>> {
-  const adminCheck = await requireRole(["admin"]);
-  if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("courses")
-    .update({ teacher_id: params.teacherId })
-    .eq("id", params.courseId);
-
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.course_teacher_reassigned",
-    entityType: "courses",
-    entityId: params.courseId,
-    newValues: { teacherId: params.teacherId },
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { updated: true } };
-}
-
-// -----------------------------------------------------------------------------
 // 4. SCHEDULE ACTIONS
 // -----------------------------------------------------------------------------
 const createScheduleSlotSchema = z.object({
@@ -725,7 +1175,10 @@ export async function adminCreateClassScheduleSlotAction(
 
   const parsed = createScheduleSlotSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid timetable slot." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid timetable slot.",
+    };
   }
 
   if (parsed.data.endTime <= parsed.data.startTime) {
@@ -840,7 +1293,7 @@ export async function adminToggleRolePermissionAction(params: {
 }
 
 // -----------------------------------------------------------------------------
-// 6. NOTIFICATIONS & ANNOUNCEMENTS ACTIONS
+// 6. NOTIFICATIONS & NON-REPLYABLE ANNOUNCEMENTS ACTIONS
 // -----------------------------------------------------------------------------
 const dispatchNotificationSchema = z.object({
   targetScope: z.enum([
@@ -850,15 +1303,27 @@ const dispatchNotificationSchema = z.object({
     "department",
     "class",
     "individual",
+    "one_student",
+    "one_teacher",
   ]),
   targetId: z.string().uuid().optional(),
   notificationType: z
-    .enum(["system", "course", "exam", "assignment", "grade", "message", "attendance"])
+    .enum([
+      "system",
+      "course",
+      "exam",
+      "assignment",
+      "grade",
+      "message",
+      "attendance",
+      "review",
+      "security",
+    ])
     .default("system"),
   title: z.string().trim().min(2).max(160),
   body: z.string().trim().min(2).max(2000),
   scheduledFor: z.string().optional(),
-  isAnnouncement: z.boolean().default(false),
+  isAnnouncement: z.boolean().default(true),
 });
 
 export async function adminDispatchNotificationAction(
@@ -871,28 +1336,54 @@ export async function adminDispatchNotificationAction(
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid notification payload.",
+      error: parsed.error.issues[0]?.message ?? "Invalid announcement payload.",
     };
   }
 
   const supabase = await createSupabaseServerClient();
 
   let recipientIds: string[] = [];
+  let dbTargetScope:
+    | "all_students"
+    | "all_teachers"
+    | "all_users"
+    | "department"
+    | "class"
+    | "individual" = "all_users";
 
-  if (parsed.data.targetScope === "individual") {
+  if (
+    parsed.data.targetScope === "individual" ||
+    parsed.data.targetScope === "one_student" ||
+    parsed.data.targetScope === "one_teacher"
+  ) {
     if (!parsed.data.targetId) {
       return { ok: false, error: "Please select a recipient user." };
     }
     recipientIds = [parsed.data.targetId];
+    dbTargetScope = "individual";
   } else if (parsed.data.targetScope === "all_students") {
-    const { data } = await supabase.from("profiles").select("id").eq("role", "student");
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "student")
+      .eq("status", "active");
     recipientIds = (data ?? []).map((p) => p.id);
+    dbTargetScope = "all_students";
   } else if (parsed.data.targetScope === "all_teachers") {
-    const { data } = await supabase.from("profiles").select("id").eq("role", "teacher");
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("role", "teacher")
+      .eq("status", "active");
     recipientIds = (data ?? []).map((p) => p.id);
+    dbTargetScope = "all_teachers";
   } else if (parsed.data.targetScope === "all_users") {
-    const { data } = await supabase.from("profiles").select("id");
+    const { data } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("status", "active");
     recipientIds = (data ?? []).map((p) => p.id);
+    dbTargetScope = "all_users";
   } else if (parsed.data.targetScope === "department") {
     if (!parsed.data.targetId) {
       return { ok: false, error: "Please select a department." };
@@ -902,6 +1393,7 @@ export async function adminDispatchNotificationAction(
       .select("id")
       .eq("department_id", parsed.data.targetId);
     recipientIds = (data ?? []).map((p) => p.id);
+    dbTargetScope = "department";
   } else if (parsed.data.targetScope === "class") {
     if (!parsed.data.targetId) {
       return { ok: false, error: "Please select a class cohort." };
@@ -911,6 +1403,7 @@ export async function adminDispatchNotificationAction(
       .select("student_id")
       .eq("class_id", parsed.data.targetId);
     recipientIds = Array.from(new Set((data ?? []).map((r) => r.student_id)));
+    dbTargetScope = "class";
   }
 
   const scheduledForIso =
@@ -925,7 +1418,7 @@ export async function adminDispatchNotificationAction(
       notification_type: parsed.data.notificationType,
       title: parsed.data.title,
       body: parsed.data.body,
-      target_scope: parsed.data.targetScope,
+      target_scope: dbTargetScope,
       scheduled_for: scheduledForIso,
       is_announcement: parsed.data.isAnnouncement,
       sent_at: scheduledForIso ?? new Date().toISOString(),
@@ -934,7 +1427,10 @@ export async function adminDispatchNotificationAction(
     .single();
 
   if (notifError || !notification) {
-    return { ok: false, error: notifError?.message ?? "Failed to create notification." };
+    return {
+      ok: false,
+      error: notifError?.message ?? "Failed to create announcement.",
+    };
   }
 
   if (recipientIds.length > 0) {
@@ -961,11 +1457,100 @@ export async function adminDispatchNotificationAction(
   });
 
   revalidatePath("/admin");
+  revalidatePath("/admin/notifications");
+  revalidatePath("/notifications");
+  revalidatePath("/messages");
   return { ok: true, data: { recipientCount: recipientIds.length } };
 }
 
 // -----------------------------------------------------------------------------
-// 7. ADMIN PLATFORM SETTINGS ACTION
+// 7. REVIEWS MODERATION ACTIONS (NEVER MODIFIES RATING VALUES)
+// -----------------------------------------------------------------------------
+const moderateReviewSchema = z.object({
+  reviewId: z.string().uuid(),
+  reviewType: z.enum(["course", "teacher"]),
+  action: z.enum(["approve", "hide", "remove"]),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export async function adminModerateReviewAction(
+  input: z.infer<typeof moderateReviewSchema>,
+): Promise<ServiceResult<{ updated: true }>> {
+  const adminCheck = await requireRole(["admin"]);
+  if (!adminCheck.ok) return adminCheck;
+
+  const parsed = moderateReviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid moderation request.",
+    };
+  }
+
+  const trimmedReason = (parsed.data.reason ?? "").trim();
+  if (parsed.data.action !== "approve" && trimmedReason.length < 3) {
+    return {
+      ok: false,
+      error: "A moderation reason is required when hiding or removing a review.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const moderationStatus =
+    parsed.data.action === "approve"
+      ? "approved"
+      : parsed.data.action === "hide"
+        ? "hidden"
+        : "removed";
+  const isPublished = parsed.data.action === "approve";
+  const nowIso = new Date().toISOString();
+
+  if (parsed.data.reviewType === "course") {
+    const { error } = await supabase
+      .from("course_reviews")
+      .update({
+        moderation_status: moderationStatus,
+        moderation_reason: isPublished ? null : trimmedReason,
+        moderated_by: adminCheck.data.userId,
+        moderated_at: nowIso,
+        is_published: isPublished,
+      })
+      .eq("id", parsed.data.reviewId);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase
+      .from("teacher_reviews")
+      .update({
+        moderation_status: moderationStatus,
+        moderation_reason: isPublished ? null : trimmedReason,
+        moderated_by: adminCheck.data.userId,
+        moderated_at: nowIso,
+        is_published: isPublished,
+      })
+      .eq("id", parsed.data.reviewId);
+    if (error) return { ok: false, error: error.message };
+  }
+
+  await logAdminAudit({
+    actorId: adminCheck.data.userId,
+    action: `admin.review_${moderationStatus}`,
+    entityType:
+      parsed.data.reviewType === "course" ? "course_reviews" : "teacher_reviews",
+    entityId: parsed.data.reviewId,
+    newValues: {
+      moderationStatus,
+      reason: trimmedReason || null,
+    },
+  });
+
+  revalidatePath("/admin/reviews");
+  revalidatePath("/student/courses");
+  revalidatePath("/teacher/ratings");
+  return { ok: true, data: { updated: true } };
+}
+
+// -----------------------------------------------------------------------------
+// 8. ADMIN PLATFORM SETTINGS ACTION
 // -----------------------------------------------------------------------------
 const platformSettingsInputSchema = z.object({
   platformName: z.string().trim().min(2).max(80),
@@ -986,7 +1571,10 @@ export async function adminSavePlatformSettingsAction(
 
   const parsed = platformSettingsInputSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid platform settings." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid platform settings.",
+    };
   }
 
   const supabase = await createSupabaseServerClient();

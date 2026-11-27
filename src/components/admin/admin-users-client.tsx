@@ -11,6 +11,7 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   Upload,
   UserCheck,
   UserPlus,
@@ -64,6 +65,7 @@ import {
   adminChangeUserRoleAction,
   adminChangeUserStatusAction,
   adminCreateUserAccountAction,
+  adminDeleteUserAccountAction,
   adminReviewTeacherRequestAction,
   adminSendPasswordResetEmailAction,
   adminSetUserCustomPermissionAction,
@@ -84,10 +86,13 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
   const adminT = getAdminDictionary(locale);
   const authT = getAuthDictionary(locale);
 
-  const [activeTab, setActiveTab] = useState<"users" | "requests" | "bulk">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "requests" | "bulk">(
+    "users",
+  );
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [quickPreset, setQuickPreset] = useState<
+    "all" | "students" | "teachers" | "suspended"
+  >("all");
   const [page, setPage] = useState(1);
 
   // Add User Dialog state
@@ -105,16 +110,25 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
   const [inspectedUser, setInspectedUser] = useState<ProfileRow | null>(null);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
+  // Suspend User Confirmation Dialog (requires mandatory reason)
+  const [suspendingUser, setSuspendingUser] = useState<ProfileRow | null>(null);
+  const [suspensionReason, setSuspensionReason] = useState("");
+
+  // Delete User Confirmation Dialog
+  const [deletingUser, setDeletingUser] = useState<ProfileRow | null>(null);
+
   // Bulk Import state
   const [rawBulkText, setRawBulkText] = useState("");
-  const [bulkValidation, setBulkValidation] = useState<BulkImportParseResult | null>(null);
+  const [bulkValidation, setBulkValidation] =
+    useState<BulkImportParseResult | null>(null);
   const [importingBulk, setImportingBulk] = useState(false);
 
   const filteredProfiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return data.profiles.filter((p) => {
-      if (roleFilter !== "all" && p.role !== roleFilter) return false;
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (quickPreset === "students" && p.role !== "student") return false;
+      if (quickPreset === "teachers" && p.role !== "teacher") return false;
+      if (quickPreset === "suspended" && p.status !== "suspended") return false;
       if (!q) return true;
       return (
         (p.full_name ?? "").toLowerCase().includes(q) ||
@@ -122,9 +136,12 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
         (p.phone ?? "").toLowerCase().includes(q)
       );
     });
-  }, [data.profiles, searchQuery, roleFilter, statusFilter]);
+  }, [data.profiles, searchQuery, quickPreset]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProfiles.length / PAGE_SIZE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredProfiles.length / PAGE_SIZE),
+  );
   const currentPage = Math.min(page, totalPages);
   const paginatedProfiles = filteredProfiles.slice(
     (currentPage - 1) * PAGE_SIZE,
@@ -182,19 +199,57 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
     router.refresh();
   }
 
-  async function handleStatusToggle(userId: string, currentStatus: string) {
-    const nextStatus = currentStatus === "suspended" ? "active" : "suspended";
-    setBusyUserId(userId);
+  async function handleReactivateUser(user: ProfileRow) {
+    setBusyUserId(user.id);
     const res = await adminChangeUserStatusAction({
-      targetUserId: userId,
-      status: nextStatus,
+      targetUserId: user.id,
+      status: "active",
     });
     setBusyUserId(null);
     if (!res.ok) {
       toast.error(res.error);
       return;
     }
-    toast.success(adminT.users.statusUpdatedToast);
+    toast.success("Account reactivated.");
+    router.refresh();
+  }
+
+  async function handleConfirmSuspendUser() {
+    if (!suspendingUser) return;
+    if (suspensionReason.trim().length < 3) {
+      toast.error("Please enter a suspension reason.");
+      return;
+    }
+    setBusyUserId(suspendingUser.id);
+    const res = await adminChangeUserStatusAction({
+      targetUserId: suspendingUser.id,
+      status: "suspended",
+      reason: suspensionReason,
+    });
+    setBusyUserId(null);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("User suspended and audit logged.");
+    setSuspendingUser(null);
+    setSuspensionReason("");
+    router.refresh();
+  }
+
+  async function handleConfirmDeleteUser() {
+    if (!deletingUser) return;
+    setBusyUserId(deletingUser.id);
+    const res = await adminDeleteUserAccountAction({
+      targetUserId: deletingUser.id,
+    });
+    setBusyUserId(null);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("User account deleted.");
+    setDeletingUser(null);
     router.refresh();
   }
 
@@ -225,7 +280,10 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
     router.refresh();
   }
 
-  async function handleReviewTeacherRequest(requestId: string, approve: boolean) {
+  async function handleReviewTeacherRequest(
+    requestId: string,
+    approve: boolean,
+  ) {
     const res = await adminReviewTeacherRequestAction({
       requestId,
       approve,
@@ -291,14 +349,22 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
             onClick={() =>
               downloadExcelCsv(
                 "learnix-users.csv",
-                ["Full Name", "Email", "Role", "Status", "Phone", "Locale", "Created At"],
+                [
+                  "Full Name",
+                  "Email",
+                  "Role",
+                  "Status",
+                  "Suspension Reason",
+                  "Phone",
+                  "Created At",
+                ],
                 filteredProfiles.map((p) => [
                   p.full_name,
                   p.email,
                   p.role,
                   p.status,
+                  p.suspension_reason ?? "",
                   p.phone,
-                  p.preferred_locale,
                   p.created_at,
                 ]),
               )
@@ -325,7 +391,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-name">{adminT.users.fullNameLabel}</Label>
+                    <Label htmlFor="admin-new-name">
+                      {adminT.users.fullNameLabel}
+                    </Label>
                     <Input
                       id="admin-new-name"
                       value={newFullName}
@@ -334,7 +402,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-email">{adminT.users.emailLabel}</Label>
+                    <Label htmlFor="admin-new-email">
+                      {adminT.users.emailLabel}
+                    </Label>
                     <Input
                       id="admin-new-email"
                       type="email"
@@ -347,7 +417,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-role">{adminT.users.roleLabel}</Label>
+                    <Label htmlFor="admin-new-role">
+                      {adminT.users.roleLabel}
+                    </Label>
                     <select
                       id="admin-new-role"
                       value={newRole}
@@ -360,7 +432,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                     </select>
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-phone">{adminT.users.phoneLabel}</Label>
+                    <Label htmlFor="admin-new-phone">
+                      {adminT.users.phoneLabel}
+                    </Label>
                     <Input
                       id="admin-new-phone"
                       value={newPhone}
@@ -372,7 +446,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-dept">{adminT.users.departmentLabel}</Label>
+                    <Label htmlFor="admin-new-dept">
+                      {adminT.users.departmentLabel}
+                    </Label>
                     <select
                       id="admin-new-dept"
                       value={newDeptId}
@@ -388,7 +464,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                     </select>
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-level">{adminT.users.levelLabel}</Label>
+                    <Label htmlFor="admin-new-level">
+                      {adminT.users.levelLabel}
+                    </Label>
                     <select
                       id="admin-new-level"
                       value={newLevelId}
@@ -406,7 +484,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                 </div>
 
                 <div className="grid gap-1.5">
-                  <Label htmlFor="admin-new-password">{authT.signup.passwordLabel}</Label>
+                  <Label htmlFor="admin-new-password">
+                    {authT.signup.passwordLabel}
+                  </Label>
                   <Input
                     id="admin-new-password"
                     type="password"
@@ -442,11 +522,15 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
       <div className="inline-flex rounded-lg border border-border bg-muted p-1">
         {(
           [
-            { id: "users", label: `${adminT.users.tabUsers} (${data.profiles.length})` },
+            {
+              id: "users",
+              label: `${adminT.users.tabUsers} (${data.profiles.length})`,
+            },
             {
               id: "requests",
               label: `${adminT.users.tabTeacherRequests} (${
-                data.teacherRequests.filter((r) => r.status === "pending").length
+                data.teacherRequests.filter((r) => r.status === "pending")
+                  .length
               })`,
             },
             { id: "bulk", label: adminT.users.tabBulkImport },
@@ -458,7 +542,7 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
             onClick={() => setActiveTab(tab.id)}
             className={`rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${
               activeTab === tab.id
-                ? "gold-sheen bg-gold-metallic font-semibold text-brand-charcoal shadow-xs"
+                ? "bg-emerald-600 font-semibold text-white shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -470,54 +554,56 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
       {/* TAB 1: ALL USERS */}
       {activeTab === "users" ? (
         <Card>
-          <CardHeader className="gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1 sm:max-w-xs">
-              <Search
-                className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setPage(1);
-                }}
-                placeholder={adminT.common.searchPlaceholder}
-                className="ps-9"
-              />
-            </div>
+          <CardHeader className="space-y-4">
+            {/* Quick Filters: All Users | Students | Teachers | Suspended Users */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    ["all", `All Users (${data.profiles.length})`],
+                    [
+                      "students",
+                      `Students (${data.profiles.filter((p) => p.role === "student").length})`,
+                    ],
+                    [
+                      "teachers",
+                      `Teachers (${data.profiles.filter((p) => p.role === "teacher").length})`,
+                    ],
+                    [
+                      "suspended",
+                      `Suspended Users (${data.profiles.filter((p) => p.status === "suspended").length})`,
+                    ],
+                  ] as const
+                ).map(([key, label]) => (
+                  <Button
+                    key={key}
+                    size="sm"
+                    variant={quickPreset === key ? "gold" : "outline"}
+                    onClick={() => {
+                      setQuickPreset(key);
+                      setPage(1);
+                    }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={roleFilter}
-                onChange={(e) => {
-                  setRoleFilter(e.target.value);
-                  setPage(1);
-                }}
-                aria-label={adminT.users.roleLabel}
-                className={cn(fieldBase, "h-9 w-auto py-1 text-xs")}
-              >
-                <option value="all">
-                  {adminT.common.allFilter} ({adminT.users.roleLabel})
-                </option>
-                <option value="student">{t.roles.student}</option>
-                <option value="teacher">{t.roles.teacher}</option>
-                <option value="admin">{t.roles.admin}</option>
-              </select>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPage(1);
-                }}
-                aria-label="Status filter"
-                className={cn(fieldBase, "h-9 w-auto py-1 text-xs")}
-              >
-                <option value="all">{adminT.common.allFilter}</option>
-                <option value="active">{adminT.common.active}</option>
-                <option value="suspended">{adminT.common.suspended}</option>
-              </select>
+              <div className="relative w-full sm:max-w-xs">
+                <Search
+                  className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search by name or email..."
+                  className="ps-9"
+                />
+              </div>
             </div>
           </CardHeader>
 
@@ -536,82 +622,125 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                     <TableHead>{adminT.users.emailLabel}</TableHead>
                     <TableHead>{adminT.users.roleLabel}</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-end">{adminT.common.actions}</TableHead>
+                    <TableHead className="text-end">
+                      {adminT.common.actions}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedProfiles.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium text-foreground">
-                        {user.full_name || "—"}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {user.email}
-                      </TableCell>
-                      <TableCell>
-                        <select
-                          value={user.role}
-                          disabled={busyUserId === user.id}
-                          onChange={(e) =>
-                            handleRoleChange(user.id, e.target.value as UserRole)
-                          }
-                          aria-label={`${adminT.users.roleLabel} ${user.email}`}
-                          className={cn(fieldBase, "h-8 w-32 py-1 text-xs")}
-                        >
-                          <option value="student">{t.roles.student}</option>
-                          <option value="teacher">{t.roles.teacher}</option>
-                          <option value="admin">{t.roles.admin}</option>
-                        </select>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            user.status === "active"
-                              ? "success"
-                              : user.status === "suspended"
-                                ? "destructive"
-                                : "warning"
-                          }
-                        >
-                          {user.status === "active"
-                            ? adminT.common.active
-                            : adminT.common.suspended}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-end">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setInspectedUser(user)}
-                          >
-                            <ShieldCheck className="size-3.5" aria-hidden="true" />
-                            <span>{adminT.users.viewDetailsAndActivity}</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSendPasswordReset(user.email)}
-                          >
-                            <KeyRound className="size-3.5" aria-hidden="true" />
-                            <span>{adminT.users.sendPasswordReset}</span>
-                          </Button>
-                          <Button
-                            variant={
-                              user.status === "suspended" ? "gold-outline" : "destructive"
+                  {paginatedProfiles.map((user) => {
+                    const isSelf = user.id === data.currentAdminId;
+                    return (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <p className="font-medium text-foreground">
+                            {user.full_name || "—"}
+                          </p>
+                          {user.status === "suspended" &&
+                            user.suspension_reason && (
+                              <p className="mt-0.5 text-[11px] text-destructive">
+                                Reason: {user.suspension_reason}
+                              </p>
+                            )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">
+                          {user.email}
+                        </TableCell>
+                        <TableCell>
+                          <select
+                            value={user.role}
+                            disabled={busyUserId === user.id || isSelf}
+                            onChange={(e) =>
+                              handleRoleChange(
+                                user.id,
+                                e.target.value as UserRole,
+                              )
                             }
-                            size="sm"
-                            disabled={busyUserId === user.id}
-                            onClick={() => handleStatusToggle(user.id, user.status)}
+                            aria-label={`${adminT.users.roleLabel} ${user.email}`}
+                            className={cn(fieldBase, "h-8 w-32 py-1 text-xs")}
                           >
-                            {user.status === "suspended"
-                              ? adminT.users.activateAccount
-                              : adminT.users.suspendAccount}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <option value="student">{t.roles.student}</option>
+                            <option value="teacher">{t.roles.teacher}</option>
+                            <option value="admin">{t.roles.admin}</option>
+                          </select>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              user.status === "active"
+                                ? "success"
+                                : user.status === "suspended"
+                                  ? "destructive"
+                                  : "warning"
+                            }
+                          >
+                            {user.status === "active"
+                              ? adminT.common.active
+                              : adminT.common.suspended}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setInspectedUser(user)}
+                            >
+                              <ShieldCheck
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                              <span>View</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                handleSendPasswordReset(user.email)
+                              }
+                            >
+                              <KeyRound
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
+                              <span>Reset Password</span>
+                            </Button>
+                            {user.status === "suspended" ? (
+                              <Button
+                                variant="gold"
+                                size="sm"
+                                disabled={busyUserId === user.id}
+                                onClick={() => void handleReactivateUser(user)}
+                              >
+                                Reactivate
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={busyUserId === user.id || isSelf}
+                                onClick={() => {
+                                  setSuspendingUser(user);
+                                  setSuspensionReason("");
+                                }}
+                              >
+                                Suspend
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Delete account"
+                              disabled={busyUserId === user.id || isSelf}
+                              onClick={() => setDeletingUser(user)}
+                            >
+                              <Trash2 className="size-3.5 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -619,7 +748,8 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
             {/* Pagination */}
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>
-                {adminT.common.pageOf} {currentPage} / {totalPages} ({filteredProfiles.length})
+                {adminT.common.pageOf} {currentPage} / {totalPages} (
+                {filteredProfiles.length})
               </span>
               <div className="flex items-center gap-2">
                 <Button
@@ -651,9 +781,7 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
             <CardTitle className="text-base">
               {adminT.users.tabTeacherRequests}
             </CardTitle>
-            <CardDescription>
-              {adminT.users.subtitle}
-            </CardDescription>
+            <CardDescription>{adminT.users.subtitle}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.teacherRequests.length === 0 ? (
@@ -670,7 +798,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                     <TableHead>{authT.signup.specializationLabel}</TableHead>
                     <TableHead>{authT.signup.qualificationsLabel}</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-end">{adminT.common.actions}</TableHead>
+                    <TableHead className="text-end">
+                      {adminT.common.actions}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -711,17 +841,29 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                               <Button
                                 variant="gold"
                                 size="sm"
-                                onClick={() => handleReviewTeacherRequest(req.id, true)}
+                                onClick={() =>
+                                  handleReviewTeacherRequest(req.id, true)
+                                }
                               >
-                                <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                                <span>{adminT.users.teacherRequestApprove}</span>
+                                <CheckCircle2
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
+                                <span>
+                                  {adminT.users.teacherRequestApprove}
+                                </span>
                               </Button>
                               <Button
                                 variant="destructive"
                                 size="sm"
-                                onClick={() => handleReviewTeacherRequest(req.id, false)}
+                                onClick={() =>
+                                  handleReviewTeacherRequest(req.id, false)
+                                }
                               >
-                                <XCircle className="size-3.5" aria-hidden="true" />
+                                <XCircle
+                                  className="size-3.5"
+                                  aria-hidden="true"
+                                />
                                 <span>{adminT.users.teacherRequestReject}</span>
                               </Button>
                             </div>
@@ -747,7 +889,10 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
           <CardHeader>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <FileSpreadsheet className="size-5 text-gold-foreground" aria-hidden="true" />
+                <FileSpreadsheet
+                  className="size-5 text-emerald-500"
+                  aria-hidden="true"
+                />
                 <span>{adminT.users.bulkImportTitle}</span>
               </CardTitle>
               <Button
@@ -781,16 +926,16 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                 <span>{adminT.users.bulkTemplateDownload}</span>
               </Button>
             </div>
-            <CardDescription>{adminT.users.bulkImportDescription}</CardDescription>
+            <CardDescription>
+              {adminT.users.bulkImportDescription}
+            </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="rounded-lg border border-gold-border bg-gold-subtle/50 p-3 text-xs text-gold-foreground">
-              {adminT.users.bulkServiceKeyRequiredNote}
-            </div>
-
             <div className="grid gap-3">
-              <Label htmlFor="bulk-file-input">{adminT.users.bulkUploadLabel}</Label>
+              <Label htmlFor="bulk-file-input">
+                {adminT.users.bulkUploadLabel}
+              </Label>
               <Input
                 id="bulk-file-input"
                 type="file"
@@ -818,7 +963,8 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                 >
                   <Upload className="size-4" aria-hidden="true" />
                   <span>
-                    {adminT.users.bulkImportValidButton} ({bulkValidation.validRows.length})
+                    {adminT.users.bulkImportValidButton} (
+                    {bulkValidation.validRows.length})
                   </span>
                 </Button>
               ) : null}
@@ -828,14 +974,18 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
               <div className="space-y-4 pt-2">
                 <div className="flex flex-wrap gap-3">
                   <Badge variant="success">
-                    {adminT.users.bulkValidRowsCount}: {bulkValidation.validRows.length}
+                    {adminT.users.bulkValidRowsCount}:{" "}
+                    {bulkValidation.validRows.length}
                   </Badge>
                   <Badge
                     variant={
-                      bulkValidation.issues.length > 0 ? "destructive" : "neutral"
+                      bulkValidation.issues.length > 0
+                        ? "destructive"
+                        : "neutral"
                     }
                   >
-                    {adminT.users.bulkIssuesCount}: {bulkValidation.issues.length}
+                    {adminT.users.bulkIssuesCount}:{" "}
+                    {bulkValidation.issues.length}
                   </Badge>
                 </div>
 
@@ -859,7 +1009,10 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                           </TableCell>
                           <TableCell className="text-xs text-destructive">
                             <span className="inline-flex items-center gap-1.5">
-                              <ShieldAlert className="size-3.5" aria-hidden="true" />
+                              <ShieldAlert
+                                className="size-3.5"
+                                aria-hidden="true"
+                              />
                               {issue.message}
                             </span>
                           </TableCell>
@@ -873,6 +1026,80 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Dialog: Suspend User Confirmation with Mandatory Reason */}
+      <Dialog
+        open={Boolean(suspendingUser)}
+        onOpenChange={(open) => {
+          if (!open) setSuspendingUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Suspend User Account</DialogTitle>
+            <DialogDescription>
+              Suspending{" "}
+              <strong>
+                {suspendingUser?.full_name || suspendingUser?.email}
+              </strong>{" "}
+              blocks access immediately and records an audit & security event.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label>Suspension Reason * (Required)</Label>
+            <Textarea
+              rows={3}
+              value={suspensionReason}
+              onChange={(e) => setSuspensionReason(e.target.value)}
+              placeholder="Explain the policy violation or administrative reason..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspendingUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busyUserId === suspendingUser?.id}
+              onClick={() => void handleConfirmSuspendUser()}
+            >
+              Confirm Suspension
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Delete User Confirmation */}
+      <Dialog
+        open={Boolean(deletingUser)}
+        onOpenChange={(open) => {
+          if (!open) setDeletingUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete User Account Permanently</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete{" "}
+              <strong>{deletingUser?.full_name || deletingUser?.email}</strong>?
+              If you want to preserve academic history while revoking access, use{" "}
+              <strong>Suspend</strong> instead.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busyUserId === deletingUser?.id}
+              onClick={() => void handleConfirmDeleteUser()}
+            >
+              Delete User Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Inspect User Details, Activity History & Custom Permissions */}
       <Dialog
@@ -895,6 +1122,13 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
               </DialogHeader>
 
               <div className="space-y-6">
+                {inspectedUser.suspension_reason && (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                    <strong>Suspension Reason:</strong>{" "}
+                    {inspectedUser.suspension_reason}
+                  </div>
+                )}
+
                 {/* Custom Permissions */}
                 <div className="space-y-2.5">
                   <h4 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -961,7 +1195,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                         <TableHeader>
                           <TableRow>
                             <TableHead>{adminT.security.actionCol}</TableHead>
-                            <TableHead>{adminT.security.timestampCol}</TableHead>
+                            <TableHead>
+                              {adminT.security.timestampCol}
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -978,7 +1214,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                                   {log.action}
                                 </TableCell>
                                 <TableCell className="font-mono text-xs text-muted-foreground">
-                                  {log.created_at.replace("T", " ").slice(0, 19)}
+                                  {log.created_at
+                                    .replace("T", " ")
+                                    .slice(0, 19)}
                                 </TableCell>
                               </TableRow>
                             ))}

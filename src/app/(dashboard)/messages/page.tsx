@@ -4,21 +4,31 @@ import { connection } from "next/server";
 
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
+import { RoleDashboardShell } from "@/components/navigation/role-dashboard-shell";
 import { MessagingClient } from "@/components/shared/messaging-client";
 import { getMessagingData } from "@/services/shared/queries";
 
 export const metadata: Metadata = {
-  title: "Internal Messaging | Learnix",
-  description: "Secure student-teacher conversations with file attachments and notification alerts.",
+  title: "Messages | Learnix",
+  description:
+    "Realtime student-teacher conversations with read status, attachments, and notification alerts.",
 };
 
 async function MessagingLoader() {
   await connection();
   const res = await getMessagingData();
   if (!res.ok) {
-    return <ErrorState description={res.error} />;
+    return (
+      <RoleDashboardShell>
+        <ErrorState description={res.error} />
+      </RoleDashboardShell>
+    );
   }
-  return <MessagingClient data={res.data} />;
+  return (
+    <RoleDashboardShell>
+      <MessagingClient data={res.data} />
+    </RoleDashboardShell>
+  );
 }
 
 export default function MessagesPage() {

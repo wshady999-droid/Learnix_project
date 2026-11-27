@@ -1,19 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  ArrowDown,
+  ArrowUp,
   BookOpen,
   CalendarClock,
   CheckCircle2,
   Edit3,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileText,
   Film,
+  FolderPlus,
   HelpCircle,
   ImagePlus,
   Layers,
+  MessageSquare,
   Plus,
   Presentation,
   Search,
@@ -54,10 +61,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
-import {
-  COURSE_CATEGORIES,
-  type CourseCategory,
-} from "@/lib/constants/categories";
+import { COURSE_CATEGORIES } from "@/lib/constants/categories";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   uploadCourseThumbnail,
@@ -67,10 +71,16 @@ import { cn } from "@/lib/utils";
 import type { TableRow as DbTableRow } from "@/services/db/utils";
 import {
   teacherDeleteChapterAction,
+  teacherDeleteLearningResourceAction,
   teacherDeleteLessonAction,
+  teacherReorderChapterAction,
+  teacherReorderLessonAction,
   teacherSaveChapterAction,
   teacherSaveCourseAction,
+  teacherSaveLearningResourceAction,
   teacherSaveLessonAction,
+  teacherToggleCourseStatusAction,
+  teacherToggleLessonPublishedAction,
 } from "@/services/teacher/actions";
 import type { TeacherCoursesData } from "@/services/teacher/queries";
 
@@ -80,26 +90,38 @@ interface TeacherCoursesClientProps {
 
 export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { locale } = useLocale();
   const t = getTeacherDictionary(locale);
   const [isPending, startTransition] = useTransition();
 
-  const [activeTab, setActiveTab] = useState<"courses" | "chapters" | "students">(
-    "courses",
-  );
+  const categoryOptions = useMemo(() => {
+    if (data.categories.length > 0) {
+      return data.categories.map((c) => ({ id: c.id, name: c.name }));
+    }
+    return COURSE_CATEGORIES.map((name) => ({ id: "", name }));
+  }, [data.categories]);
+
+  const [activeTab, setActiveTab] = useState<
+    "courses" | "chapters" | "resources" | "students"
+  >("courses");
   const [search, setSearch] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string>(
     data.courses[0]?.id ?? "",
   );
 
+  // Course modal state
   const [courseDialogOpen, setCourseDialogOpen] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | undefined>(
     undefined,
   );
-  const [courseCode, setCourseCode] = useState("");
+  const [editingCourseCode, setEditingCourseCode] = useState("");
   const [courseTitle, setCourseTitle] = useState("");
-  const [courseCategory, setCourseCategory] = useState<CourseCategory>(
-    COURSE_CATEGORIES[0],
+  const [courseCategoryId, setCourseCategoryId] = useState<string>(
+    categoryOptions[0]?.id ?? "",
+  );
+  const [courseCategoryName, setCourseCategoryName] = useState<string>(
+    categoryOptions[0]?.name ?? COURSE_CATEGORIES[0],
   );
   const [courseSummary, setCourseSummary] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
@@ -108,10 +130,8 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   const [courseLanguage, setCourseLanguage] = useState<
     "en" | "ar" | "de" | "it" | "fr"
   >("en");
-  const [courseStatus, setCourseStatus] = useState<
-    "draft" | "published" | "archived"
-  >("draft");
   const [estimatedHours, setEstimatedHours] = useState("12");
+  const [durationUnit, setDurationUnit] = useState<"hours" | "days">("hours");
   const [passingScore, setPassingScore] = useState("60");
   const [completionRequirements, setCompletionRequirements] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
@@ -121,6 +141,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   );
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
+  // Chapter modal state
   const [chapterDialogOpen, setChapterDialogOpen] = useState(false);
   const [editingChapterId, setEditingChapterId] = useState<string | undefined>(
     undefined,
@@ -130,6 +151,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   const [chapterOrder, setChapterOrder] = useState("1");
   const [chapterPublished, setChapterPublished] = useState(true);
 
+  // Lesson modal state
   const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
   const [editingLessonId, setEditingLessonId] = useState<string | undefined>(
     undefined,
@@ -151,6 +173,33 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   const [isPublished, setIsPublished] = useState(true);
   const [uploadingLessonMedia, setUploadingLessonMedia] = useState(false);
 
+  // Learning Resource modal state
+  const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+  const [editingResourceId, setEditingResourceId] = useState<
+    string | undefined
+  >(undefined);
+  const [resourceChapterId, setResourceChapterId] = useState<string>("none");
+  const [resourceLessonId, setResourceLessonId] = useState<string>("none");
+  const [resourceTitle, setResourceTitle] = useState("");
+  const [resourceDescription, setResourceDescription] = useState("");
+  const [resourceType, setResourceType] = useState<
+    "pdf" | "document" | "link" | "slides" | "archive" | "other"
+  >("pdf");
+  const [resourceStoragePath, setResourceStoragePath] = useState("");
+  const [resourceFileName, setResourceFileName] = useState("");
+  const [resourceFileSize, setResourceFileSize] = useState<number | null>(null);
+  const [resourceMimeType, setResourceMimeType] = useState("");
+  const [resourceExternalUrl, setResourceExternalUrl] = useState("");
+  const [resourcePublished, setResourcePublished] = useState(true);
+  const [uploadingResourceFile, setUploadingResourceFile] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "new") {
+      openNewCourseModal();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     return () => {
       if (thumbnailPreviewUrl && thumbnailPreviewUrl.startsWith("blob:")) {
@@ -166,11 +215,16 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
       (c) =>
         c.title.toLowerCase().includes(q) ||
         c.code.toLowerCase().includes(q) ||
+        (c.category ?? "").toLowerCase().includes(q) ||
         (c.subtitle ?? "").toLowerCase().includes(q),
     );
   }, [data.courses, search]);
 
   const activeCourseId = selectedCourseId || data.courses[0]?.id || "";
+  const activeCourse = useMemo(
+    () => data.courses.find((c) => c.id === activeCourseId) ?? null,
+    [data.courses, activeCourseId],
+  );
   const courseChapters = useMemo(
     () => data.chapters.filter((ch) => ch.course_id === activeCourseId),
     [data.chapters, activeCourseId],
@@ -179,6 +233,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     () => data.lessons.filter((l) => l.course_id === activeCourseId),
     [data.lessons, activeCourseId],
   );
+  const courseResources = useMemo(
+    () => data.learningResources.filter((r) => r.course_id === activeCourseId),
+    [data.learningResources, activeCourseId],
+  );
   const courseEnrollments = useMemo(
     () => data.enrollments.filter((e) => e.course_id === activeCourseId),
     [data.enrollments, activeCourseId],
@@ -186,19 +244,20 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
 
   function openNewCourseModal() {
     setEditingCourseId(undefined);
-    setCourseCode("");
+    setEditingCourseCode("");
     setCourseTitle("");
-    setCourseCategory(COURSE_CATEGORIES[0]);
+    setCourseCategoryId(categoryOptions[0]?.id ?? "");
+    setCourseCategoryName(categoryOptions[0]?.name ?? COURSE_CATEGORIES[0]);
     setCourseSummary("");
     setCourseDescription("");
     setDepartmentId("none");
     setLevelId("none");
     setCourseLanguage("en");
-    setCourseStatus("published");
     setEstimatedHours("12");
+    setDurationUnit("hours");
     setPassingScore("60");
     setCompletionRequirements(
-      "Complete all chapters, lessons, and pass the final examination.",
+      "Complete all sections, lessons, and pass the course assessments.",
     );
     setThumbnailUrl("");
     setThumbnailFile(null);
@@ -208,13 +267,16 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
 
   function openEditCourseModal(course: DbTableRow<"courses">) {
     setEditingCourseId(course.id);
-    setCourseCode(course.code);
+    setEditingCourseCode(course.code);
     setCourseTitle(course.title);
-    setCourseCategory(
-      (COURSE_CATEGORIES as readonly string[]).includes(course.category)
-        ? (course.category as CourseCategory)
-        : COURSE_CATEGORIES[0],
-    );
+    const matchingCat =
+      categoryOptions.find(
+        (c) =>
+          (course.category_id && c.id === course.category_id) ||
+          c.name.toLowerCase() === (course.category ?? "").toLowerCase(),
+      ) ?? categoryOptions[0];
+    setCourseCategoryId(matchingCat?.id ?? "");
+    setCourseCategoryName(matchingCat?.name ?? course.category ?? "General");
     setCourseSummary(course.subtitle ?? "");
     setCourseDescription(course.description ?? "");
     setDepartmentId(course.department_id ?? "none");
@@ -222,8 +284,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     setCourseLanguage(
       (course.language as "en" | "ar" | "de" | "it" | "fr") || "en",
     );
-    setCourseStatus(course.status);
     setEstimatedHours(String(course.estimated_hours ?? 12));
+    setDurationUnit(
+      course.duration_unit === "days" ? "days" : "hours",
+    );
     setPassingScore(String(course.passing_score ?? 60));
     setCompletionRequirements(course.completion_requirements ?? "");
     setThumbnailUrl(course.thumbnail_url ?? "");
@@ -261,25 +325,25 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     setThumbnailUrl("");
   }
 
-  function handleSaveCourse() {
-    if (courseCode.trim().length < 2) {
-      toast.error("Course Code must be at least 2 characters.");
+  function handleSaveCourse(targetStatus: "draft" | "published") {
+    if (courseTitle.trim().length < 3) {
+      toast.error("Course Name must be at least 3 characters.");
       return;
     }
-    if (courseTitle.trim().length < 2) {
-      toast.error("Course Title must be at least 2 characters.");
+    if (!courseCategoryName.trim()) {
+      toast.error("Please select a Course Category.");
       return;
     }
-    if (courseSummary.trim().length < 2) {
-      toast.error("Short Summary must be at least 2 characters.");
+    if (courseDescription.trim().length < 10) {
+      toast.error("Course Description must be at least 10 characters.");
       return;
     }
     if (Number(estimatedHours) < 1) {
-      toast.error("Estimated Hours must be at least 1.");
+      toast.error("Duration must be at least 1.");
       return;
     }
-    if (Number(passingScore) < 0 || Number(passingScore) > 100) {
-      toast.error("Passing Score must be between 0 and 100.");
+    if (!editingCourseId && !thumbnailFile && !thumbnailUrl) {
+      toast.error("Course Cover Image is mandatory when creating a course.");
       return;
     }
 
@@ -309,16 +373,17 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
 
       const res = await teacherSaveCourseAction({
         id: editingCourseId,
-        code: courseCode,
         title: courseTitle,
-        category: courseCategory,
-        summary: courseSummary,
+        categoryId: courseCategoryId || null,
+        category: courseCategoryName,
+        summary: courseSummary || courseDescription.slice(0, 140),
         description: courseDescription,
         departmentId: departmentId === "none" ? null : departmentId,
         educationalLevelId: levelId === "none" ? null : levelId,
         language: courseLanguage,
-        status: courseStatus,
+        status: targetStatus,
         estimatedHours: Number(estimatedHours),
+        durationUnit,
         passingScore: Number(passingScore),
         completionRequirements,
         thumbnailUrl: resolvedThumbnailUrl,
@@ -329,10 +394,34 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         return;
       }
 
-      toast.success(t.courses.courseSavedToast);
+      toast.success(
+        targetStatus === "published"
+          ? `Course published (${res.data.code}).`
+          : `Course draft saved (${res.data.code}).`,
+      );
       setCourseDialogOpen(false);
       setThumbnailFile(null);
       setSelectedCourseId(res.data.id);
+      router.refresh();
+    });
+  }
+
+  function handleQuickToggleCoursePublish(course: DbTableRow<"courses">) {
+    const nextStatus = course.status === "published" ? "draft" : "published";
+    startTransition(async () => {
+      const res = await teacherToggleCourseStatusAction({
+        courseId: course.id,
+        status: nextStatus,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        nextStatus === "published"
+          ? "Course published to students."
+          : "Course unpublished to draft.",
+      );
       router.refresh();
     });
   }
@@ -377,6 +466,22 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     });
   }
 
+  function handleReorderChapter(chapterId: string, direction: "up" | "down") {
+    if (!activeCourseId) return;
+    startTransition(async () => {
+      const res = await teacherReorderChapterAction({
+        courseId: activeCourseId,
+        chapterId,
+        direction,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   function handleDeleteChapter(chapterId: string) {
     if (!activeCourseId) return;
     startTransition(async () => {
@@ -396,7 +501,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   function openNewLessonModal(defaultChapterId?: string) {
     const chId = defaultChapterId || courseChapters[0]?.id || "";
     if (!chId) {
-      toast.error("Create a chapter first before adding lessons.");
+      toast.error("Create a section first before adding lessons.");
       return;
     }
     setEditingLessonId(undefined);
@@ -515,6 +620,46 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     });
   }
 
+  function handleReorderLesson(
+    chapterId: string,
+    lessonId: string,
+    direction: "up" | "down",
+  ) {
+    if (!activeCourseId) return;
+    startTransition(async () => {
+      const res = await teacherReorderLessonAction({
+        courseId: activeCourseId,
+        chapterId,
+        lessonId,
+        direction,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleToggleLessonPublished(lesson: DbTableRow<"lessons">) {
+    if (!activeCourseId) return;
+    startTransition(async () => {
+      const res = await teacherToggleLessonPublishedAction({
+        courseId: activeCourseId,
+        lessonId: lesson.id,
+        isPublished: !lesson.is_published,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        lesson.is_published ? "Lesson hidden as draft." : "Lesson published.",
+      );
+      router.refresh();
+    });
+  }
+
   function handleDeleteLesson(lessonId: string) {
     if (!activeCourseId) return;
     startTransition(async () => {
@@ -527,6 +672,125 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         return;
       }
       toast.success(t.courses.lessonDeletedToast);
+      router.refresh();
+    });
+  }
+
+  function openNewResourceModal() {
+    if (!activeCourseId) return;
+    setEditingResourceId(undefined);
+    setResourceChapterId("none");
+    setResourceLessonId("none");
+    setResourceTitle("");
+    setResourceDescription("");
+    setResourceType("pdf");
+    setResourceStoragePath("");
+    setResourceFileName("");
+    setResourceFileSize(null);
+    setResourceMimeType("");
+    setResourceExternalUrl("");
+    setResourcePublished(true);
+    setResourceDialogOpen(true);
+  }
+
+  function openEditResourceModal(resItem: DbTableRow<"learning_resources">) {
+    setEditingResourceId(resItem.id);
+    setResourceChapterId(resItem.chapter_id ?? "none");
+    setResourceLessonId(resItem.lesson_id ?? "none");
+    setResourceTitle(resItem.title);
+    setResourceDescription(resItem.description ?? "");
+    setResourceType(
+      (resItem.resource_type as
+        | "pdf"
+        | "document"
+        | "link"
+        | "slides"
+        | "archive"
+        | "other") || "pdf",
+    );
+    setResourceStoragePath(resItem.storage_path ?? "");
+    setResourceFileName(resItem.file_name ?? "");
+    setResourceFileSize(resItem.file_size_bytes);
+    setResourceMimeType(resItem.mime_type ?? "");
+    setResourceExternalUrl(resItem.external_url ?? "");
+    setResourcePublished(resItem.is_published);
+    setResourceDialogOpen(true);
+  }
+
+  async function handleResourceFileUpload(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = e.target.files?.[0];
+    if (!file || !activeCourseId) return;
+
+    setUploadingResourceFile(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `${activeCourseId}/resources_${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage
+        .from("course-materials")
+        .upload(storagePath, file, { upsert: true });
+
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setResourceStoragePath(storagePath);
+      setResourceFileName(file.name);
+      setResourceFileSize(file.size);
+      setResourceMimeType(file.type || "application/octet-stream");
+      if (!resourceTitle.trim()) {
+        setResourceTitle(file.name.replace(/\.[^.]+$/, ""));
+      }
+      toast.success("Learning resource uploaded.");
+    } finally {
+      setUploadingResourceFile(false);
+    }
+  }
+
+  function handleSaveResource() {
+    if (!activeCourseId) return;
+    startTransition(async () => {
+      const res = await teacherSaveLearningResourceAction({
+        id: editingResourceId,
+        courseId: activeCourseId,
+        chapterId: resourceChapterId === "none" ? null : resourceChapterId,
+        lessonId: resourceLessonId === "none" ? null : resourceLessonId,
+        title: resourceTitle,
+        description: resourceDescription,
+        resourceType,
+        storageBucket: resourceStoragePath ? "course-materials" : null,
+        storagePath: resourceStoragePath || null,
+        externalUrl: resourceExternalUrl || null,
+        fileName: resourceFileName || null,
+        fileSizeBytes: resourceFileSize,
+        mimeType: resourceMimeType || null,
+        isPublished: resourcePublished,
+      });
+
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Learning resource saved.");
+      setResourceDialogOpen(false);
+      router.refresh();
+    });
+  }
+
+  function handleDeleteResource(resourceId: string) {
+    if (!activeCourseId) return;
+    startTransition(async () => {
+      const res = await teacherDeleteLearningResourceAction({
+        resourceId,
+        courseId: activeCourseId,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Learning resource removed.");
       router.refresh();
     });
   }
@@ -554,7 +818,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
           size="sm"
           onClick={() => setActiveTab("courses")}
         >
-          {t.courses.tabCourses}
+          {t.courses.tabCourses} ({data.courses.length})
         </Button>
         <Button
           variant={activeTab === "chapters" ? "gold" : "outline"}
@@ -562,6 +826,13 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
           onClick={() => setActiveTab("chapters")}
         >
           {t.courses.tabChaptersLessons}
+        </Button>
+        <Button
+          variant={activeTab === "resources" ? "gold" : "outline"}
+          size="sm"
+          onClick={() => setActiveTab("resources")}
+        >
+          Learning Resources ({courseResources.length})
         </Button>
         <Button
           variant={activeTab === "students" ? "gold" : "outline"}
@@ -616,18 +887,19 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                     className={cn(
                       "overflow-hidden",
                       isSelected
-                        ? "border-gold-primary/60 shadow-md"
+                        ? "border-emerald-500/60 shadow-md"
                         : "border-border/80",
                     )}
                   >
                     <div className="relative h-36 w-full overflow-hidden border-b border-border/60 bg-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={course.thumbnail_url || "/learnix-hero.jpg"}
                         alt={course.title}
                         className="h-full w-full object-cover"
                       />
                       <div className="absolute top-2.5 right-2.5">
-                        <Badge className="border border-[#C99A22]/60 bg-[#11131F]/85 text-[10px] font-semibold text-[#C99A22] backdrop-blur-md">
+                        <Badge className="border border-emerald-500/60 bg-[#0a1f1d]/85 text-[10px] font-semibold text-emerald-300 backdrop-blur-md">
                           {course.category || "General"}
                         </Badge>
                       </div>
@@ -649,19 +921,19 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                         {course.title}
                       </CardTitle>
                       <CardDescription className="line-clamp-2">
-                        {course.subtitle ||
-                          course.description ||
-                          "No summary provided."}
+                        {course.description ||
+                          course.subtitle ||
+                          "No description provided."}
                       </CardDescription>
                     </CardHeader>
 
                     <CardContent className="space-y-3 text-xs text-muted-foreground">
-                      <div className="grid grid-cols-3 gap-2 rounded-lg border border-border/70 bg-muted/40 p-2.5 text-center">
+                      <div className="grid grid-cols-4 gap-2 rounded-lg border border-border/70 bg-muted/40 p-2.5 text-center">
                         <div>
                           <p className="font-semibold text-foreground">
                             {chaptersCount}
                           </p>
-                          <p className="text-[11px]">Chapters</p>
+                          <p className="text-[11px]">Sections</p>
                         </div>
                         <div>
                           <p className="font-semibold text-foreground">
@@ -675,18 +947,17 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                           </p>
                           <p className="text-[11px]">Students</p>
                         </div>
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {Number(course.estimated_hours ?? 10)}
+                            {course.duration_unit === "days" ? "d" : "h"}
+                          </p>
+                          <p className="text-[11px]">Duration</p>
+                        </div>
                       </div>
-                      {course.completion_requirements && (
-                        <p className="line-clamp-2 text-[11px]">
-                          <strong className="text-foreground">
-                            Completion:{" "}
-                          </strong>
-                          {course.completion_requirements}
-                        </p>
-                      )}
                     </CardContent>
 
-                    <CardFooter className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                    <CardFooter className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
                       <Button
                         variant={isSelected ? "gold" : "outline"}
                         size="sm"
@@ -698,14 +969,26 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                         <Layers className="size-3.5" />
                         <span>Manage Content</span>
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditCourseModal(course)}
-                      >
-                        <Edit3 className="size-3.5" />
-                        <span>{t.common.edit}</span>
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isPending}
+                          onClick={() => handleQuickToggleCoursePublish(course)}
+                        >
+                          {course.status === "published"
+                            ? "Unpublish"
+                            : "Publish"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditCourseModal(course)}
+                        >
+                          <Edit3 className="size-3.5" />
+                          <span>{t.common.edit}</span>
+                        </Button>
+                      </div>
                     </CardFooter>
                   </Card>
                 );
@@ -720,10 +1003,12 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">
-                {t.courses.selectCoursePrompt}
+                {activeCourse
+                  ? `${activeCourse.code} — ${activeCourse.title}`
+                  : t.courses.selectCoursePrompt}
               </CardTitle>
               <CardDescription>
-                {t.courses.createAfterLessonQuizNote}
+                Organize sections, videos, PDFs, text lessons, reordering, and visibility.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -746,7 +1031,16 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 onClick={openNewChapterModal}
               >
                 <Plus className="size-4" />
-                <span>{t.courses.addChapter}</span>
+                <span>Add Section</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!activeCourseId}
+                onClick={openNewResourceModal}
+              >
+                <FolderPlus className="size-4" />
+                <span>Add Resource</span>
               </Button>
               <Button
                 variant="gold"
@@ -765,10 +1059,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               <EmptyState
                 icon={Layers}
                 title={t.common.noRecordsTitle}
-                description="Add your first chapter to organize videos, PDFs, PowerPoint presentations, and post-lesson quizzes."
+                description="Add your first section to organize videos, PDFs, text lessons, and learning resources."
               />
             ) : (
-              courseChapters.map((chapter) => {
+              courseChapters.map((chapter, chIdx) => {
                 const lessonsInChapter = courseLessons.filter(
                   (l) => l.chapter_id === chapter.id,
                 );
@@ -782,7 +1076,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                       <div>
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="font-mono text-xs">
-                            #{chapter.position}
+                            #{chIdx + 1}
                           </Badge>
                           <h3 className="font-semibold text-foreground">
                             {chapter.title}
@@ -804,7 +1098,31 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Move section up"
+                          disabled={isPending || chIdx === 0}
+                          onClick={() =>
+                            handleReorderChapter(chapter.id, "up")
+                          }
+                        >
+                          <ArrowUp className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Move section down"
+                          disabled={
+                            isPending || chIdx === courseChapters.length - 1
+                          }
+                          onClick={() =>
+                            handleReorderChapter(chapter.id, "down")
+                          }
+                        >
+                          <ArrowDown className="size-3.5" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -833,44 +1151,52 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
 
                     {lessonsInChapter.length === 0 ? (
                       <p className="py-4 text-center text-xs text-muted-foreground">
-                        No lessons in this chapter yet.
+                        No lessons in this section yet.
                       </p>
                     ) : (
                       <div className="mt-3 space-y-2">
-                        {lessonsInChapter.map((lesson) => (
+                        {lessonsInChapter.map((lesson, lIdx) => (
                           <div
                             key={lesson.id}
                             className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/80 p-3 text-xs"
                           >
                             <div className="flex items-center gap-2.5">
                               {lesson.content_type === "video" && (
-                                <Film className="size-4 text-gold-foreground" />
+                                <Film className="size-4 text-emerald-500" />
                               )}
                               {lesson.content_type === "pdf" && (
-                                <FileText className="size-4 text-gold-foreground" />
+                                <FileText className="size-4 text-emerald-500" />
                               )}
                               {lesson.content_type === "presentation" && (
-                                <Presentation className="size-4 text-gold-foreground" />
+                                <Presentation className="size-4 text-emerald-500" />
                               )}
                               {lesson.content_type === "article" && (
-                                <BookOpen className="size-4 text-gold-foreground" />
+                                <BookOpen className="size-4 text-emerald-500" />
                               )}
                               {lesson.content_type === "quiz" && (
-                                <HelpCircle className="size-4 text-gold-foreground" />
+                                <HelpCircle className="size-4 text-emerald-500" />
                               )}
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="font-semibold text-foreground">
-                                    {lesson.position}. {lesson.title}
+                                    {lIdx + 1}. {lesson.title}
                                   </span>
+                                  <Badge variant="outline" className="uppercase">
+                                    {lesson.content_type === "article"
+                                      ? "TEXT"
+                                      : lesson.content_type}
+                                  </Badge>
                                   <Badge
-                                    variant="outline"
-                                    className="uppercase"
+                                    variant={
+                                      lesson.is_published ? "gold" : "outline"
+                                    }
                                   >
-                                    {lesson.content_type}
+                                    {lesson.is_published
+                                      ? "Published"
+                                      : "Draft"}
                                   </Badge>
                                   {lesson.is_preview && (
-                                    <Badge variant="gold">Preview</Badge>
+                                    <Badge variant="outline">Preview</Badge>
                                   )}
                                 </div>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
@@ -895,7 +1221,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                                       href={lesson.external_resource_url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="inline-flex items-center gap-1 text-gold-foreground underline"
+                                      className="inline-flex items-center gap-1 text-emerald-600 underline dark:text-emerald-400"
                                     >
                                       <ExternalLink className="size-3" />
                                       External Resource
@@ -905,7 +1231,59 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Move lesson up"
+                                disabled={isPending || lIdx === 0}
+                                onClick={() =>
+                                  handleReorderLesson(
+                                    chapter.id,
+                                    lesson.id,
+                                    "up",
+                                  )
+                                }
+                              >
+                                <ArrowUp className="size-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Move lesson down"
+                                disabled={
+                                  isPending ||
+                                  lIdx === lessonsInChapter.length - 1
+                                }
+                                onClick={() =>
+                                  handleReorderLesson(
+                                    chapter.id,
+                                    lesson.id,
+                                    "down",
+                                  )
+                                }
+                              >
+                                <ArrowDown className="size-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title={
+                                  lesson.is_published
+                                    ? "Unpublish lesson"
+                                    : "Publish lesson"
+                                }
+                                disabled={isPending}
+                                onClick={() =>
+                                  handleToggleLessonPublished(lesson)
+                                }
+                              >
+                                {lesson.is_published ? (
+                                  <Eye className="size-3.5 text-emerald-500" />
+                                ) : (
+                                  <EyeOff className="size-3.5 text-muted-foreground" />
+                                )}
+                              </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -934,6 +1312,112 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         </Card>
       )}
 
+      {activeTab === "resources" && (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base">
+                Course Learning Resources
+              </CardTitle>
+              <CardDescription>
+                Supplementary PDFs, reference guides, slide decks, and external links for students.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className={cn(fieldBase, "h-9 w-64")}
+                value={activeCourseId}
+                onChange={(e) => setSelectedCourseId(e.target.value)}
+              >
+                {data.courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.title}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="gold"
+                size="sm"
+                disabled={!activeCourseId}
+                onClick={openNewResourceModal}
+              >
+                <Plus className="size-4" />
+                <span>Add Learning Resource</span>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {courseResources.length === 0 ? (
+              <EmptyState
+                icon={FolderPlus}
+                title="No Learning Resources Yet"
+                description="Upload supplementary PDFs, worksheets, or external links for this course."
+              />
+            ) : (
+              <div className="space-y-2.5">
+                {courseResources.map((resItem) => (
+                  <div
+                    key={resItem.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-card/60 p-3.5 text-xs"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-foreground">
+                          {resItem.title}
+                        </span>
+                        <Badge variant="outline" className="uppercase">
+                          {resItem.resource_type}
+                        </Badge>
+                        <Badge
+                          variant={resItem.is_published ? "gold" : "outline"}
+                        >
+                          {resItem.is_published ? "Published" : "Draft"}
+                        </Badge>
+                      </div>
+                      {resItem.description && (
+                        <p className="mt-1 text-muted-foreground">
+                          {resItem.description}
+                        </p>
+                      )}
+                      <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                        {resItem.file_name && <span>File: {resItem.file_name}</span>}
+                        {resItem.external_url && (
+                          <a
+                            href={resItem.external_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-emerald-600 underline dark:text-emerald-400"
+                          >
+                            {resItem.external_url}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditResourceModal(resItem)}
+                      >
+                        <Edit3 className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isPending}
+                        onClick={() => handleDeleteResource(resItem.id)}
+                      >
+                        <Trash2 className="size-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {activeTab === "students" && (
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -942,8 +1426,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 {t.courses.tabEnrolledStudents}
               </CardTitle>
               <CardDescription>
-                Students enrolled in the selected course and their completion
-                progress.
+                Students enrolled in the selected course and their completion progress.
               </CardDescription>
             </div>
             <select
@@ -974,6 +1457,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                     <TableHead>Status</TableHead>
                     <TableHead>{t.courses.progressLabel}</TableHead>
                     <TableHead>{t.courses.enrolledAtLabel}</TableHead>
+                    <TableHead className="text-right">Chat</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1002,6 +1486,16 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {enr.enrolled_at.slice(0, 10)}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button asChild variant="outline" size="sm">
+                          <Link
+                            href={`/messages?userId=${enr.student_id}&courseId=${enr.course_id}`}
+                          >
+                            <MessageSquare className="size-3.5" />
+                            <span>Chat</span>
+                          </Link>
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1011,6 +1505,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         </Card>
       )}
 
+      {/* CREATE / EDIT COURSE DIALOG */}
       <Dialog open={courseDialogOpen} onOpenChange={setCourseDialogOpen}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
@@ -1019,79 +1514,98 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 ? t.courses.editCourse
                 : t.courses.createCourse}
             </DialogTitle>
-            <DialogDescription>{t.courses.subtitle}</DialogDescription>
+            <DialogDescription>
+              {editingCourseId
+                ? `Course Code: ${editingCourseCode} (auto-generated)`
+                : "Course codes are generated automatically in the database and linked to your teacher account."}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>{t.courses.courseCodeLabel}</Label>
-              <Input
-                value={courseCode}
-                onChange={(e) => setCourseCode(e.target.value)}
-                placeholder="CS-301"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>{t.courses.statusLabel}</Label>
-              <select
-                className={cn(fieldBase, "h-9 w-full")}
-                value={courseStatus}
-                onChange={(e) =>
-                  setCourseStatus(
-                    e.target.value as "draft" | "published" | "archived",
-                  )
-                }
-              >
-                <option value="draft">{t.common.draft}</option>
-                <option value="published">{t.common.published}</option>
-                <option value="archived">{t.common.archived}</option>
-              </select>
-            </div>
-
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>{t.courses.courseTitleLabel}</Label>
-              <Input
-                value={courseTitle}
-                onChange={(e) => setCourseTitle(e.target.value)}
-                placeholder="Advanced Artificial Intelligence & Neural Systems"
-              />
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="teacher-course-category">Course Category *</Label>
+              <Label htmlFor="teacher-course-category">Category *</Label>
               <select
                 id="teacher-course-category"
                 required
                 className={cn(fieldBase, "h-9 w-full")}
-                value={courseCategory}
-                onChange={(e) =>
-                  setCourseCategory(e.target.value as CourseCategory)
-                }
+                value={courseCategoryName}
+                onChange={(e) => {
+                  const chosen = categoryOptions.find(
+                    (c) => c.name === e.target.value,
+                  );
+                  setCourseCategoryName(e.target.value);
+                  setCourseCategoryId(chosen?.id ?? "");
+                }}
               >
-                {COURSE_CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
+                {categoryOptions.map((cat) => (
+                  <option key={cat.name} value={cat.name}>
+                    {cat.name}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>{t.courses.courseSummaryLabel}</Label>
+              <Label>Course Name *</Label>
               <Input
-                value={courseSummary}
-                onChange={(e) => setCourseSummary(e.target.value)}
-                placeholder="Concise overview shown on course cards"
+                required
+                value={courseTitle}
+                onChange={(e) => setCourseTitle(e.target.value)}
+                placeholder="Advanced Artificial Intelligence & Neural Systems"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Duration *</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  required
+                  value={estimatedHours}
+                  onChange={(e) => setEstimatedHours(e.target.value)}
+                />
+                <select
+                  className={cn(fieldBase, "h-9 w-28 shrink-0")}
+                  value={durationUnit}
+                  onChange={(e) =>
+                    setDurationUnit(e.target.value as "hours" | "days")
+                  }
+                >
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>{t.courses.passingScoreLabel}</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={passingScore}
+                onChange={(e) => setPassingScore(e.target.value)}
               />
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label>{t.courses.courseDescriptionLabel}</Label>
+              <Label>Description *</Label>
               <Textarea
-                rows={3}
+                rows={4}
+                required
                 value={courseDescription}
                 onChange={(e) => setCourseDescription(e.target.value)}
+                placeholder="Describe what students will learn, syllabus highlights, and outcomes..."
+              />
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>{t.courses.courseSummaryLabel} (Optional)</Label>
+              <Input
+                value={courseSummary}
+                onChange={(e) => setCourseSummary(e.target.value)}
+                placeholder="Short tagline shown on catalog cards"
               />
             </div>
 
@@ -1102,7 +1616,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
               >
-                <option value="none">— None —</option>
+                <option value="none">— Optional —</option>
                 {data.departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
@@ -1118,7 +1632,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 value={levelId}
                 onChange={(e) => setLevelId(e.target.value)}
               >
-                <option value="none">— None —</option>
+                <option value="none">— Optional —</option>
                 {data.educationalLevels.map((lvl) => (
                   <option key={lvl.id} value={lvl.id}>
                     {lvl.name}
@@ -1127,42 +1641,14 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>{t.courses.estimatedHoursLabel}</Label>
-              <Input
-                type="number"
-                value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>{t.courses.passingScoreLabel}</Label>
-              <Input
-                type="number"
-                value={passingScore}
-                onChange={(e) => setPassingScore(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label>{t.courses.completionRequirementsLabel}</Label>
-              <Textarea
-                rows={2}
-                value={completionRequirements}
-                onChange={(e) => setCompletionRequirements(e.target.value)}
-                placeholder="e.g. Watch 90% of video lectures, complete all post-lesson quizzes, and score at least 60% on the final exam."
-              />
-            </div>
-
             <div className="space-y-2.5 sm:col-span-2">
               <div className="flex items-center justify-between">
                 <Label
                   htmlFor="course-cover-image-input"
                   className="flex items-center gap-2"
                 >
-                  <ImagePlus className="size-4 text-gold-foreground" />
-                  <span>Course Cover Image</span>
+                  <ImagePlus className="size-4 text-emerald-500" />
+                  <span>Course Image * (Mandatory)</span>
                 </Label>
                 <span className="text-[11px] text-muted-foreground">
                   JPG, PNG, WEBP • Max 5 MB
@@ -1178,8 +1664,9 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               />
 
               {(thumbnailPreviewUrl || thumbnailUrl) && (
-                <div className="relative overflow-hidden rounded-xl border border-[#C99A22]/50 bg-muted/40 p-2">
+                <div className="relative overflow-hidden rounded-xl border border-emerald-500/40 bg-muted/40 p-2">
                   <div className="relative h-44 w-full overflow-hidden rounded-lg">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={thumbnailPreviewUrl || thumbnailUrl}
                       alt="Course cover preview"
@@ -1187,7 +1674,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                     />
                     <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/80 via-black/45 to-transparent px-3 py-2 text-xs text-white">
                       <span className="flex items-center gap-1.5 truncate font-medium">
-                        <CheckCircle2 className="size-3.5 shrink-0 text-[#C99A22]" />
+                        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-400" />
                         <span className="truncate">
                           {thumbnailFile
                             ? `Ready to upload: ${thumbnailFile.name} (${(thumbnailFile.size / (1024 * 1024)).toFixed(2)} MB)`
@@ -1209,7 +1696,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setCourseDialogOpen(false)}
@@ -1217,20 +1704,30 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               {t.common.cancel}
             </Button>
             <Button
+              variant="outline"
+              disabled={isPending || uploadingThumbnail}
+              onClick={() => handleSaveCourse("draft")}
+            >
+              {uploadingThumbnail ? "Uploading..." : "Save Draft"}
+            </Button>
+            <Button
               variant="gold"
               disabled={isPending || uploadingThumbnail}
-              onClick={handleSaveCourse}
+              onClick={() => handleSaveCourse("published")}
             >
-              {uploadingThumbnail ? "Uploading Cover..." : t.common.save}
+              {uploadingThumbnail ? "Uploading Cover..." : "Publish Course"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* SECTION DIALOG */}
       <Dialog open={chapterDialogOpen} onOpenChange={setChapterDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t.courses.addChapter}</DialogTitle>
+            <DialogTitle>
+              {editingChapterId ? "Edit Section" : "Add Section"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -1238,7 +1735,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               <Input
                 value={chapterTitle}
                 onChange={(e) => setChapterTitle(e.target.value)}
-                placeholder="Module 1: Core Foundations"
+                placeholder="Section 1: Core Foundations"
               />
             </div>
             <div className="space-y-1.5">
@@ -1286,18 +1783,21 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         </DialogContent>
       </Dialog>
 
+      {/* LESSON DIALOG */}
       <Dialog open={lessonDialogOpen} onOpenChange={setLessonDialogOpen}>
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t.courses.addLesson}</DialogTitle>
+            <DialogTitle>
+              {editingLessonId ? "Edit Lesson" : t.courses.addLesson}
+            </DialogTitle>
             <DialogDescription>
-              {t.courses.createAfterLessonQuizNote}
+              Upload videos, PDFs, presentations, or write text lessons.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Chapter</Label>
+              <Label>Section</Label>
               <select
                 className={cn(fieldBase, "h-9 w-full")}
                 value={lessonChapterId}
@@ -1329,10 +1829,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               >
                 <option value="video">{t.courses.typeVideo}</option>
                 <option value="pdf">{t.courses.typePdf}</option>
+                <option value="article">Text Lesson (Article / Notes)</option>
                 <option value="presentation">
                   {t.courses.typePresentation}
                 </option>
-                <option value="article">{t.courses.typeArticle}</option>
                 <option value="quiz">{t.courses.typeQuiz}</option>
               </select>
             </div>
@@ -1342,7 +1842,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               <Input
                 value={lessonTitle}
                 onChange={(e) => setLessonTitle(e.target.value)}
-                placeholder="Lecture 1.1: Architecture Walkthrough"
+                placeholder="Lesson 1.1: Architecture Walkthrough"
               />
             </div>
 
@@ -1369,7 +1869,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               lessonType === "presentation") && (
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="flex items-center gap-2">
-                  <Upload className="size-3.5 text-gold-foreground" />
+                  <Upload className="size-3.5 text-emerald-500" />
                   <span>{t.courses.uploadLessonMediaLabel}</span>
                 </Label>
                 <Input
@@ -1414,10 +1914,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
             <div className="space-y-1.5 sm:col-span-2">
               <Label>{t.courses.lessonBodyLabel}</Label>
               <Textarea
-                rows={4}
+                rows={5}
                 value={lessonBody}
                 onChange={(e) => setLessonBody(e.target.value)}
-                placeholder="Detailed lesson notes, key formulas, or post-lesson quiz questions..."
+                placeholder="Write text lesson content, notes, formulas, or references..."
               />
             </div>
 
@@ -1449,8 +1949,154 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
             </Button>
             <Button
               variant="gold"
-              disabled={isPending}
+              disabled={isPending || uploadingLessonMedia}
               onClick={handleSaveLesson}
+            >
+              {t.common.save}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* LEARNING RESOURCE DIALOG */}
+      <Dialog open={resourceDialogOpen} onOpenChange={setResourceDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingResourceId
+                ? "Edit Learning Resource"
+                : "Add Learning Resource"}
+            </DialogTitle>
+            <DialogDescription>
+              Attach PDFs, worksheets, code archives, or reference URLs to this course.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Resource Type</Label>
+                <select
+                  className={cn(fieldBase, "h-9 w-full")}
+                  value={resourceType}
+                  onChange={(e) =>
+                    setResourceType(
+                      e.target.value as
+                        | "pdf"
+                        | "document"
+                        | "link"
+                        | "slides"
+                        | "archive"
+                        | "other",
+                    )
+                  }
+                >
+                  <option value="pdf">PDF Document</option>
+                  <option value="document">Document / Worksheet</option>
+                  <option value="slides">Slides</option>
+                  <option value="link">External Link</option>
+                  <option value="archive">Code / Archive</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Link to Section (Optional)</Label>
+                <select
+                  className={cn(fieldBase, "h-9 w-full")}
+                  value={resourceChapterId}
+                  onChange={(e) => setResourceChapterId(e.target.value)}
+                >
+                  <option value="none">Course-wide</option>
+                  {courseChapters.map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Link to Lesson (Optional)</Label>
+              <select
+                className={cn(fieldBase, "h-9 w-full")}
+                value={resourceLessonId}
+                onChange={(e) => setResourceLessonId(e.target.value)}
+              >
+                <option value="none">None</option>
+                {courseLessons.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Resource Title *</Label>
+              <Input
+                value={resourceTitle}
+                onChange={(e) => setResourceTitle(e.target.value)}
+                placeholder="Formula Cheat Sheet / Lab Starter Pack"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Description</Label>
+              <Textarea
+                rows={2}
+                value={resourceDescription}
+                onChange={(e) => setResourceDescription(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Upload className="size-3.5 text-emerald-500" />
+                <span>Upload File (Supabase Storage)</span>
+              </Label>
+              <Input
+                type="file"
+                disabled={uploadingResourceFile}
+                onChange={handleResourceFileUpload}
+              />
+              {resourceFileName && (
+                <p className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                  Uploaded: {resourceFileName}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label>Or External URL</Label>
+              <Input
+                value={resourceExternalUrl}
+                onChange={(e) => setResourceExternalUrl(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+
+            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border p-3 font-medium">
+              <span>Visible to Enrolled Students</span>
+              <input
+                type="checkbox"
+                checked={resourcePublished}
+                onChange={(e) => setResourcePublished(e.target.checked)}
+              />
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setResourceDialogOpen(false)}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button
+              variant="gold"
+              disabled={isPending || uploadingResourceFile}
+              onClick={handleSaveResource}
             >
               {t.common.save}
             </Button>

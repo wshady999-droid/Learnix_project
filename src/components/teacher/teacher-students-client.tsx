@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -8,6 +9,7 @@ import {
   CalendarCheck,
   Clock,
   Eye,
+  MessageSquare,
   MessageSquarePlus,
   Search,
   Send,
@@ -57,6 +59,14 @@ interface TeacherStudentsClientProps {
   data: TeacherStudentsData;
 }
 
+type RosterFilterPreset =
+  | "all"
+  | "top10"
+  | "lowest10"
+  | "highest_grades"
+  | "lowest_grades"
+  | "attention";
+
 export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
   const router = useRouter();
   const { locale } = useLocale();
@@ -66,6 +76,10 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
   const [activeTab, setActiveTab] = useState<
     "roster" | "falling-behind" | "attendance" | "feedback"
   >("roster");
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>(
+    data.courses[0]?.id ?? "all",
+  );
+  const [rosterPreset, setRosterPreset] = useState<RosterFilterPreset>("all");
   const [search, setSearch] = useState("");
   const [profileStudent, setProfileStudent] =
     useState<AssignedStudentRow | null>(null);
@@ -95,15 +109,76 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
   const [feedbackSubject, setFeedbackSubject] = useState("");
   const [feedbackBody, setFeedbackBody] = useState("");
 
+  // Compute course-scoped student metrics when a specific course is selected
+  const courseScopedStudents = useMemo(() => {
+    const base =
+      selectedCourseFilter === "all"
+        ? data.students
+        : data.students.filter((s) =>
+            s.enrolledCourses.some((ec) => ec.courseId === selectedCourseFilter),
+          );
+
+    return base.map((stu) => {
+      if (selectedCourseFilter === "all") {
+        return {
+          raw: stu,
+          progressPercent: stu.averageProgressPercent,
+          assignmentAvgPercent: stu.assignmentAveragePercent,
+          quizAvgPercent: stu.examAveragePercent,
+          overallPercent: stu.overallPerformancePercent,
+          lastActivityAt: stu.lastActivityAt,
+          needsAttention: stu.isFallingBehind,
+        };
+      }
+      const cm = stu.enrolledCourses.find(
+        (ec) => ec.courseId === selectedCourseFilter,
+      );
+      const progressPercent = cm?.progressPercent ?? 0;
+      const assignmentAvgPercent = cm?.assignmentAveragePercent ?? 0;
+      const quizAvgPercent = cm?.quizAveragePercent ?? 0;
+      const overallPercent = cm?.overallPerformancePercent ?? 0;
+      const needsAttention =
+        progressPercent < 35 ||
+        (overallPercent > 0 && overallPercent < 60);
+      return {
+        raw: stu,
+        progressPercent,
+        assignmentAvgPercent,
+        quizAvgPercent,
+        overallPercent,
+        lastActivityAt: cm?.lastActivityAt ?? stu.lastActivityAt,
+        needsAttention,
+      };
+    });
+  }, [data.students, selectedCourseFilter]);
+
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return data.students;
-    return data.students.filter(
-      (s) =>
-        s.fullName.toLowerCase().includes(q) ||
-        s.email.toLowerCase().includes(q),
+    let list = courseScopedStudents.filter(
+      (item) =>
+        !q ||
+        item.raw.fullName.toLowerCase().includes(q) ||
+        item.raw.email.toLowerCase().includes(q),
     );
-  }, [data.students, search]);
+
+    if (rosterPreset === "attention") {
+      list = list.filter((item) => item.needsAttention);
+    } else if (rosterPreset === "top10") {
+      list = [...list]
+        .sort((a, b) => b.overallPercent - a.overallPercent)
+        .slice(0, 10);
+    } else if (rosterPreset === "lowest10") {
+      list = [...list]
+        .sort((a, b) => a.overallPercent - b.overallPercent)
+        .slice(0, 10);
+    } else if (rosterPreset === "highest_grades") {
+      list = [...list].sort((a, b) => b.overallPercent - a.overallPercent);
+    } else if (rosterPreset === "lowest_grades") {
+      list = [...list].sort((a, b) => a.overallPercent - b.overallPercent);
+    }
+
+    return list;
+  }, [courseScopedStudents, search, rosterPreset]);
 
   const fallingBehindStudents = useMemo(
     () => data.students.filter((s) => s.isFallingBehind),
@@ -129,7 +204,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
         : data.students;
 
     if (targetList.length === 0) {
-      toast.error("No assigned students found to record attendance.");
+      toast.error("No enrolled students found to record attendance.");
       return;
     }
 
@@ -176,6 +251,9 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
     });
   }
 
+  const chatQuerySuffix =
+    selectedCourseFilter !== "all" ? `&courseId=${selectedCourseFilter}` : "";
+
   return (
     <div className="space-y-8">
       <div>
@@ -220,14 +298,56 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
 
       {activeTab === "roster" && (
         <div className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t.common.searchPlaceholder}
-              className="pl-9"
-            />
+          {/* Course Filter + Search */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs whitespace-nowrap">Course:</Label>
+              <select
+                className={cn(fieldBase, "h-9 w-64")}
+                value={selectedCourseFilter}
+                onChange={(e) => setSelectedCourseFilter(e.target.value)}
+              >
+                <option value="all">All My Courses</option>
+                {data.courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code} — {c.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="relative min-w-[240px] flex-1 max-w-sm">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search student by name or email..."
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          {/* Performance Filter Presets */}
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                ["all", "All Enrolled"],
+                ["top10", "Top 10 Students"],
+                ["lowest10", "Lowest 10 Students"],
+                ["highest_grades", "Highest Grades"],
+                ["lowest_grades", "Lowest Grades"],
+                ["attention", "Students Needing Attention"],
+              ] as const
+            ).map(([presetKey, label]) => (
+              <Button
+                key={presetKey}
+                size="sm"
+                variant={rosterPreset === presetKey ? "gold" : "outline"}
+                onClick={() => setRosterPreset(presetKey)}
+              >
+                {label}
+              </Button>
+            ))}
           </div>
 
           <Card>
@@ -236,77 +356,91 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                 <EmptyState
                   icon={Users}
                   title={t.common.noRecordsTitle}
-                  description={t.common.noRecordsDescription}
+                  description="No enrolled students match the selected course and filter."
                 />
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{t.students.studentNameLabel}</TableHead>
-                      <TableHead>{t.students.enrolledCoursesLabel}</TableHead>
-                      <TableHead>{t.students.averageProgressLabel}</TableHead>
-                      <TableHead>{t.students.examAverageLabel}</TableHead>
-                      <TableHead>{t.students.attendanceRateLabel}</TableHead>
-                      <TableHead>{t.students.studyTimeLabel}</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Course Progress</TableHead>
+                      <TableHead>Assignment Avg</TableHead>
+                      <TableHead>Quiz Avg</TableHead>
+                      <TableHead>Overall Performance</TableHead>
+                      <TableHead>Last Activity</TableHead>
                       <TableHead className="text-right">
                         {t.common.actions}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredStudents.map((stu) => (
-                      <TableRow key={stu.studentId}>
-                        <TableCell>
-                          <p className="font-semibold text-foreground">
-                            {stu.fullName}
-                          </p>
-                          <p className="font-mono text-xs text-muted-foreground">
-                            {stu.email}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {stu.enrolledCourses.length > 0
-                            ? stu.enrolledCourses
-                                .map((c) => c.courseTitle)
-                                .join(", ")
-                            : "Assigned Direct"}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {stu.averageProgressPercent}%
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {stu.examAveragePercent}% ({stu.examsTakenCount})
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {stu.attendanceRatePercent}%
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {stu.totalStudyMinutes} min
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              stu.isFallingBehind ? "destructive" : "gold"
-                            }
-                          >
-                            {stu.isFallingBehind
-                              ? t.students.fallingBehindBadge
-                              : t.students.onTrackBadge}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setProfileStudent(stu)}
-                          >
-                            <Eye className="size-3.5" />
-                            <span>{t.students.openProfileButton}</span>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {filteredStudents.map((item) => {
+                      const stu = item.raw;
+                      return (
+                        <TableRow key={stu.studentId}>
+                          <TableCell>
+                            <p className="font-semibold text-foreground">
+                              {stu.fullName}
+                            </p>
+                            <p className="font-mono text-xs text-muted-foreground">
+                              {stu.email}
+                            </p>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {item.progressPercent}%
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {item.assignmentAvgPercent}%
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {item.quizAvgPercent}%
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-semibold text-foreground">
+                                {item.overallPercent}%
+                              </span>
+                              <Badge
+                                variant={
+                                  item.needsAttention ? "destructive" : "gold"
+                                }
+                              >
+                                {item.needsAttention
+                                  ? "Needs Attention"
+                                  : "On Track"}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {item.lastActivityAt
+                              ? item.lastActivityAt
+                                  .slice(0, 16)
+                                  .replace("T", " ")
+                              : "No activity"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1.5">
+                              <Button asChild variant="gold" size="sm">
+                                <Link
+                                  href={`/messages?userId=${stu.studentId}${chatQuerySuffix}`}
+                                >
+                                  <MessageSquare className="size-3.5" />
+                                  <span>Chat</span>
+                                </Link>
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setProfileStudent(stu)}
+                              >
+                                <Eye className="size-3.5" />
+                                <span>Details</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -322,7 +456,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
               {t.students.tabFallingBehind}
             </CardTitle>
             <CardDescription>
-              Students with course progress below 35%, exam average below 60%, or attendance rate under 70%.
+              Students with course progress below 35%, quiz/assignment average below 60%, or attendance rate under 70%.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -330,7 +464,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
               <EmptyState
                 icon={AlertTriangle}
                 title="All Assigned Students On Track"
-                description="No assigned students are currently flagged as falling behind."
+                description="No assigned students are currently flagged as needing attention."
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
@@ -344,20 +478,24 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                         <p className="text-sm font-semibold text-foreground">
                           {stu.fullName}
                         </p>
-                        <Badge variant="destructive">
-                          {t.students.fallingBehindBadge}
-                        </Badge>
+                        <Badge variant="destructive">Needs Attention</Badge>
                       </div>
                       <p className="font-mono text-muted-foreground">
                         {stu.email}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-3 pt-1">
                         <span>Progress: {stu.averageProgressPercent}%</span>
-                        <span>Exam Avg: {stu.examAveragePercent}%</span>
-                        <span>Attendance: {stu.attendanceRatePercent}%</span>
+                        <span>Assign Avg: {stu.assignmentAveragePercent}%</span>
+                        <span>Quiz Avg: {stu.examAveragePercent}%</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button asChild variant="gold" size="sm">
+                        <Link href={`/messages?userId=${stu.studentId}`}>
+                          <MessageSquare className="size-3.5" />
+                          <span>Chat</span>
+                        </Link>
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -420,10 +558,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
               </div>
             </div>
 
-            {(studentsInAttendanceCourse.length > 0
-              ? studentsInAttendanceCourse
-              : data.students
-            ).length === 0 ? (
+            {studentsInAttendanceCourse.length === 0 ? (
               <EmptyState
                 icon={CalendarCheck}
                 title={t.common.noRecordsTitle}
@@ -439,10 +574,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(studentsInAttendanceCourse.length > 0
-                      ? studentsInAttendanceCourse
-                      : data.students
-                    ).map((stu) => {
+                    {studentsInAttendanceCourse.map((stu) => {
                       const current =
                         attendanceStatuses[stu.studentId] ?? "present";
                       return (
@@ -570,7 +702,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
               <Input
                 value={feedbackSubject}
                 onChange={(e) => setFeedbackSubject(e.target.value)}
-                placeholder="Academic Progress Feedback / Upcoming Midterm Reminder"
+                placeholder="Academic Progress Feedback / Upcoming Quiz Reminder"
               />
             </div>
 
@@ -622,21 +754,21 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                 </div>
                 <div className="rounded-lg border border-border p-3 text-center">
                   <p className="text-base font-bold text-foreground">
+                    {profileStudent.assignmentAveragePercent}%
+                  </p>
+                  <p className="text-muted-foreground">Assignment Avg</p>
+                </div>
+                <div className="rounded-lg border border-border p-3 text-center">
+                  <p className="text-base font-bold text-foreground">
                     {profileStudent.examAveragePercent}%
                   </p>
-                  <p className="text-muted-foreground">Exam Avg</p>
+                  <p className="text-muted-foreground">Quiz Avg</p>
                 </div>
                 <div className="rounded-lg border border-border p-3 text-center">
                   <p className="text-base font-bold text-foreground">
-                    {profileStudent.attendanceRatePercent}%
+                    {profileStudent.overallPerformancePercent}%
                   </p>
-                  <p className="text-muted-foreground">Attendance</p>
-                </div>
-                <div className="rounded-lg border border-border p-3 text-center">
-                  <p className="text-base font-bold text-foreground">
-                    {profileStudent.totalStudyMinutes}m
-                  </p>
-                  <p className="text-muted-foreground">Study Time</p>
+                  <p className="text-muted-foreground">Overall</p>
                 </div>
               </div>
 
@@ -647,24 +779,31 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                 {profileStudent.enrolledCourses.map((ec) => (
                   <div
                     key={ec.courseId}
-                    className="flex items-center justify-between rounded-lg border border-border/80 p-2.5"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/80 p-2.5"
                   >
                     <span className="font-medium text-foreground">
                       {ec.courseTitle}
                     </span>
-                    <Badge variant="outline">{ec.progressPercent}%</Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline">
+                        Progress {ec.progressPercent}%
+                      </Badge>
+                      <Badge variant="gold">
+                        Overall {ec.overallPerformancePercent}%
+                      </Badge>
+                    </div>
                   </div>
                 ))}
               </div>
 
               <div className="space-y-2">
                 <h4 className="flex items-center gap-1.5 font-semibold text-foreground">
-                  <Clock className="size-3.5 text-gold-foreground" />
+                  <Clock className="size-3.5 text-emerald-500" />
                   <span>{t.students.recentActivityTitle}</span>
                 </h4>
                 {profileStudent.recentActivity.length === 0 ? (
                   <p className="text-muted-foreground">
-                    No recent study sessions recorded yet.
+                    No recent study activity recorded yet.
                   </p>
                 ) : (
                   profileStudent.recentActivity.map((act) => (
@@ -688,19 +827,27 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                 )}
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setFeedbackMode("personal");
-                  setTargetStudentId(profileStudent.studentId);
-                  setActiveTab("feedback");
-                  setProfileStudent(null);
-                }}
-              >
-                <MessageSquarePlus className="size-3.5" />
-                <span>Prepare Personal Feedback</span>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="gold" size="sm">
+                  <Link href={`/messages?userId=${profileStudent.studentId}`}>
+                    <MessageSquare className="size-3.5" />
+                    <span>Open Direct Chat</span>
+                  </Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFeedbackMode("personal");
+                    setTargetStudentId(profileStudent.studentId);
+                    setActiveTab("feedback");
+                    setProfileStudent(null);
+                  }}
+                >
+                  <MessageSquarePlus className="size-3.5" />
+                  <span>Send Feedback Alert</span>
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
