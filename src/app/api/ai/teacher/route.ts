@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  buildLearnixScopeAndRedirectionPolicy,
+  detectClearlyUnrelatedOffTopicPrompt,
+} from "@/lib/ai-assistant-scope";
+import {
+  formatCleanQuizQuestionsText,
+  sanitizeQuizOptionText,
+  sanitizeQuizQuestionPrompt,
+} from "@/lib/quiz-format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   callServerAiProvider,
   checkAiRateLimit,
+  getVerifiedPlatformHelpContext,
   logAiUsage,
   persistAiConversationTurn,
   retrieveGroundedCourseContext,
@@ -128,6 +138,59 @@ export async function POST(request: Request) {
     );
   }
 
+  const isQuestionMode = [
+    "question_generator",
+    "question_replacement",
+    "pdf_questions",
+    "lesson_questions",
+    "exam_generator",
+  ].includes(parsed.data.mode);
+
+  // Polite redirection for clearly unrelated off-topic inquiries in assistant chat modes
+  if (!isQuestionMode) {
+    const offTopicCheck = detectClearlyUnrelatedOffTopicPrompt(
+      parsed.data.prompt,
+    );
+    if (offTopicCheck.isOffTopic && offTopicCheck.redirectionMessage) {
+      const savedOffTopicTurn = await persistAiConversationTurn({
+        conversationId: parsed.data.conversationId ?? null,
+        userId,
+        roleContext: "teacher",
+        courseId: parsed.data.courseId,
+        lessonId: parsed.data.lessonId ?? null,
+        mode: parsed.data.mode,
+        userMessage: parsed.data.prompt,
+        assistantMessage: offTopicCheck.redirectionMessage,
+        citations: [],
+        structuredPayload: { offTopicRedirected: true },
+      });
+
+      await logAiUsage({
+        userId,
+        roleContext: "teacher",
+        feature: `teacher:${parsed.data.mode}`,
+        provider: "learnix-scope-guard",
+        courseId: parsed.data.courseId,
+        promptChars: parsed.data.prompt.length,
+        responseChars: offTopicCheck.redirectionMessage.length,
+        status: "success",
+      });
+
+      return NextResponse.json({
+        ok: true,
+        data: {
+          conversationId: savedOffTopicTurn.conversationId,
+          messageId: savedOffTopicTurn.assistantMessageId,
+          content: offTopicCheck.redirectionMessage,
+          citations: [],
+          draftQuestions: [],
+          provider: "learnix-scope-guard",
+          requiresTeacherReview: false,
+        },
+      });
+    }
+  }
+
   // Gather rich, authorized course & student analytics context for the teacher
   const [grounded, resultsRes, enrollmentsRes, assignmentsRes] =
     await Promise.all([
@@ -135,6 +198,7 @@ export async function POST(request: Request) {
         courseId: parsed.data.courseId,
         lessonId: parsed.data.lessonId ?? null,
         query: parsed.data.prompt,
+        allowBroadCourseFallback: isQuestionMode,
       }),
       supabase
         .from("results")
@@ -164,11 +228,19 @@ export async function POST(request: Request) {
           .from("profiles")
           .select("id, full_name, email")
           .in("id", studentIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; email: string }> }),
+      : Promise.resolve({
+          data: [] as Array<{
+            id: string;
+            full_name: string | null;
+            email: string;
+          }>,
+        }),
     assignments.length > 0
       ? supabase
           .from("assignment_submissions")
-          .select("assignment_id, student_id, status, grade_points, is_grade_published")
+          .select(
+            "assignment_id, student_id, status, grade_points, is_grade_published",
+          )
           .in(
             "assignment_id",
             assignments.map((a) => a.id),
@@ -213,7 +285,6 @@ export async function POST(request: Request) {
         )
       : 0;
 
-  // Build concise per-student snapshot for teacher insights (at most 30 students)
   const rosterDigest = enrollments.slice(0, 30).map((enr) => {
     const name = profileMap.get(enr.student_id) ?? "Student";
     const stuResults = results.filter((r) => r.student_id === enr.student_id);
@@ -235,14 +306,6 @@ export async function POST(request: Request) {
     return `- ${name}: progress ${Number(enr.progress_percent ?? 0)}%, quiz avg ${quizAvg !== null ? `${quizAvg}%` : "N/A"}, missing assignments: ${missingCount}`;
   });
 
-  const isQuestionMode = [
-    "question_generator",
-    "question_replacement",
-    "pdf_questions",
-    "lesson_questions",
-    "exam_generator",
-  ].includes(parsed.data.mode);
-
   const requestedCount =
     parsed.data.mode === "question_replacement" ? 1 : parsed.data.questionCount;
   const allowedTypes =
@@ -253,31 +316,51 @@ export async function POST(request: Request) {
     ? Math.max(1, Number((parsed.data.totalMarks / requestedCount).toFixed(2)))
     : 5;
 
+  const forbiddenQuizContext = {
+    courseCode: grounded.courseCode,
+    courseTitle: grounded.courseTitle,
+  };
+
+  const lessonAndDocCitations = grounded.citations.filter(
+    (c) => c.sourceType !== "course" && c.sourceType !== "course_metadata",
+  );
+
   const fallbackQuestions: GeneratedDraftQuestion[] = isQuestionMode
     ? buildGroundedDraftQuestions({
         count: Math.min(requestedCount, 15),
         difficultyMix: parsed.data.difficultyMix,
-        courseTitle: grounded.courseTitle,
-        citations: grounded.citations,
+        citations: lessonAndDocCitations,
         prompt: parsed.data.prompt,
         allowedTypes: [...allowedTypes],
         pointsPerQuestion: defaultPointsPerQuestion,
+        forbiddenContext: forbiddenQuizContext,
       })
     : [];
 
   if (isQuestionMode) {
+    // Clean material context stripped of internal course code prefixes so the model focuses purely on educational content
+    const cleanMaterialPassages = lessonAndDocCitations
+      .map((c, idx) => `Passage ${idx + 1}:\n${c.excerpt}`)
+      .join("\n\n");
+
     const jsonSystemInstruction = [
-      "You are Learnix AI Assessment Architect for instructors.",
-      "Generate strictly grounded, academically rigorous quiz questions based ONLY on the supplied course materials.",
-      'Return ONLY valid JSON matching: {"summary": string, "questions": Array<{"prompt": string, "questionType": "single_choice"|"multiple_choice"|"true_false"|"short_answer"|"essay", "difficulty": "easy"|"medium"|"hard", "points": number, "explanation": string, "options": Array<{"optionText": string, "isCorrect": boolean}>}>}.',
-      "Rules:",
+      "You are Learnix AI Assessment Architect.",
+      "Generate academically rigorous quiz questions grounded in the supplied learning material and selected lesson content.",
+      "When supplied learning material covers the topic, rely strictly on those facts and do not invent unsupported claims. If no detailed passages cover the teacher's requested academic topic yet, generate accurate educational questions directly on the requested topic.",
+      'ALWAYS output ONLY a valid JSON object (never plain-text apologies or prose outside JSON) matching: {"questions": Array<{"prompt": string, "questionType": "single_choice"|"multiple_choice"|"true_false"|"short_answer"|"essay", "difficulty": "easy"|"medium"|"hard", "points": number, "explanation": string, "options": Array<{"optionText": string, "isCorrect": boolean}>}>}.',
+      "CRITICAL STUDENT-FACING QUIZ OUTPUT RULES:",
       `- Generate exactly ${requestedCount} question(s).`,
       `- Allowed questionType values: ${allowedTypes.join(", ")}.`,
       `- Default marks per question: ${defaultPointsPerQuestion}.`,
-      "- For single_choice: provide 4 options with exactly 1 isCorrect=true.",
-      "- For multiple_choice: provide 4 options with 2 or 3 isCorrect=true.",
+      "- NEVER include course codes, subject codes, course names, subject names, or internal database IDs anywhere in `prompt` or `optionText`.",
+      "- NEVER add course titles, subject headers, or introductory descriptions before or between questions.",
+      "- Write ONLY the direct question text in `prompt` (do NOT prefix with 'Question 1:', 'Q1.', course names, or file names).",
+      "- Write ONLY the clean choice text in `optionText` (do NOT prefix with 'A.', 'B.', '1.', etc.).",
+      "- For single_choice: provide 4 clear, distinct options with exactly 1 isCorrect=true.",
+      "- For multiple_choice: provide 4 clear, distinct options with 2 or 3 isCorrect=true.",
       '- For true_false: provide 2 options ("True" and "False") with 1 isCorrect=true.',
       "- For short_answer or essay: options must be [] and explanation must describe the expected answer/rubric.",
+      `- Match the requested difficulty level (${parsed.data.difficultyMix}) and language of the teacher's instruction or supplied material.`,
       parsed.data.existingQuestionPrompt
         ? `- Do NOT repeat this question being replaced: "${parsed.data.existingQuestionPrompt}". Create a fresh alternative covering the same topic.`
         : "",
@@ -286,34 +369,32 @@ export async function POST(request: Request) {
       .join("\n");
 
     const jsonUserPrompt = [
-      `Course: ${grounded.courseCode} — ${grounded.courseTitle}`,
-      `Difficulty Target: ${parsed.data.difficultyMix}`,
-      `Teacher Request: ${parsed.data.prompt}`,
+      `Requested Difficulty: ${parsed.data.difficultyMix}`,
+      `Assessment Topic / Instruction: ${parsed.data.prompt}`,
       grounded.contextBlock
-        ? `\nAuthorized Course Materials:\n${grounded.contextBlock}`
-        : "\nAuthorized Course Materials: Use the course title and teacher request above.",
+        ? `\nLearning Material Content:\n${grounded.contextBlock}`
+        : cleanMaterialPassages
+          ? `\nLearning Material Content:\n${cleanMaterialPassages}`
+          : "\nLearning Material Content: Generate questions strictly aligned with the assessment topic above.",
     ].join("\n");
 
     const aiRes = await callServerAiProvider({
       systemInstruction: jsonSystemInstruction,
       userPrompt: jsonUserPrompt,
       fallbackResponse: JSON.stringify({
-        summary: `Prepared ${fallbackQuestions.length} grounded draft question(s) for teacher review.`,
         questions: fallbackQuestions,
       }),
       jsonMode: true,
     });
 
     let parsedQuestions = fallbackQuestions;
-    let summaryMarkdown = `### AI Quiz Draft — ${grounded.courseTitle}\nPrepared **${fallbackQuestions.length}** editable question(s) for teacher review.`;
 
     try {
       const cleaned = aiRes.text
-        .replace(/^```json\s*/i, "")
+        .replace(/^```(?:json)?\s*/i, "")
         .replace(/```\s*$/i, "")
         .trim();
       const decoded = JSON.parse(cleaned) as {
-        summary?: string;
         questions?: Array<{
           prompt?: string;
           questionType?: string;
@@ -326,7 +407,9 @@ export async function POST(request: Request) {
 
       if (Array.isArray(decoded.questions) && decoded.questions.length > 0) {
         const sanitized: GeneratedDraftQuestion[] = decoded.questions
-          .filter((q) => typeof q.prompt === "string" && q.prompt.trim().length > 3)
+          .filter(
+            (q) => typeof q.prompt === "string" && q.prompt.trim().length > 3,
+          )
           .map((q) => {
             const qType = (
               [
@@ -345,17 +428,21 @@ export async function POST(request: Request) {
                 : "medium"
             ) as GeneratedDraftQuestion["difficulty"];
 
+            const cleanPrompt = sanitizeQuizQuestionPrompt(
+              q.prompt!,
+              forbiddenQuizContext,
+            );
+
             let opts = Array.isArray(q.options)
               ? q.options
-                  .filter(
-                    (o) =>
-                      typeof o.optionText === "string" &&
-                      o.optionText.trim().length > 0,
-                  )
                   .map((o) => ({
-                    optionText: o.optionText!.trim(),
+                    optionText:
+                      typeof o.optionText === "string"
+                        ? sanitizeQuizOptionText(o.optionText)
+                        : "",
                     isCorrect: Boolean(o.isCorrect),
                   }))
+                  .filter((o) => o.optionText.length > 0)
               : [];
 
             if (qType === "true_false" && opts.length < 2) {
@@ -374,7 +461,7 @@ export async function POST(request: Request) {
             }
 
             return {
-              prompt: q.prompt!.trim(),
+              prompt: cleanPrompt,
               questionType: qType,
               difficulty: diff,
               points:
@@ -384,18 +471,23 @@ export async function POST(request: Request) {
               explanation: (q.explanation ?? "").trim(),
               options: opts,
             };
-          });
+          })
+          .filter((q) => q.prompt.length > 3);
 
         if (sanitized.length > 0) {
           parsedQuestions = sanitized;
-          summaryMarkdown =
-            decoded.summary?.trim() ||
-            `### AI Quiz Draft — ${grounded.courseTitle}\nGenerated **${sanitized.length}** question(s) grounded in your course materials. Review, edit, or publish below.`;
         }
       }
     } catch {
-      // Keep fallbackQuestions if JSON parsing failed
+      // Keep sanitized fallbackQuestions if JSON parsing failed
     }
+
+    // Format visible quiz content strictly as sequential questions and A/B/C/D options ONLY
+    // (no course codes, no subject names, no AI introductions, no filler text between questions)
+    const cleanQuizContent = formatCleanQuizQuestionsText(
+      parsedQuestions,
+      forbiddenQuizContext,
+    );
 
     const savedTurn = await persistAiConversationTurn({
       conversationId: parsed.data.conversationId ?? null,
@@ -405,7 +497,7 @@ export async function POST(request: Request) {
       lessonId: parsed.data.lessonId ?? null,
       mode: parsed.data.mode,
       userMessage: parsed.data.prompt,
-      assistantMessage: summaryMarkdown,
+      assistantMessage: cleanQuizContent,
       citations: grounded.citations,
       structuredPayload: {
         draftQuestions: parsedQuestions,
@@ -420,7 +512,7 @@ export async function POST(request: Request) {
       provider: aiRes.provider,
       courseId: parsed.data.courseId,
       promptChars: parsed.data.prompt.length,
-      responseChars: summaryMarkdown.length,
+      responseChars: cleanQuizContent.length,
       status: "success",
     });
 
@@ -429,7 +521,7 @@ export async function POST(request: Request) {
       data: {
         conversationId: savedTurn.conversationId,
         messageId: savedTurn.assistantMessageId,
-        content: summaryMarkdown,
+        content: cleanQuizContent,
         citations: grounded.citations,
         draftQuestions: parsedQuestions,
         provider: aiRes.provider,
@@ -438,13 +530,16 @@ export async function POST(request: Request) {
     });
   }
 
-  // Analytical / Pedagogical Teacher Assistant Modes
+  // Analytical / Pedagogical / Platform-Aware Teacher Assistant Modes
+  const platformHelp = getVerifiedPlatformHelpContext();
   const systemInstruction = [
     "You are Learnix AI Teacher Assistant.",
-    "Provide clear, actionable insights grounded strictly in the authorized course materials and live class telemetry provided below.",
-    "You can analyze individual student performance, identify students with low grades or missing assignments, summarize course averages, highlight difficult topics, and draft teaching plans.",
-    "Never fabricate student names, grades, or facts not present in the context.",
-  ].join(" ");
+    "Respond in the same language used by the teacher (Arabic -> Arabic, English -> English).",
+    "Provide clear, actionable insights grounded in the authorized course materials, live class telemetry, and Learnix platform workflows provided below.",
+    "You can analyze individual student performance, identify students with low grades or missing assignments, summarize course averages, highlight difficult topics, draft teaching plans, answer course-related academic/technical questions, and explain Learnix teacher/student features.",
+    "Never fabricate student names, grades, or database records not present in the context.",
+    buildLearnixScopeAndRedirectionPolicy(),
+  ].join("\n");
 
   const userPrompt = [
     `Course: ${grounded.courseCode} — ${grounded.courseTitle}`,
@@ -456,6 +551,7 @@ export async function POST(request: Request) {
     grounded.contextBlock
       ? `\nCourse Materials:\n${grounded.contextBlock}`
       : "\nCourse Materials: (No indexed lesson markdown or PDF chunks yet.)",
+    `\n${platformHelp.contextBlock}`,
     `\nTeacher Question / Instruction: ${parsed.data.prompt}`,
   ].join("\n");
 
@@ -517,11 +613,11 @@ export async function POST(request: Request) {
 function buildGroundedDraftQuestions(params: {
   count: number;
   difficultyMix: string;
-  courseTitle: string;
   citations: Array<{ sourceTitle: string; excerpt: string }>;
   prompt: string;
   allowedTypes: Array<GeneratedDraftQuestion["questionType"]>;
   pointsPerQuestion: number;
+  forbiddenContext: { courseCode?: string | null; courseTitle?: string | null };
 }): GeneratedDraftQuestion[] {
   const difficulties: Array<"easy" | "medium" | "hard"> =
     params.difficultyMix === "foundational" || params.difficultyMix === "easy"
@@ -535,20 +631,30 @@ function buildGroundedDraftQuestions(params: {
       ? params.allowedTypes
       : (["single_choice", "true_false", "short_answer"] as const);
 
+  const cleanTopic =
+    sanitizeQuizQuestionPrompt(params.prompt, params.forbiddenContext)
+      .replace(/^generate\s+(?:a\s+)?(?:quiz|questions?|exam)[^:]*[:\-]?\s*/i, "")
+      .slice(0, 75)
+      .trim() || "the core concept covered in the lesson material";
+
   const items: GeneratedDraftQuestion[] = [];
   for (let i = 0; i < params.count; i++) {
     const src = params.citations[i % Math.max(1, params.citations.length)];
-    const sourceName = src?.sourceTitle ?? params.courseTitle;
+    const cleanExcerpt = src
+      ? sanitizeQuizOptionText(src.excerpt).slice(0, 120).trim()
+      : "";
     const diff = difficulties[i % difficulties.length] ?? "medium";
     const qType = types[i % types.length] ?? "single_choice";
 
     if (qType === "true_false") {
       items.push({
-        prompt: `Based on "${sourceName}", determine whether the following statement applies to ${params.prompt.slice(0, 70)}.`,
+        prompt: cleanExcerpt
+          ? `Does the following statement accurately reflect the lesson material: "${cleanExcerpt}"?`
+          : `Is the primary principle of ${cleanTopic} applied to improve accuracy and consistency?`,
         questionType: "true_false",
         difficulty: diff,
         points: params.pointsPerQuestion,
-        explanation: `Grounded in ${sourceName}. Verify before publishing.`,
+        explanation: "Verify against lesson material before publishing.",
         options: [
           { optionText: "True", isCorrect: true },
           { optionText: "False", isCorrect: false },
@@ -556,40 +662,43 @@ function buildGroundedDraftQuestions(params: {
       });
     } else if (qType === "short_answer" || qType === "essay") {
       items.push({
-        prompt: `Explain how "${sourceName}" addresses ${params.prompt.slice(0, 80)} and provide one practical example.`,
+        prompt: `Explain the key principles of ${cleanTopic} and provide one practical example.`,
         questionType: qType,
         difficulty: diff,
         points: params.pointsPerQuestion,
-        explanation: `Rubric: Check conceptual accuracy against ${sourceName}, clarity, and example relevance.`,
+        explanation:
+          "Rubric: Check conceptual accuracy against the lesson material, clarity, and relevance of the example.",
         options: [],
       });
     } else {
       items.push({
-        prompt: `According to "${sourceName}", which statement accurately describes ${params.prompt.slice(0, 70)}?`,
+        prompt: `Which statement best describes ${cleanTopic}?`,
         questionType: qType,
         difficulty: diff,
         points: params.pointsPerQuestion,
-        explanation: `Grounded in ${sourceName}.`,
+        explanation: "Grounded in the supplied lesson material.",
         options: [
           {
-            optionText: src
-              ? src.excerpt.slice(0, 110).trim()
-              : `Core principle taught in ${sourceName}`,
+            optionText:
+              cleanExcerpt ||
+              `It defines the structured rules and core workflow of ${cleanTopic}.`,
             isCorrect: true,
           },
           {
             optionText:
               qType === "multiple_choice"
-                ? `Applied workflow documented in ${sourceName}`
-                : "An unsupported assumption outside the lesson scope",
+                ? `It supports systematic validation and practical implementation of ${cleanTopic}.`
+                : "It ignores structured validation and relies on arbitrary assumptions.",
             isCorrect: qType === "multiple_choice",
           },
           {
-            optionText: "A contradictory premise not backed by the material",
+            optionText:
+              "It eliminates the need for structured organization or verification.",
             isCorrect: false,
           },
           {
-            optionText: "An unrelated concept from outside this module",
+            optionText:
+              "It applies only to unrelated visual styling tasks.",
             isCorrect: false,
           },
         ],

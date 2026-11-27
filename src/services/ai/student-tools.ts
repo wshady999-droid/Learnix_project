@@ -12,7 +12,7 @@ import {
   type VerifiedCourseDurationInfo,
 } from "@/services/ai/engine";
 
-export interface GeminiFunctionDeclaration {
+export interface AiFunctionDeclaration {
   name: string;
   description: string;
   parameters: {
@@ -31,7 +31,7 @@ export interface GeminiFunctionDeclaration {
 }
 
 export interface StudentToolExecutionContext {
-  /** Strictly derived from the authenticated Supabase server session (`auth.data.userId`). Never trusted from Gemini arguments. */
+  /** Strictly derived from the authenticated Supabase server session (`auth.data.userId`). Never trusted from model arguments. */
   authenticatedStudentId: string;
   studentDisplayName: string;
   selectedCourseId: string | null;
@@ -47,27 +47,25 @@ export interface StudentToolExecutionResult {
 }
 
 /**
- * Official Gemini Function Declarations for the Unified Learnix Student AI Agent.
+ * Structured Function Declarations for the Unified Learnix Student AI Agent (Groq `llama-3.3-70b-versatile`).
  * Every tool is backed by existing Supabase tables (`src/types/database.ts`) and strictly enforced server-side.
  */
-export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
-  // --- 1. Course Catalog (Public Metadata of `status = 'published'` courses) ---
+export const STUDENT_AI_TOOLS: AiFunctionDeclaration[] = [
+  // --- 1. Course Catalog ---
   {
     name: "search_published_courses",
     description:
-      "Search or list published courses available on the Learnix platform catalog (`public.courses` where `status = 'published'`). Supports any topic, keyword, or category in Arabic or English, or returns all published courses when query is omitted. Exposes public catalog metadata only and indicates whether the authenticated student is enrolled.",
+      "Search or list published courses in the Learnix catalog by topic, keyword, or category.",
     parameters: {
       type: "OBJECT",
       properties: {
         query: {
           type: "STRING",
-          description:
-            "Optional search topic, keyword, course title, course code, or subject in Arabic or English (e.g., 'mobile', 'programming', 'database', 'موبايل', 'برمجة'). Leave empty to list all published courses.",
+          description: "Optional topic, title, code, or keyword (Arabic or English).",
         },
         category: {
           type: "STRING",
-          description:
-            "Optional course category filter (e.g., 'IT', 'Mobile App', 'Web', 'Cybersecurity', 'Cloud Computing', 'Java', 'Testing', 'Data Analysis', 'Data Modeling', 'Database', 'IOT', 'Project Management', 'BPM').",
+          description: "Optional category name filter.",
         },
       },
     },
@@ -75,14 +73,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_published_course_details",
     description:
-      "Retrieve public catalog details for a specific published course on Learnix (title, code, subtitle, description, category, completion requirements/learning objectives, estimated hours, language, passing score, instructor public display name, and whether the student is enrolled).",
+      "Get public catalog details for a published course (title, code, category, hours, passing score, instructor, enrollment status).",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Course UUID, course code (e.g. 'CS-101'), title, or topic keyword identifying the published course.",
+          description: "Course UUID, code, title, or topic keyword.",
         },
       },
       required: ["courseIdentifier"],
@@ -91,14 +88,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "compare_published_courses",
     description:
-      "Compare two or more published courses on Learnix side by side using their verified public catalog metadata (category, description, learning objectives/completion requirements, estimated hours, language, passing score, instructor public display name, and student enrollment status).",
+      "Compare two or more published courses side by side using catalog metadata.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifiers: {
           type: "ARRAY",
-          description:
-            "List of two or more course codes, titles, UUIDs, or topic keywords to compare.",
+          description: "Two or more course codes, titles, UUIDs, or keywords.",
           items: { type: "STRING" },
         },
       },
@@ -108,18 +104,18 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_available_course_categories",
     description:
-      "List all supported course categories on the Learnix platform along with the count of currently published courses in each category.",
+      "List all course categories on Learnix with published course counts.",
     parameters: {
       type: "OBJECT",
       properties: {},
     },
   },
 
-  // --- 2. Student Enrollment (Authenticated Student Only) ---
+  // --- 2. Student Enrollment ---
   {
     name: "get_my_enrolled_courses",
     description:
-      "Get the authenticated student's own enrolled courses from `public.course_enrollments`, including enrollment status, completion progress percentage, enrolled date, and course metadata.",
+      "Get the student's enrolled courses, status, and completion progress.",
     parameters: {
       type: "OBJECT",
       properties: {},
@@ -128,32 +124,30 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_my_enrollment_details",
     description:
-      "Get detailed enrollment progress for the authenticated student in a specific course (enrollment status, progress percentage, completed lessons count vs total published lessons, and course metadata).",
+      "Get detailed progress and lesson completion count for an enrolled course.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Course UUID, course code, title, or topic keyword for the enrolled course.",
+          description: "Course UUID, code, title, or keyword.",
         },
       },
       required: ["courseIdentifier"],
     },
   },
 
-  // --- 3. Assignments (Authenticated Student Only) ---
+  // --- 3. Assignments ---
   {
     name: "get_my_assignments",
     description:
-      "List published assignments (`public.assignments` where `is_published = true`) across the authenticated student's enrolled courses, including due dates, maximum points, and the student's current submission status and grade from `public.assignment_submissions`.",
+      "List published assignments across enrolled courses with due dates, points, and submission status.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Optional course code, title, or UUID to filter assignments by a specific enrolled course.",
+          description: "Optional course code, title, or UUID.",
         },
       },
     },
@@ -161,7 +155,7 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_assignment_details",
     description:
-      "Get full details of a specific published assignment in an enrolled course (title, description, due date, max points, late submission policy, and the authenticated student's submission status).",
+      "Get full details and submission status for a specific published assignment.",
     parameters: {
       type: "OBJECT",
       properties: {
@@ -176,31 +170,29 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_assignment_submission_status",
     description:
-      "Check the authenticated student's own assignment submission status, submitted timestamp, awarded grade points, and teacher feedback from `public.assignment_submissions`.",
+      "Check the student's assignment submission status, grade, and teacher feedback.",
     parameters: {
       type: "OBJECT",
       properties: {
         assignmentIdentifier: {
           type: "STRING",
-          description:
-            "Optional assignment UUID or title. If omitted, returns submission status for all assignments in the student's enrolled courses.",
+          description: "Optional assignment UUID or title.",
         },
       },
     },
   },
 
-  // --- 4. Exams (Authenticated Student Only) ---
+  // --- 4. Exams ---
   {
     name: "get_my_exams",
     description:
-      "List published examinations (`public.exams` where `status = 'published'`) for the authenticated student's enrolled courses, including duration in minutes, total points, passing score, max attempts, availability window, and whether the student has completed or passed each exam.",
+      "List published exams/quizzes for enrolled courses with duration, marks, attempts, and status.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Optional course code, title, or UUID to filter exams by a specific enrolled course.",
+          description: "Optional course code, title, or UUID.",
         },
       },
     },
@@ -208,13 +200,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_exam_details",
     description:
-      "Get detailed metadata for a specific published examination in an enrolled course (title, description, instructions, duration minutes, total points, passing score, max attempts, availability dates, and the authenticated student's attempt count). Never exposes official exam questions or answer keys.",
+      "Get metadata, instructions, duration, and attempt count for a published exam.",
     parameters: {
       type: "OBJECT",
       properties: {
         examIdentifier: {
           type: "STRING",
-          description: "Exam UUID, exam title, or course code/title.",
+          description: "Exam UUID, title, or course code/title.",
         },
       },
       required: ["examIdentifier"],
@@ -223,31 +215,29 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_my_exam_results",
     description:
-      "Get the authenticated student's published examination results and scores from `public.results` (`is_published = true`), including earned points, total points, score percentage, pass/fail status, teacher feedback, and graded timestamp.",
+      "Get the student's published exam scores, pass/fail status, and feedback.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Optional course code, title, or UUID to filter exam results.",
+          description: "Optional course code, title, or UUID.",
         },
       },
     },
   },
 
-  // --- 5. Academic Performance (Authenticated Student Only) ---
+  // --- 5. Academic Performance ---
   {
     name: "get_my_grades",
     description:
-      "Get a consolidated summary of the authenticated student's grades across both published exam results (`public.results`) and graded assignment submissions (`public.assignment_submissions`), plus overall exam average.",
+      "Get consolidated exam and assignment grades plus overall average.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Optional course code, title, or UUID to filter grades for a specific course.",
+          description: "Optional course code, title, or UUID.",
         },
       },
     },
@@ -255,7 +245,7 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_my_academic_progress",
     description:
-      "Get the authenticated student's learning progress metrics: enrolled courses completion percentages (`public.course_enrollments`), completed lessons count (`public.lesson_progress`), logged study hours (`public.study_sessions`), personal lesson notes count (`public.lesson_notes`), and earned certificates (`public.certificates`).",
+      "Get course completion percentages, completed lessons, study hours, notes, and certificates.",
     parameters: {
       type: "OBJECT",
       properties: {},
@@ -264,14 +254,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_my_attendance",
     description:
-      "Get the authenticated student's class attendance record and attendance rate percentage from `public.attendance_records` and `public.attendance` (present, late, excused, absent counts, and recent session dates/topics).",
+      "Get class attendance rate and session records.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Optional course code, title, or UUID to filter attendance records.",
+          description: "Optional course code, title, or UUID.",
         },
       },
     },
@@ -279,7 +268,7 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_my_academic_report",
     description:
-      "Generate a comprehensive personal academic report for the authenticated student combining their enrolled courses, average completion progress, overall exam average, recent exam grades, active assignments, attendance rate, logged study hours, completed lessons, notes, and certificates.",
+      "Generate a comprehensive personal academic report across courses, exams, assignments, attendance, and study hours.",
     parameters: {
       type: "OBJECT",
       properties: {},
@@ -290,14 +279,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_course_duration",
     description:
-      "Get the verified duration of a published course (in hours and minutes) from the database. Prefers `courses.estimated_hours` when > 0; otherwise, for enrolled courses, sums published `lessons.duration_seconds` ONLY when all published lessons have valid durations > 0, and explicitly reports incomplete data if any lesson is missing a duration.",
+      "Get verified duration (hours/minutes) of a published course.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Course code, title, UUID, or topic keyword (e.g., 'Mobile App', 'CS-301', 'تطبيقات الموبايل').",
+          description: "Course code, title, UUID, or keyword.",
         },
       },
       required: ["courseIdentifier"],
@@ -306,14 +294,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_course_metadata",
     description:
-      "Get structured metadata for a published course (code, title, subtitle, category, description, completion requirements, estimated hours, language, passing score, instructor public display name, and verified duration breakdown; includes published chapter titles only when the student is enrolled).",
+      "Get structured metadata and verified duration breakdown for a published course.",
     parameters: {
       type: "OBJECT",
       properties: {
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Course code, title, UUID, or topic keyword in Arabic or English.",
+          description: "Course code, title, UUID, or keyword.",
         },
       },
       required: ["courseIdentifier"],
@@ -324,19 +311,17 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "search_enrolled_course_content",
     description:
-      "Search the authenticated student's ENROLLED course materials using Learnix's Grounded Course RAG pipeline (`lessons.content_markdown`, `lessons.summary`, `chapters`, and `ai_document_chunks`). Use this tool whenever the student asks for educational explanations, lesson summaries, concept comparisons from their course, flashcards, practice quiz questions, or what their course lectures/documents say about a topic. Strictly restricted to published courses in which the student is enrolled.",
+      "Search the student's enrolled course lessons, chapters, and uploaded documents (RAG).",
     parameters: {
       type: "OBJECT",
       properties: {
         query: {
           type: "STRING",
-          description:
-            "The educational topic, concept, lecture, or question to search for in the student's enrolled course materials (supports Arabic and English semantic matching).",
+          description: "Topic, concept, or question to search.",
         },
         courseIdentifier: {
           type: "STRING",
-          description:
-            "Optional course UUID, code, or title to scope the search to a specific enrolled course.",
+          description: "Optional enrolled course UUID, code, or title.",
         },
       },
       required: ["query"],
@@ -347,14 +332,13 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
   {
     name: "get_platform_help_and_navigation",
     description:
-      "Retrieve the official Learnix Platform Guide and Student Navigation Reference: how Learnix works, available student sidebar pages (`/student`, `/student/courses`, `/student/my-learning`, `/student/exams`, `/student/ai-assistant`, `/student/performance`, `/student/profile`), how to enroll in courses, how to upload documents/images/audio, how to use live voice recording, and where to find assignments, exams, and progress.",
+      "Get the official Learnix Platform Guide: navigation pages, enrolling, uploading files, voice recording, assignments, exams, and progress.",
     parameters: {
       type: "OBJECT",
       properties: {
         topic: {
           type: "STRING",
-          description:
-            "Optional specific platform feature or how-to question the student is asking about.",
+          description: "Optional Learnix feature or how-to topic.",
         },
       },
     },
@@ -362,7 +346,7 @@ export const STUDENT_AI_GEMINI_TOOLS: GeminiFunctionDeclaration[] = [
 ];
 
 const ALLOWED_TOOL_NAMES = new Set(
-  STUDENT_AI_GEMINI_TOOLS.map((t) => t.name),
+  STUDENT_AI_TOOLS.map((t) => t.name),
 );
 
 export function isAllowedStudentAiTool(toolName: string): boolean {
@@ -420,7 +404,7 @@ function checkPrivacyOrCrossStudentAccessAttempt(
 ): string | null {
   if (!rawArgs || typeof rawArgs !== "object") return null;
 
-  // Reject any attempt by Gemini or caller to pass a studentId / userId argument
+  // Reject any attempt by the model or caller to pass a studentId / userId argument
   const forbiddenArgKeys = [
     "studentid",
     "student_id",
@@ -563,7 +547,7 @@ function matchCoursesByIdentifier<
 }
 
 /**
- * Executes an allowlisted Gemini tool using the authenticated Supabase server client.
+ * Executes an allowlisted Learnix Student AI tool using the authenticated Supabase server client.
  * Enforces strict student data isolation (`authenticatedStudentId` from session),
  * teacher email privacy (`id, full_name` only), course status checks (`status = 'published'`),
  * and enrollment verification before accessing `chapters`, `lessons`, or `ai_document_chunks`.

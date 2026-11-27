@@ -29,6 +29,11 @@ import {
 import { Input, Textarea, fieldBase } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
+import {
+  getOptionLetter,
+  sanitizeQuizOptionText,
+  sanitizeQuizQuestionPrompt,
+} from "@/lib/quiz-format";
 import { cn } from "@/lib/utils";
 import type { AiCitation } from "@/services/ai/engine";
 import type { AiWorkspaceHistoryData } from "@/services/ai/queries";
@@ -690,10 +695,11 @@ export function TeacherAiAssistantClient({
                             </div>
 
                             <p className="font-semibold text-foreground">
-                              {dq.prompt}
+                              Question {idx + 1}:{" "}
+                              {sanitizeQuizQuestionPrompt(dq.prompt)}
                             </p>
                             {dq.options.length > 0 && (
-                              <ul className="list-disc pl-5 text-muted-foreground">
+                              <ul className="space-y-1 pl-2 text-muted-foreground">
                                 {dq.options.map((opt, oIdx) => (
                                   <li
                                     key={oIdx}
@@ -703,7 +709,8 @@ export function TeacherAiAssistantClient({
                                         : ""
                                     }
                                   >
-                                    {opt.optionText}{" "}
+                                    {getOptionLetter(oIdx)}.{" "}
+                                    {sanitizeQuizOptionText(opt.optionText)}{" "}
                                     {opt.isCorrect ? "(Correct)" : ""}
                                   </li>
                                 ))}

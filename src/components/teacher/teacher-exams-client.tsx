@@ -56,6 +56,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
+import {
+  getOptionLetter,
+  sanitizeQuizOptionText,
+  sanitizeQuizQuestionPrompt,
+} from "@/lib/quiz-format";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { TableRow as DbTableRow } from "@/services/db/utils";
@@ -955,7 +960,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                 <span>AI Quiz Generator</span>
               </CardTitle>
               <CardDescription>
-                Generate course-grounded quizzes with Gemini AI, edit or replace any question, preview, and save as Draft or Publish.
+                Generate course-grounded quizzes with Learnix AI, edit or replace any question, preview, and save as Draft or Publish.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-xs">
@@ -1727,13 +1732,12 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                 key={i}
                 className="space-y-2 rounded-xl border border-border/80 p-3.5"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-foreground">
-                    Question {i + 1}
-                  </span>
-                  <Badge variant="outline">{q.points} pts</Badge>
-                </div>
-                <p className="text-foreground">{q.prompt}</p>
+                <p className="font-semibold text-foreground">
+                  Question {i + 1}:
+                </p>
+                <p className="text-foreground">
+                  {sanitizeQuizQuestionPrompt(q.prompt)}
+                </p>
                 {q.options.length > 0 ? (
                   <div className="space-y-1.5 pt-1">
                     {q.options.map((opt, j) => (
@@ -1741,7 +1745,10 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                         key={j}
                         className="rounded-lg border border-border/70 px-3 py-2 text-muted-foreground"
                       >
-                        {opt.optionText}
+                        <span className="mr-1.5 font-semibold text-foreground">
+                          {getOptionLetter(j)}.
+                        </span>
+                        {sanitizeQuizOptionText(opt.optionText)}
                       </div>
                     ))}
                   </div>

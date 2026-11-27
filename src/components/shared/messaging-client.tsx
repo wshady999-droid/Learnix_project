@@ -47,9 +47,16 @@ export function MessagingClient({ data }: MessagingClientProps) {
     "chats" | "contacts" | "announcements"
   >("chats");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedConvId, setSelectedConvId] = useState<string>(
-    searchParams.get("convId") || data.conversations[0]?.id || "",
-  );
+  const [selectedConvId, setSelectedConvId] = useState<string>(() => {
+    const byId = searchParams.get("convId");
+    if (byId) return byId;
+    const byUser = searchParams.get("userId");
+    if (byUser) {
+      const match = data.conversations.find((c) => c.peerUserId === byUser);
+      if (match) return match.id;
+    }
+    return data.conversations[0]?.id || "";
+  });
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string>(
     data.announcements[0]?.id || "",
   );
@@ -92,8 +99,6 @@ export function MessagingClient({ data }: MessagingClientProps) {
       (c) => c.peerUserId === targetUserId,
     );
     if (existing) {
-      setSelectedConvId(existing.id);
-      setSidebarTab("chats");
       return;
     }
 
@@ -111,14 +116,18 @@ export function MessagingClient({ data }: MessagingClientProps) {
     });
   }, [searchParams, data.conversations, router]);
 
+  const activeConvId = activeConv?.id;
+  const activeConvUnread = activeConv?.unreadCount ?? 0;
+  const activeConvMsgCount = activeConv?.messages.length ?? 0;
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    if (activeConv && activeConv.unreadCount > 0) {
-      void sharedMarkConversationReadAction(activeConv.id).then(() => {
+    if (activeConvId && activeConvUnread > 0) {
+      void sharedMarkConversationReadAction(activeConvId).then(() => {
         router.refresh();
       });
     }
-  }, [activeConv?.id, activeConv?.messages.length, activeConv?.unreadCount, router]);
+  }, [activeConvId, activeConvMsgCount, activeConvUnread, router]);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();

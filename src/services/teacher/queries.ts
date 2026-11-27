@@ -906,7 +906,7 @@ export async function getTeacherStudentsData(): Promise<ServiceResult<TeacherStu
       ...stuLessons.map((l) => l.updated_at),
       ...stuStudy.map((s) => s.started_at),
       ...stuAssignmentSubs.map((s) => s.submitted_at),
-      ...stuResults.map((r) => r.created_at),
+      ...stuResults.map((r) => r.graded_at),
       ...stuEnrollments.map((e) => e.last_accessed_at ?? e.enrolled_at),
     ].filter((ts): ts is string => Boolean(ts));
     allTimestamps.sort((a, b) => b.localeCompare(a));
@@ -988,7 +988,7 @@ export async function getTeacherStudentsData(): Promise<ServiceResult<TeacherStu
       const cTimestamps = [
         ...cLessons.map((l) => l.updated_at),
         ...cAllSubs.map((s) => s.submitted_at),
-        ...cResults.map((r) => r.created_at),
+        ...cResults.map((r) => r.graded_at),
         e.last_accessed_at ?? e.enrolled_at,
       ].filter((ts): ts is string => Boolean(ts));
       cTimestamps.sort((a, b) => b.localeCompare(a));
@@ -1129,7 +1129,7 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
           .from("results")
           .select("*")
           .in("course_id", courseIds)
-          .order("created_at", { ascending: false })
+          .order("graded_at", { ascending: false })
       : Promise.resolve({ data: [] as Array<TableRow<"results">>, error: null }),
     courseIds.length > 0
       ? supabase
@@ -1686,7 +1686,7 @@ export async function getTeacherAnalyticsData(): Promise<ServiceResult<TeacherAn
     }
   }
   for (const r of results) {
-    const day = r.created_at.slice(0, 10);
+    const day = r.graded_at.slice(0, 10);
     const entry = dayMap.get(day);
     if (entry) {
       entry.submissions += 1;

@@ -51,20 +51,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       return DEFAULT_THEME;
     }
   });
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => {
-    if (typeof document !== "undefined") {
-      return document.documentElement.classList.contains("dark")
-        ? "dark"
-        : "light";
-    }
-    return "dark";
-  });
+  const resolvedTheme = useMemo<ResolvedTheme>(
+    () => resolveTheme(theme, prefersDark),
+    [theme, prefersDark],
+  );
 
   useEffect(() => {
-    const nextResolved = resolveTheme(theme, prefersDark);
-    setResolvedTheme(nextResolved);
-    applyTheme(nextResolved);
-  }, [theme, prefersDark]);
+    applyTheme(resolvedTheme);
+  }, [resolvedTheme]);
 
   const setTheme = useCallback((next: Theme) => {
     const root = document.documentElement;
@@ -80,7 +74,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       typeof window !== "undefined" && window.matchMedia(DARK_QUERY).matches;
     const newResolved = resolveTheme(next, systemDark);
     setThemeState(next);
-    setResolvedTheme(newResolved);
     applyTheme(newResolved);
 
     window.setTimeout(

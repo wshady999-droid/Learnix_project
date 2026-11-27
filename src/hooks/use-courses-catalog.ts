@@ -199,25 +199,20 @@ export async function fetchAllCoursesCatalog(): Promise<CatalogCourseItem[]> {
 
 export function useCoursesCatalog(initialCourses?: CatalogCourseItem[]) {
   const hasInitial = initialCourses !== undefined;
-  const [courses, setCourses] = useState<CatalogCourseItem[]>(
-    initialCourses ?? [],
-  );
+  const [fetchedCourses, setFetchedCourses] = useState<
+    CatalogCourseItem[] | null
+  >(null);
   const [loading, setLoading] = useState<boolean>(!hasInitial);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (initialCourses !== undefined) {
-      setCourses(initialCourses);
-      setLoading(false);
-    }
-  }, [initialCourses]);
+  const courses = fetchedCourses ?? initialCourses ?? [];
 
   const refetch = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await fetchAllCoursesCatalog();
-      setCourses(data);
+      setFetchedCourses(data);
     } catch (err) {
       setError(
         err instanceof Error
@@ -240,7 +235,7 @@ export function useCoursesCatalog(initialCourses?: CatalogCourseItem[]) {
       try {
         const data = await fetchAllCoursesCatalog();
         if (active) {
-          setCourses(data);
+          setFetchedCourses(data);
         }
       } catch (err) {
         if (active) {

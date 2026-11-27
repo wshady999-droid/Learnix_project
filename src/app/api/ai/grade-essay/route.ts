@@ -129,7 +129,11 @@ export async function POST(request: Request) {
     "AI grading suggestion generated. Teacher verification required.";
 
   try {
-    const parsedAi = JSON.parse(aiRes.text) as {
+    const cleaned = aiRes.text
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+    const parsedAi = JSON.parse(cleaned) as {
       suggestedPoints?: number;
       explanation?: string;
       feedback?: string;
@@ -140,9 +144,13 @@ export async function POST(request: Request) {
         Math.max(0, Number(parsedAi.suggestedPoints.toFixed(2))),
       );
     }
-    suggestedFeedback = [parsedAi.feedback, parsedAi.explanation]
-      .filter(Boolean)
+    const combinedFeedback = [parsedAi.feedback, parsedAi.explanation]
+      .filter((s): s is string => Boolean(s && s.trim().length > 0))
+      .map((s) => s.trim())
       .join(" — ");
+    if (combinedFeedback) {
+      suggestedFeedback = combinedFeedback;
+    }
   } catch {
     suggestedFeedback = aiRes.text.slice(0, 1000);
   }

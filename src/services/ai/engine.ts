@@ -1736,88 +1736,197 @@ export function getVerifiedPlatformHelpContext(): {
   citation: AiCitation;
 } {
   const contextBlock = [
-    "=== VERIFIED LEARNIX PLATFORM GUIDE & STUDENT NAVIGATION ===",
+    "=== VERIFIED LEARNIX PLATFORM GUIDE & WORKFLOWS ===",
     "1. Platform Overview & Features:",
-    "   - Learnix is an AI-powered academic platform combining structured online courses, interactive multimedia lessons, proctored smart examinations, real-time student analytics, and a multimodal Grounded Course RAG AI Study Assistant.",
-    "   - Supports 5 languages (English, Arabic with full RTL, German, Italian, French) and dark/light themes with gold accents.",
-    "2. Student Sidebar Navigation (3 Groups, 7 Pages):",
-    "   - LEARNING Group:",
-    "     1) Overview (`/student`): Dashboard summary of enrolled courses, average completion progress, upcoming exams, active assignments, latest grades, logged study hours, and notifications.",
-    "     2) Explore Courses (`/student/courses`): Browse all published courses, filter by category (IT, Mobile App, Web, Cybersecurity, Cloud Computing, Social Media, Java, Testing, Data Analysis, Data Modeling, Database, IOT, Project Management, BPM), search by title/code/teacher, flip course cards for details, and click 'Enroll Now' to enroll instantly.",
-    "     3) My Learning (`/student/my-learning`): Interactive planetary Learning Orbit displaying your enrolled courses, completion progress, and direct access to open lessons in the Lesson Viewer (`/student/courses/[lessonId]`).",
-    "     4) Exams (`/student/exams`): Displays your enrolled course cards and their associated published examinations (title, duration, number of questions, total marks, attempts used, passing score), with an 'Exam Details' modal and 'Open Examination' / 'Resume Active Attempt' button to launch the Secure Exam Runner (`/student/exams/[examId]`), plus an 'Attempts & Results' history tab.",
-    "   - AI & PROGRESS Group:",
-    "     5) AI Study Assistant (`/student/ai-assistant`): Full-width multimodal AI tutor supporting text chat, optional course context selector ('General AI Assistant' or any enrolled course), Conversation History drawer, New Chat button, file attachments, and ChatGPT-style live voice recording.",
-    "     6) Performance (`/student/performance`): Academic analytics dashboard showing Overall Exam Average, Completed Courses count, Logged Study Hours, Examinations Passed, Examination Score History chart, Course Completion vs. Exam Mastery chart, Academic Strengths (>=75%), Subjects Needing Revision (<75%), and the Official Examination Grades & Feedback table.",
-    "   - ACCOUNT Group:",
-    "     7) Profile (`/student/profile`): View earned certificates and learning milestones (completed lessons, personal notes, exams passed), and manage your avatar, personal info, password, language, and theme.",
-    "3. Additional Student Pages & Features:",
-    "   - Attendance History (`/student/attendance`): View your class attendance rate, total sessions, present/late/excused/absent counts, and session table.",
-    "   - How to Enroll in a Course: Go to 'Explore Courses' (`/student/courses`) in the left sidebar, find a published course card, click to flip the card (or view details), and click the gold 'Enroll Now' button.",
-    "   - How to Upload Files in AI Study Assistant: Click the 'Attach' (paperclip) button in the bottom chat toolbar and choose:",
-    "     * 'Upload Document' (supports PDF, DOCX, PPTX, XLSX, TXT up to 15 MB)",
-    "     * 'Upload Image' (supports PNG, JPG, JPEG, WEBP up to 15 MB)",
-    "     * 'Upload Audio' (supports MP3, WAV, M4A, WEBM up to 15 MB)",
-    "     You can attach up to 5 files, preview them in the staging tray, type a question, and press Send.",
-    "   - How to Use Live Voice Recording in AI Study Assistant: Click the 'Voice' (microphone) button in the chat toolbar to start recording immediately with a live audio-level waveform and timer. You can click 'Send' WHILE recording is still active to finalize and send your voice message directly, or click 'Cancel' while recording to discard it.",
-    "   - Where to Find Assignments & Exams: Upcoming assignments appear on the 'Overview' page (`/student`). Assigned online exams and attempt history are located on the 'Exams' page (`/student/exams`).",
-    "   - How to Track Learning Progress: Check 'Overview' (`/student`) for a quick summary, 'My Learning' (`/student/my-learning`) for visual course completion, or 'Performance' (`/student/performance`) for detailed exam charts, strengths/weaknesses, and grades.",
-    "   - Features NOT Available / Policy Notice: If a student asks about a feature not listed above (such as paid billing subscriptions, live video conferencing calls, or peer-to-peer student group chat), state clearly that this information or feature is not currently available in Learnix.",
+    "   - Learnix is an AI-powered learning management system (LMS) combining structured online courses, multimedia lessons, assignments, smart quizzes/examinations, real-time messaging & notifications, analytics, and the Groq-powered Learnix AI Assistant.",
+    "   - Supports 5 languages (English, Arabic with full RTL, German, Italian, French) and persistent dark/light themes.",
+    "2. Student Workflows & Navigation:",
+    "   - Overview (`/student`): Dashboard summary of enrolled courses, completion progress, upcoming quizzes, active assignments, latest grades, study hours, and notifications.",
+    "   - Explore Courses (`/student/courses`): Browse all published courses, filter by category, search by title/code/teacher, view approved student reviews, flip course cards for details, and click 'Enroll Now'.",
+    "   - My Learning (`/student/my-learning`): Interactive Learning Orbit showing enrolled courses, chapters, lessons, downloadable learning resources/PDFs, Lesson Viewer (`/student/courses/[lessonId]`), and post-completion course/teacher reviews.",
+    "   - Assignments (`/student/assignments`): View published course assignments, instructions, due dates, rubrics, submit written answers or file attachments, and view teacher-approved grades & feedback.",
+    "   - Exams / Quizzes (`/student/exams`): View published course quizzes, attempt limits, duration, marks, launch the Secure Exam Runner (`/student/exams/[examId]`), and review completed attempt results.",
+    "   - AI Study Assistant (`/student/ai-assistant`): Course-aware academic tutor supporting text chat, enrolled course context selection, conversation history, document uploads (PDF, DOCX, PPTX, XLSX, TXT up to 15 MB), and live voice recording.",
+    "   - Performance (`/student/performance`) & Attendance (`/student/attendance`): Track exam averages, assignment grades, completion charts, strengths, revision areas, and attendance records.",
+    "   - Messages (`/messages`), Notifications (`/notifications`), and Profile (`/student/profile`): Real-time chat with instructors, instant platform notifications, earned certificates, and account settings.",
+    "3. Teacher Workflows & Navigation:",
+    "   - Overview (`/teacher`) & Courses (`/teacher/courses`): Create courses (with automatic course code generation and cover image), organize chapters & lessons, upload PDFs/videos/learning resources, and publish courses.",
+    "   - Quizzes & AI Quiz Generator (`/teacher/exams`): Generate clean course-grounded quizzes with Learnix AI, replace or edit individual questions, preview student-facing quiz layout, manage the Question Bank, and monitor student attempts.",
+    "   - Assignments & Grading (`/teacher/grading`): Create assignments with rubrics, review student submissions, generate AI grading suggestions/feedback, and click 'Approve & Publish Grade' (human-in-the-loop).",
+    "   - Students (`/teacher/students`), Analytics (`/teacher/analytics`), and AI Teacher Assistant (`/teacher/ai-assistant`): Monitor enrolled student progress, identify struggling learners or missing assignments, chat directly with students, and draft teaching plans.",
+    "4. Unsupported Features Policy:",
+    "   - Features not part of Learnix (such as paid checkout/subscriptions or built-in live video calls) should be clearly noted as unavailable on Learnix.",
   ].join("\n");
 
   return {
     contextBlock,
     citation: {
-      sourceTitle: "Learnix Platform Guide & Student Navigation Reference",
+      sourceTitle: "Learnix Platform Guide & Workflows Reference",
       sourceType: "platform_guide",
       excerpt:
-        "Official Learnix Student Section navigation (Overview, Explore Courses, My Learning, Exams, AI Study Assistant, Performance, Profile) and feature workflows.",
+        "Official Learnix Student and Teacher navigation, courses, assignments, quizzes, AI assistant, messaging, and analytics workflows.",
     },
   };
 }
 
-/**
- * Calls server-side LLM provider (Gemini or OpenAI) when configured in server env vars.
- * Transmits Gemini API key exclusively via `x-goog-api-key` HTTP header (never in URL query parameters).
- * Never exposes keys to the client; returns structured error metadata (`providerFailed`, `errorStatus`, `errorCode`)
- * so callers can enforce strict grounding and never generate ungrounded fallback answers when the provider fails.
- */
-function buildServerGeminiRequest(apiKey: string, model: string): {
-  url: string;
-  headers: Record<string, string>;
-} {
-  const cleanModel = encodeURIComponent(model.trim());
-  if (apiKey.startsWith("AQ.")) {
-    return {
-      url: `https://aiplatform.googleapis.com/v1/publishers/google/models/${cleanModel}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    };
-  }
-  return {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent`,
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
+const GROQ_CHAT_COMPLETIONS_URL =
+  "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_AUDIO_TRANSCRIPTIONS_URL =
+  "https://api.groq.com/openai/v1/audio/transcriptions";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b";
+
+interface GroqToolCallPayload {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
   };
+}
+
+interface GroqChatMessagePayload {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: GroqToolCallPayload[];
+  tool_call_id?: string;
+  name?: string;
+}
+
+function supportsGroqJsonObjectMode(model: string): boolean {
+  const lower = model.toLowerCase();
+  return (
+    lower.includes("gpt-oss") ||
+    lower.startsWith("openai/") ||
+    lower.includes("qwen") ||
+    lower.includes("llama-3") ||
+    lower.includes("llama3") ||
+    lower.includes("mixtral") ||
+    lower.includes("gemma") ||
+    lower.includes("deepseek")
+  );
+}
+
+function stripThinkingAndJsonFences(
+  rawText: string,
+  jsonMode: boolean,
+): string {
+  const withoutThink = rawText
+    .replace(/^<think>[\s\S]*?<\/think>\s*/i, "")
+    .trim();
+  if (jsonMode && withoutThink.startsWith("```")) {
+    return withoutThink
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/, "")
+      .trim();
+  }
+  return withoutThink;
+}
+
+function normalizeToolSchemaForGroq(
+  schema: unknown,
+): Record<string, unknown> {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return { type: "object", properties: {} };
+  }
+  const raw = schema as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "type" && typeof value === "string") {
+      normalized.type = value.toLowerCase();
+    } else if (
+      key === "properties" &&
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      const props: Record<string, unknown> = {};
+      for (const [propName, propVal] of Object.entries(
+        value as Record<string, unknown>,
+      )) {
+        props[propName] = normalizeToolSchemaForGroq(propVal);
+      }
+      normalized.properties = props;
+    } else if (key === "items" && value && typeof value === "object") {
+      normalized.items = normalizeToolSchemaForGroq(value);
+    } else {
+      normalized[key] = value;
+    }
+  }
+
+  if (normalized.type === "object" && !normalized.properties) {
+    normalized.properties = {};
+  }
+
+  return normalized;
+}
+
+function formatFunctionDeclarationsForGroq(
+  tools: AiAgentFunctionDeclaration[],
+): Array<Record<string, unknown>> {
+  return tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: normalizeToolSchemaForGroq(tool.parameters),
+    },
+  }));
+}
+
+function parseRecoveredXmlToolCalls(
+  failedGeneration: string | undefined,
+): GroqToolCallPayload[] {
+  if (!failedGeneration) return [];
+  const recovered: GroqToolCallPayload[] = [];
+  const regex =
+    /<function=([a-zA-Z0-9_]+)(?:>|\s+)(\{[\s\S]*?\})?\s*<\/function>/g;
+  let match: RegExpExecArray | null = regex.exec(failedGeneration);
+  let idx = 0;
+
+  while (match !== null) {
+    const fnName = match[1]?.trim();
+    const rawArgs = match[2]?.trim() || "{}";
+    if (fnName) {
+      try {
+        const parsedArgs = JSON.parse(rawArgs);
+        recovered.push({
+          id: `call_recovered_${idx++}`,
+          type: "function",
+          function: {
+            name: fnName,
+            arguments: JSON.stringify(parsedArgs ?? {}),
+          },
+        });
+      } catch {
+        // Ignore malformed XML tool fragment
+      }
+    }
+    match = regex.exec(failedGeneration);
+  }
+
+  return recovered;
 }
 
 /**
  * Invokes the centralized Supabase Edge Function (`learnix-ai`) which reads
- * `AI_PROVIDER`, `GEMINI_API_KEY`, and `GEMINI_MODEL` from Supabase Edge Function Secrets.
+ * `AI_PROVIDER`, `GROQ_API_KEY`, and `GROQ_MODEL` securely from Supabase Edge Function Secrets.
  */
 async function invokeLearnixAiEdgeFunction(
   payload: Record<string, unknown>,
 ): Promise<{
   ok: boolean;
   text?: string;
-  raw?: unknown;
+  message?: {
+    role?: string;
+    content?: string | null;
+    tool_calls?: GroqToolCallPayload[];
+  };
   provider?: string;
   secretMissing?: boolean;
   errorCode?: string;
   status?: number;
+  retryAfterSeconds?: number;
 }> {
   try {
     const supabase = await createSupabaseServerClient();
@@ -1827,19 +1936,58 @@ async function invokeLearnixAiEdgeFunction(
 
     if (error) {
       const msg = error.message || "";
-      if (msg.includes("EDGE_SECRET_NOT_SET") || msg.includes("503")) {
-        return { ok: false, secretMissing: true, errorCode: "EDGE_SECRET_NOT_SET" };
+      const ctx = (error as { context?: Response }).context;
+      let bodyCode = "";
+      let retryAfterSeconds: number | undefined;
+      const status = ctx?.status;
+      if (ctx && typeof ctx.clone === "function") {
+        try {
+          const errJson = (await ctx.clone().json()) as {
+            errorCode?: string;
+            retryAfterSeconds?: number;
+          };
+          bodyCode = errJson?.errorCode ?? "";
+          retryAfterSeconds = errJson?.retryAfterSeconds;
+        } catch {
+          // Ignore non-JSON error body
+        }
       }
-      return { ok: false, errorCode: "EDGE_INVOKE_ERROR" };
+      if (
+        bodyCode === "EDGE_SECRET_NOT_SET" ||
+        msg.includes("EDGE_SECRET_NOT_SET") ||
+        status === 503 ||
+        msg.includes("503")
+      ) {
+        return {
+          ok: false,
+          secretMissing: true,
+          errorCode: "EDGE_SECRET_NOT_SET",
+          status: status ?? 503,
+        };
+      }
+      return {
+        ok: false,
+        errorCode:
+          status === 429
+            ? bodyCode || "GROQ_RATE_LIMITED"
+            : bodyCode || "EDGE_INVOKE_ERROR",
+        status,
+        retryAfterSeconds,
+      };
     }
 
     const parsed = data as {
       ok?: boolean;
       text?: string;
-      raw?: unknown;
+      message?: {
+        role?: string;
+        content?: string | null;
+        tool_calls?: GroqToolCallPayload[];
+      };
       provider?: string;
       errorCode?: string;
       status?: number;
+      retryAfterSeconds?: number;
     } | null;
 
     if (!parsed || parsed.ok !== true) {
@@ -1848,18 +1996,195 @@ async function invokeLearnixAiEdgeFunction(
         secretMissing: parsed?.errorCode === "EDGE_SECRET_NOT_SET",
         errorCode: parsed?.errorCode ?? "EDGE_PROVIDER_FAILED",
         status: parsed?.status,
+        retryAfterSeconds: parsed?.retryAfterSeconds,
       };
     }
 
     return {
       ok: true,
       text: parsed.text,
-      raw: parsed.raw,
-      provider: parsed.provider ?? "edge:gemini",
+      message: parsed.message,
+      provider: parsed.provider ?? `edge:groq:${DEFAULT_GROQ_MODEL}`,
     };
   } catch {
     return { ok: false, secretMissing: true, errorCode: "EDGE_UNREACHABLE" };
   }
+}
+
+async function callServerGroqCompletion(params: {
+  apiKey: string;
+  model: string;
+  messages: GroqChatMessagePayload[];
+  tools?: Array<Record<string, unknown>>;
+  jsonMode?: boolean;
+  temperature?: number;
+  fetchFn?: typeof fetch;
+}): Promise<{
+  ok: boolean;
+  status: number;
+  modelUsed: string;
+  message?: {
+    role?: string;
+    content?: string | null;
+    tool_calls?: GroqToolCallPayload[];
+  };
+  errorCode?: string;
+}> {
+  const fetchImpl = params.fetchFn ?? fetch;
+  const modelToUse = params.model.trim() || DEFAULT_GROQ_MODEL;
+  const hasTools = Boolean(params.tools && params.tools.length > 0);
+  const useJsonMode =
+    Boolean(params.jsonMode) &&
+    !hasTools &&
+    supportsGroqJsonObjectMode(modelToUse);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchImpl(GROQ_CHAT_COMPLETIONS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${params.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelToUse,
+          messages: params.messages,
+          temperature: params.temperature ?? 0.2,
+          ...(hasTools
+            ? {
+                tools: params.tools,
+                tool_choice: "auto",
+              }
+            : {}),
+          ...(useJsonMode
+            ? { response_format: { type: "json_object" } }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(30000),
+      });
+
+      if (res.status === 429 && attempt === 0) {
+        const retryAfterSec = Number.parseFloat(
+          res.headers.get("retry-after") || "4",
+        );
+        const waitMs = Math.min(Math.max(retryAfterSec * 1000, 1500), 7000);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (res.ok) {
+        const json = (await res.json()) as {
+          model?: string;
+          choices?: Array<{
+            message?: {
+              role?: string;
+              content?: string | null;
+              tool_calls?: GroqToolCallPayload[];
+            };
+          }>;
+        };
+        const firstMessage = json.choices?.[0]?.message;
+        if (!firstMessage) {
+          return {
+            ok: false,
+            status: 502,
+            modelUsed: json.model || modelToUse,
+            errorCode: "GROQ_EMPTY_RESPONSE",
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          modelUsed: json.model || modelToUse,
+          message: firstMessage,
+        };
+      }
+
+      let errCode = "";
+      let errMessage = "";
+      let failedGeneration: string | undefined;
+      try {
+        const errBody = (await res.json()) as {
+          error?: {
+            code?: string;
+            type?: string;
+            message?: string;
+            failed_generation?: string;
+          };
+        };
+        errCode = (
+          errBody.error?.code ||
+          errBody.error?.type ||
+          ""
+        ).toLowerCase();
+        errMessage = (errBody.error?.message || "").toLowerCase();
+        failedGeneration = errBody.error?.failed_generation;
+      } catch {
+        // Ignore non-JSON error body
+      }
+
+      if (res.status === 400 && errCode === "tool_use_failed") {
+        const recovered = parseRecoveredXmlToolCalls(failedGeneration);
+        if (recovered.length > 0) {
+          return {
+            ok: true,
+            status: 200,
+            modelUsed: modelToUse,
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: recovered,
+            },
+          };
+        }
+      }
+
+      const isModelUnavailable =
+        errCode.includes("model_not_found") ||
+        errCode.includes("model_decommissioned") ||
+        (res.status === 404 && errMessage.includes("model"));
+
+      const mappedCode =
+        res.status === 401 || res.status === 403
+          ? "GROQ_INVALID_API_KEY"
+          : isModelUnavailable
+            ? "GROQ_INVALID_MODEL"
+            : res.status === 404
+              ? "GROQ_ENDPOINT_NOT_FOUND"
+              : res.status === 429
+                ? "GROQ_RATE_LIMITED"
+                : res.status >= 400 && res.status < 500
+                  ? "GROQ_INVALID_REQUEST"
+                  : `GROQ_HTTP_${res.status}`;
+
+      return {
+        ok: false,
+        status: res.status,
+        modelUsed: modelToUse,
+        errorCode: mappedCode,
+      };
+    } catch (err) {
+      const errName =
+        err instanceof Error && err.name
+          ? err.name.toUpperCase()
+          : "NETWORK_ERROR";
+      const isTimeout =
+        errName.includes("TIMEOUT") || errName.includes("ABORT");
+      return {
+        ok: false,
+        status: isTimeout ? 504 : 502,
+        modelUsed: modelToUse,
+        errorCode: isTimeout ? "GROQ_TIMEOUT" : `GROQ_${errName}`,
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    status: 429,
+    modelUsed: modelToUse,
+    errorCode: "GROQ_RATE_LIMITED",
+  };
 }
 
 export async function callServerAiProvider(params: {
@@ -1878,7 +2203,7 @@ export async function callServerAiProvider(params: {
 }> {
   const mediaParts = params.mediaParts ?? [];
 
-  // 0. Primary: Centralized Supabase Edge Function (`learnix-ai`) backed by Edge Function Secrets
+  // 1. Primary: Centralized Supabase Edge Function (`learnix-ai`) backed by Groq Edge Function Secrets
   const edgeRes = await invokeLearnixAiEdgeFunction({
     mode: "generate",
     systemInstruction: params.systemInstruction,
@@ -1888,214 +2213,143 @@ export async function callServerAiProvider(params: {
   });
 
   if (edgeRes.ok && edgeRes.text?.trim()) {
-    return {
-      text: edgeRes.text.trim(),
-      provider: edgeRes.provider ?? "edge:gemini:gemini-2.5-flash",
-    };
+    const candidateText = stripThinkingAndJsonFences(
+      edgeRes.text,
+      Boolean(params.jsonMode),
+    );
+
+    if (params.jsonMode) {
+      try {
+        JSON.parse(candidateText);
+        return {
+          text: candidateText,
+          provider: edgeRes.provider ?? `edge:groq:${DEFAULT_GROQ_MODEL}`,
+        };
+      } catch {
+        // Fall through to local Groq fallback or safe fallback if malformed JSON
+      }
+    } else {
+      return {
+        text: candidateText,
+        provider: edgeRes.provider ?? `edge:groq:${DEFAULT_GROQ_MODEL}`,
+      };
+    }
   }
 
-  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
-  const openAiKey = (process.env.OPENAI_API_KEY ?? "").trim();
+  // 2. Server-only Groq API fallback (for local development when GROQ_API_KEY is configured in .env.local)
+  const groqKey = (process.env.GROQ_API_KEY ?? "").trim();
+  const groqModel = (process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL).trim();
+  const aiProvider = (process.env.AI_PROVIDER || "groq").trim().toLowerCase();
 
   let lastFailure: { status?: number; code: string } | null =
     !edgeRes.ok && !edgeRes.secretMissing && edgeRes.errorCode
       ? { status: edgeRes.status, code: edgeRes.errorCode }
       : null;
 
-  // 1. Server-only Gemini API fallback (supports both Vertex Express AQ.* and AI Studio AIza* keys)
   if (
-    geminiKey &&
-    !geminiKey.toLowerCase().includes("your_gemini_api_key")
+    aiProvider === "groq" &&
+    groqKey &&
+    !groqKey.toLowerCase().includes("your_groq_api_key")
   ) {
-    const preferredModel = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
-    const candidateModels = Array.from(
-      new Set([preferredModel, "gemini-2.5-flash", "gemini-2.0-flash"]),
-    );
+    const transcribedAudioSegments: string[] = [];
+    const audioParts = mediaParts.filter((m) => m.kind === "audio");
 
-    const userParts: Array<Record<string, unknown>> = [
-      { text: params.userPrompt },
-    ];
-    for (const media of mediaParts) {
-      userParts.push({
-        inline_data: {
-          mime_type: media.mimeType,
-          data: media.base64Data,
-        },
-      });
-    }
-
-    for (const model of candidateModels) {
+    for (const audio of audioParts) {
       try {
-        const reqCfg = buildServerGeminiRequest(geminiKey, model);
-        const res = await fetch(reqCfg.url, {
-          method: "POST",
-          headers: reqCfg.headers,
-          body: JSON.stringify({
-            system_instruction: {
-              parts: [{ text: params.systemInstruction }],
-            },
-            contents: [{ role: "user", parts: userParts }],
-            generationConfig: {
-              temperature: 0.2,
-              ...(params.jsonMode
-                ? { responseMimeType: "application/json" }
-                : {}),
-            },
-          }),
-          signal: AbortSignal.timeout(35000),
-        });
+        const audioBuffer = Buffer.from(audio.base64Data, "base64");
+        const blob = new Blob([audioBuffer], { type: audio.mimeType });
+        const form = new FormData();
+        form.append("file", blob, audio.fileName || "recording.webm");
+        form.append("model", "whisper-large-v3-turbo");
 
-        if (res.ok) {
-          const json = (await res.json()) as {
-            candidates?: Array<{
-              content?: { parts?: Array<{ text?: string; thought?: boolean }> };
-            }>;
-          };
-          const text = (json.candidates?.[0]?.content?.parts ?? [])
-            .filter((p) => p.thought !== true)
-            .map((p) => p.text ?? "")
-            .join("\n")
-            .trim();
-          if (text) {
-            return { text, provider: `gemini:${model}` };
+        const whisperRes = await fetch(GROQ_AUDIO_TRANSCRIPTIONS_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${groqKey}` },
+          body: form,
+          signal: AbortSignal.timeout(20000),
+        });
+        if (whisperRes.ok) {
+          const wJson = (await whisperRes.json()) as { text?: string };
+          if (wJson.text?.trim()) {
+            transcribedAudioSegments.push(
+              `[Audio Transcription (${audio.fileName})]: ${wJson.text.trim()}`,
+            );
           }
-          lastFailure = {
-            status: res.status,
-            code: "GEMINI_EMPTY_CANDIDATE",
-          };
-          break;
-        } else if (res.status === 404) {
-          lastFailure = { status: 404, code: `GEMINI_MODEL_404_${model}` };
-          continue;
-        } else {
-          lastFailure = {
-            status: res.status,
-            code: `GEMINI_HTTP_${res.status}`,
-          };
-          break;
         }
-      } catch (err) {
-        const errName =
-          err instanceof Error && err.name ? err.name : "NETWORK_ERROR";
-        lastFailure = {
-          code: `GEMINI_${errName.toUpperCase()}`,
-        };
-        break;
+      } catch {
+        // Non-fatal audio transcription failure
       }
     }
-  }
 
-  // 2. Try OpenAI API (server-side only — supports vision for images + Whisper transcription for audio)
-  if (
-    openAiKey &&
-    !openAiKey.toLowerCase().includes("your_openai_api_key")
-  ) {
-    const model = (process.env.OPENAI_MODEL || "gpt-4o-mini").trim();
-    try {
-      const transcribedAudioSegments: string[] = [];
+    const attachmentNotes = mediaParts
+      .filter((m) => m.kind !== "audio")
+      .map((m) => `[Attached File Metadata: ${m.fileName} (${m.mimeType})]`);
 
-      const audioParts = mediaParts.filter((m) => m.kind === "audio");
-      for (const audio of audioParts) {
+    const combinedUserPrompt = [
+      params.userPrompt,
+      ...transcribedAudioSegments,
+      ...attachmentNotes,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    let systemContent = params.systemInstruction.trim();
+    if (
+      params.jsonMode &&
+      !/\bjson\b/i.test(`${systemContent} ${combinedUserPrompt}`)
+    ) {
+      systemContent = `${systemContent}\nRespond strictly with a valid JSON object.`;
+    }
+
+    const groqRes = await callServerGroqCompletion({
+      apiKey: groqKey,
+      model: groqModel,
+      messages: [
+        { role: "system", content: systemContent },
+        { role: "user", content: combinedUserPrompt },
+      ],
+      jsonMode: params.jsonMode,
+      temperature: 0.2,
+    });
+
+    if (groqRes.ok && groqRes.message?.content?.trim()) {
+      const cleaned = stripThinkingAndJsonFences(
+        groqRes.message.content,
+        Boolean(params.jsonMode),
+      );
+
+      if (params.jsonMode) {
         try {
-          const audioBuffer = Buffer.from(audio.base64Data, "base64");
-          const blob = new Blob([audioBuffer], { type: audio.mimeType });
-          const form = new FormData();
-          form.append("file", blob, audio.fileName || "recording.webm");
-          form.append("model", "whisper-1");
-
-          const whisperRes = await fetch(
-            "https://api.openai.com/v1/audio/transcriptions",
-            {
-              method: "POST",
-              headers: { Authorization: `Bearer ${openAiKey}` },
-              body: form,
-              signal: AbortSignal.timeout(25000),
-            },
-          );
-          if (whisperRes.ok) {
-            const wJson = (await whisperRes.json()) as { text?: string };
-            if (wJson.text?.trim()) {
-              transcribedAudioSegments.push(
-                `[Audio Transcription (${audio.fileName})]: ${wJson.text.trim()}`,
-              );
-            }
-          }
-        } catch {
-          // Continue even if transcription fails
-        }
-      }
-
-      const combinedPromptText =
-        transcribedAudioSegments.length > 0
-          ? `${params.userPrompt}\n\n${transcribedAudioSegments.join("\n\n")}`
-          : params.userPrompt;
-
-      const imageParts = mediaParts.filter((m) => m.kind === "image");
-      const userContent: unknown =
-        imageParts.length > 0
-          ? [
-              { type: "text", text: combinedPromptText },
-              ...imageParts.map((img) => ({
-                type: "image_url",
-                image_url: {
-                  url: `data:${img.mimeType};base64,${img.base64Data}`,
-                },
-              })),
-            ]
-          : combinedPromptText;
-
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openAiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.2,
-          ...(params.jsonMode
-            ? { response_format: { type: "json_object" } }
-            : {}),
-          messages: [
-            { role: "system", content: params.systemInstruction },
-            { role: "user", content: userContent },
-          ],
-        }),
-        signal: AbortSignal.timeout(35000),
-      });
-
-      if (res.ok) {
-        const json = (await res.json()) as {
-          choices?: Array<{ message?: { content?: string } }>;
-        };
-        const text = json.choices?.[0]?.message?.content?.trim();
-        if (text) {
+          JSON.parse(cleaned);
           return {
-            text,
-            provider: `openai:${model}`,
+            text: cleaned,
+            provider: `groq:${groqRes.modelUsed}`,
             transcribedAudioText:
               transcribedAudioSegments.length > 0
                 ? transcribedAudioSegments.join("\n")
                 : undefined,
           };
+        } catch {
+          lastFailure = { status: 502, code: "GROQ_MALFORMED_JSON" };
         }
       } else {
-        lastFailure = {
-          status: res.status,
-          code: `OPENAI_HTTP_${res.status}`,
+        return {
+          text: cleaned,
+          provider: `groq:${groqRes.modelUsed}`,
+          transcribedAudioText:
+            transcribedAudioSegments.length > 0
+              ? transcribedAudioSegments.join("\n")
+              : undefined,
         };
       }
-    } catch (err) {
-      const errName =
-        err instanceof Error && err.name ? err.name : "NETWORK_ERROR";
+    } else {
       lastFailure = {
-        code: `OPENAI_${errName.toUpperCase()}`,
+        status: groqRes.status,
+        code: groqRes.errorCode ?? "GROQ_GENERATE_FAILED",
       };
     }
   }
 
-  // 3. If a provider key was configured and the provider call failed, flag `providerFailed: true`
-  // with sanitized status/code metadata (never exposing keys or sensitive request bodies).
   if (lastFailure) {
     return {
       text: params.fallbackResponse,
@@ -2106,25 +2360,24 @@ export async function callServerAiProvider(params: {
     };
   }
 
-  // 4. Deterministic Grounded Engine Fallback when no external LLM key is configured
   return {
     text: params.fallbackResponse,
     provider: "learnix-grounded-rag",
   };
 }
 
-export interface GeminiAgentHistoryTurn {
+export interface AiAgentHistoryTurn {
   sender: "user" | "assistant";
   content: string;
 }
 
-export interface GeminiAgentFunctionDeclaration {
+export interface AiAgentFunctionDeclaration {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
 }
 
-export interface GeminiAgentToolExecutionOutcome {
+export interface AiAgentToolExecutionOutcome {
   toolName: string;
   ok: boolean;
   data: Record<string, unknown>;
@@ -2134,30 +2387,19 @@ export interface GeminiAgentToolExecutionOutcome {
 }
 
 /**
- * Unified Gemini Agentic Loop using official Gemini Function Calling (`tools: [{ functionDeclarations }]`).
- *
- * Flow:
- * 1. Sends recent conversation history (`contents`), the current user turn (plus any uploaded multimodal media parts),
- *    system instructions, and tool declarations (`functionDeclarations`) to Gemini.
- * 2. Gemini dynamically interprets the student's natural-language intent and returns either:
- *    - One or more `functionCall` parts (`name`, `args`), OR
- *    - A final natural-language `text` response.
- * 3. For each requested `functionCall`, the backend validates and executes the tool via `executeTool`,
- *    deduplicates repeated identical calls within the same turn, collects citations, and returns a
- *    `functionResponse` turn (`role: "user"`, `parts: [{ functionResponse: { name, response } }]`) to Gemini.
- * 4. Repeats up to `maxIterations` (default 4) until Gemini produces its final grounded answer.
- * 5. Handles HTTP 503 or provider failures safely without fabricating tool outputs.
+ * Unified Groq Agentic Loop using OpenAI-compatible Tool Calling (`llama-3.3-70b-versatile`)
+ * via the centralized `learnix-ai` Supabase Edge Function.
  */
-export async function runGeminiStudentAgentLoop(params: {
+export async function runStudentAiAgentLoop(params: {
   systemInstruction: string;
-  conversationHistory: GeminiAgentHistoryTurn[];
+  conversationHistory: AiAgentHistoryTurn[];
   userPrompt: string;
   mediaParts?: AiInlineMediaPart[];
-  tools: GeminiAgentFunctionDeclaration[];
+  tools: AiAgentFunctionDeclaration[];
   executeTool: (
     toolName: string,
     rawArgs: Record<string, unknown> | undefined,
-  ) => Promise<GeminiAgentToolExecutionOutcome>;
+  ) => Promise<AiAgentToolExecutionOutcome>;
   maxIterations?: number;
   customFetch?: typeof fetch;
 }): Promise<{
@@ -2168,97 +2410,78 @@ export async function runGeminiStudentAgentLoop(params: {
     args: Record<string, unknown>;
     ok: boolean;
   }>;
-  toolOutcomes: GeminiAgentToolExecutionOutcome[];
+  toolOutcomes: AiAgentToolExecutionOutcome[];
   citations: AiCitation[];
   providerFailed: boolean;
   errorStatus?: number;
   errorCode?: string;
 }> {
-  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
-  const model = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+  const groqKey = (process.env.GROQ_API_KEY ?? "").trim();
+  const configuredModel = (
+    process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL
+  ).trim();
   const maxIterations = Math.min(Math.max(params.maxIterations ?? 4, 1), 6);
-  const fetchFn = params.customFetch ?? fetch;
 
   const calledTools: Array<{
     toolName: string;
     args: Record<string, unknown>;
     ok: boolean;
   }> = [];
-  const toolOutcomes: GeminiAgentToolExecutionOutcome[] = [];
+  const toolOutcomes: AiAgentToolExecutionOutcome[] = [];
   const collectedCitations: AiCitation[] = [];
-  const executedCallCache = new Map<string, GeminiAgentToolExecutionOutcome>();
+  const executedCallCache = new Map<string, AiAgentToolExecutionOutcome>();
 
-  const hasLocalKey =
-    Boolean(geminiKey) &&
-    !geminiKey.toLowerCase().includes("your_gemini_api_key");
+  const hasLocalGroqKey =
+    Boolean(groqKey) && !groqKey.toLowerCase().includes("your_groq_api_key");
 
-  // Build multi-turn Gemini `contents` array from recent conversation history + current turn
-  const contents: Array<{
-    role: "user" | "model";
-    parts: Array<Record<string, unknown>>;
-  }> = [];
+  const normalizedTools = formatFunctionDeclarationsForGroq(params.tools);
 
+  const messages: GroqChatMessagePayload[] = [];
   for (const turn of params.conversationHistory) {
     const cleanText = turn.content.trim();
     if (!cleanText) continue;
-    contents.push({
-      role: turn.sender === "user" ? "user" : "model",
-      parts: [{ text: cleanText.slice(0, 1600) }],
+    messages.push({
+      role: turn.sender === "user" ? "user" : "assistant",
+      content: cleanText.slice(0, 1800),
     });
   }
 
-  const currentTurnParts: Array<Record<string, unknown>> = [
-    { text: params.userPrompt },
-  ];
-  for (const media of params.mediaParts ?? []) {
-    currentTurnParts.push({
-      inline_data: {
-        mime_type: media.mimeType,
-        data: media.base64Data,
-      },
-    });
-  }
-  contents.push({
+  const nonDocAttachmentNotes = (params.mediaParts ?? []).map(
+    (m) => `[Attached ${m.kind}: ${m.fileName} (${m.mimeType})]`,
+  );
+  const currentTurnContent = [params.userPrompt, ...nonDocAttachmentNotes]
+    .filter(Boolean)
+    .join("\n\n");
+
+  messages.push({
     role: "user",
-    parts: currentTurnParts,
+    content: currentTurnContent,
   });
 
   for (let iteration = 0; iteration < maxIterations; iteration++) {
     try {
-      let json: {
-        candidates?: Array<{
-          content?: {
-            role?: string;
-            parts?: Array<
-              Record<string, unknown> & {
-                text?: string;
-                thought?: boolean;
-                thoughtSignature?: string;
-                functionCall?: {
-                  id?: string;
-                  name?: string;
-                  args?: Record<string, unknown>;
-                };
-              }
-            >;
-          };
-        }>;
+      let assistantMsg: {
+        role?: string;
+        content?: string | null;
+        tool_calls?: GroqToolCallPayload[];
       } | null = null;
-      let resolvedProvider = `gemini:${model}`;
+      let resolvedProvider = `edge:groq:${configuredModel}`;
 
-      // 1. Primary: Invoke Supabase Edge Function (`learnix-ai` using Edge Function Secrets) unless customFetch is injected for tests
+      // 1. Primary: Invoke Supabase Edge Function (`learnix-ai`) unless customFetch is injected for tests
       if (!params.customFetch) {
         const edgeTurn = await invokeLearnixAiEdgeFunction({
           mode: "agent_turn",
           systemInstruction: params.systemInstruction,
-          contents,
-          tools: params.tools,
+          messages,
+          tools: normalizedTools,
+          temperature: 0.2,
         });
 
-        if (edgeTurn.ok && edgeTurn.raw) {
-          json = edgeTurn.raw as typeof json;
-          resolvedProvider = edgeTurn.provider ?? "edge:gemini:gemini-2.5-flash";
-        } else if (!edgeTurn.secretMissing && !hasLocalKey) {
+        if (edgeTurn.ok && edgeTurn.message) {
+          assistantMsg = edgeTurn.message;
+          resolvedProvider =
+            edgeTurn.provider ?? `edge:groq:${DEFAULT_GROQ_MODEL}`;
+        } else if (!edgeTurn.secretMissing && !hasLocalGroqKey) {
           return {
             text: "",
             provider: "provider-error-fallback",
@@ -2267,76 +2490,38 @@ export async function runGeminiStudentAgentLoop(params: {
             citations: collectedCitations,
             providerFailed: true,
             errorStatus: edgeTurn.status,
-            errorCode: edgeTurn.errorCode ?? "EDGE_AGENT_ERROR",
+            errorCode: edgeTurn.errorCode ?? "GROQ_EDGE_AGENT_ERROR",
           };
         }
       }
 
-      // 2. Fallback: Server-only GEMINI_API_KEY (supports both AQ.* Vertex Express and AI Studio keys)
-      if (!json) {
-        if (!hasLocalKey) {
+      // 2. Server-only Groq fallback when GROQ_API_KEY is configured locally or customFetch is provided
+      if (!assistantMsg) {
+        if (!hasLocalGroqKey && !params.customFetch) {
           return {
             text: "",
-            provider: "gemini-unconfigured",
+            provider: "groq-unconfigured",
             calledTools,
             toolOutcomes,
             citations: collectedCitations,
             providerFailed: true,
-            errorCode: "GEMINI_KEY_NOT_CONFIGURED",
+            errorCode: "GROQ_KEY_NOT_CONFIGURED",
           };
         }
 
-        const candidateModels = Array.from(
-          new Set([model, "gemini-2.5-flash", "gemini-2.0-flash"]),
-        );
-        let lastStatus = 500;
-        for (const candidateModel of candidateModels) {
-          const reqCfg = buildServerGeminiRequest(geminiKey, candidateModel);
-          const res = await fetchFn(reqCfg.url, {
-            method: "POST",
-            headers: reqCfg.headers,
-            body: JSON.stringify({
-              system_instruction: {
-                parts: [{ text: params.systemInstruction }],
-              },
-              contents,
-              tools: [
-                {
-                  functionDeclarations: params.tools,
-                },
-              ],
-              toolConfig: {
-                functionCallingConfig: {
-                  mode: "AUTO",
-                },
-              },
-              generationConfig: {
-                temperature: 0.2,
-              },
-            }),
-            signal: AbortSignal.timeout(35000),
-          });
+        const serverRes = await callServerGroqCompletion({
+          apiKey: groqKey || "test-groq-key",
+          model: configuredModel,
+          messages: [
+            { role: "system", content: params.systemInstruction },
+            ...messages,
+          ],
+          tools: normalizedTools,
+          temperature: 0.2,
+          fetchFn: params.customFetch,
+        });
 
-          lastStatus = res.status;
-          if (res.ok) {
-            json = (await res.json()) as typeof json;
-            resolvedProvider = `gemini:${candidateModel}`;
-            break;
-          }
-          if (res.status !== 404) {
-            break;
-          }
-        }
-
-        if (!json) {
-          const categorizedCode =
-            lastStatus === 503 || lastStatus === 429
-              ? `GEMINI_TEMPORARY_UNAVAILABLE_HTTP_${lastStatus}`
-              : lastStatus === 401 || lastStatus === 403
-                ? `GEMINI_AUTH_CONFIG_HTTP_${lastStatus}`
-                : lastStatus === 400 || lastStatus === 404
-                  ? `GEMINI_INVALID_REQUEST_HTTP_${lastStatus}`
-                  : `GEMINI_HTTP_${lastStatus}`;
+        if (!serverRes.ok || !serverRes.message) {
           return {
             text: "",
             provider: "provider-error-fallback",
@@ -2344,53 +2529,24 @@ export async function runGeminiStudentAgentLoop(params: {
             toolOutcomes,
             citations: collectedCitations,
             providerFailed: true,
-            errorStatus: lastStatus,
-            errorCode: categorizedCode,
+            errorStatus: serverRes.status,
+            errorCode: serverRes.errorCode ?? "GROQ_AGENT_ERROR",
           };
         }
+
+        assistantMsg = serverRes.message;
+        resolvedProvider = `groq:${serverRes.modelUsed}`;
       }
 
-      const candidateParts = json.candidates?.[0]?.content?.parts ?? [];
-      if (candidateParts.length === 0) {
-        return {
-          text: "",
-          provider: "provider-error-fallback",
-          calledTools,
-          toolOutcomes,
-          citations: collectedCitations,
-          providerFailed: true,
-          errorStatus: 200,
-          errorCode: "GEMINI_EMPTY_CANDIDATE",
-        };
-      }
+      const rawToolCalls = Array.isArray(assistantMsg.tool_calls)
+        ? assistantMsg.tool_calls
+        : [];
 
-      const functionCalls = candidateParts
-        .filter(
-          (p) =>
-            p.functionCall &&
-            typeof p.functionCall.name === "string" &&
-            p.functionCall.name.trim().length > 0,
-        )
-        .map((p) => ({
-          id:
-            typeof p.functionCall!.id === "string"
-              ? p.functionCall!.id
-              : undefined,
-          name: p.functionCall!.name!.trim(),
-          args:
-            p.functionCall!.args && typeof p.functionCall!.args === "object"
-              ? p.functionCall!.args
-              : {},
-        }));
-
-      // If Gemini did not request any function calls, return the final text response (excluding internal thought parts if flagged)
-      if (functionCalls.length === 0) {
-        const finalText = candidateParts
-          .filter((p) => p.thought !== true)
-          .map((p) => (typeof p.text === "string" ? p.text : ""))
-          .join("\n")
-          .trim();
-
+      if (rawToolCalls.length === 0) {
+        const finalText = stripThinkingAndJsonFences(
+          assistantMsg.content ?? "",
+          false,
+        );
         if (finalText) {
           return {
             text: finalText,
@@ -2409,30 +2565,42 @@ export async function runGeminiStudentAgentLoop(params: {
           toolOutcomes,
           citations: collectedCitations,
           providerFailed: true,
-          errorCode: "GEMINI_EMPTY_TEXT",
+          errorCode: "GROQ_EMPTY_TEXT",
         };
       }
 
-      // Append the model's exact candidate parts to `contents` (preserving Gemini 3 `thoughtSignature` and any other model fields)
-      contents.push({
-        role: "model",
-        parts: candidateParts.map((part) => ({ ...part })),
+      // Append assistant message with tool_calls into the OpenAI-compatible conversation history
+      messages.push({
+        role: "assistant",
+        content: assistantMsg.content ?? null,
+        tool_calls: rawToolCalls,
       });
 
-      // Execute each requested tool (with duplicate-call prevention within the same request)
-      const functionResponseParts: Array<Record<string, unknown>> = [];
+      for (const tc of rawToolCalls) {
+        const fnName = tc.function?.name?.trim() ?? "";
+        const callId = tc.id || `call_${iteration}_${fnName}`;
+        let parsedArgs: Record<string, unknown> = {};
+        if (tc.function?.arguments) {
+          try {
+            const decoded = JSON.parse(tc.function.arguments);
+            if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) {
+              parsedArgs = decoded as Record<string, unknown>;
+            }
+          } catch {
+            parsedArgs = {};
+          }
+        }
 
-      for (const fc of functionCalls) {
-        const dedupeKey = `${fc.name}::${JSON.stringify(fc.args)}`;
+        const dedupeKey = `${fnName}::${JSON.stringify(parsedArgs)}`;
         let outcome = executedCallCache.get(dedupeKey);
 
         if (!outcome) {
-          outcome = await params.executeTool(fc.name, fc.args);
+          outcome = await params.executeTool(fnName, parsedArgs);
           executedCallCache.set(dedupeKey, outcome);
           toolOutcomes.push(outcome);
           calledTools.push({
-            toolName: fc.name,
-            args: fc.args,
+            toolName: fnName,
+            args: parsedArgs,
             ok: outcome.ok,
           });
           for (const cit of outcome.citations) {
@@ -2448,23 +2616,16 @@ export async function runGeminiStudentAgentLoop(params: {
           }
         }
 
-        functionResponseParts.push({
-          functionResponse: {
-            ...(fc.id ? { id: fc.id } : {}),
-            name: fc.name,
-            response: {
-              ok: outcome.ok,
-              result: outcome.data,
-            },
-          },
+        messages.push({
+          role: "tool",
+          tool_call_id: callId,
+          name: fnName,
+          content: JSON.stringify({
+            ok: outcome.ok,
+            result: outcome.data,
+          }),
         });
       }
-
-      // Send tool results back to Gemini in the official `functionResponse` format
-      contents.push({
-        role: "user",
-        parts: functionResponseParts,
-      });
     } catch (err) {
       const rawName =
         err instanceof Error && err.name ? err.name.toUpperCase() : "NETWORK_ERROR";
@@ -2477,12 +2638,11 @@ export async function runGeminiStudentAgentLoop(params: {
         toolOutcomes,
         citations: collectedCitations,
         providerFailed: true,
-        errorCode: isTimeout ? "GEMINI_REQUEST_TIMEOUT" : `GEMINI_${rawName}`,
+        errorCode: isTimeout ? "GROQ_REQUEST_TIMEOUT" : `GROQ_${rawName}`,
       };
     }
   }
 
-  // If maxIterations was reached after executing tools, ask Gemini for final synthesis or return tool outcomes
   return {
     text: "",
     provider: "provider-error-fallback",
@@ -2490,7 +2650,7 @@ export async function runGeminiStudentAgentLoop(params: {
     toolOutcomes,
     citations: collectedCitations,
     providerFailed: true,
-    errorCode: "GEMINI_MAX_TOOL_ITERATIONS_REACHED",
+    errorCode: "GROQ_MAX_TOOL_ITERATIONS_REACHED",
   };
 }
 

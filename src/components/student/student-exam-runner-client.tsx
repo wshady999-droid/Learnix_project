@@ -18,7 +18,6 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
-  Smartphone,
   XCircle,
 } from "lucide-react";
 
@@ -42,6 +41,11 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/input";
 import { getStudentDictionary } from "@/i18n/student-dictionaries";
+import {
+  getOptionLetter,
+  sanitizeQuizOptionText,
+  sanitizeQuizQuestionPrompt,
+} from "@/lib/quiz-format";
 import {
   studentLogExamViolationAction,
   studentSaveExamAnswerAction,
@@ -433,7 +437,7 @@ export function StudentExamRunnerClient({
         }
       : null;
 
-    const watermarkText = `${data.studentName} • ${data.studentEmail} • SESSION ${activeAttempt.id.slice(0, 8).toUpperCase()} • V${activeAttempt.assigned_version}`;
+    const watermarkText = `${data.studentName} • ${data.studentEmail}`;
 
     return (
       <div className="relative select-none space-y-6 print:hidden">
@@ -483,9 +487,6 @@ export function StudentExamRunnerClient({
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="font-mono text-xs">
-                  {data.course.code} • V{activeAttempt.assigned_version}
-                </Badge>
                 <Badge variant={isSavingAnswer ? "outline" : "gold"}>
                   <Save className="mr-1 size-3" />
                   {isSavingAnswer ? t.exams.savingBadge : t.exams.autoSavedBadge}
@@ -541,17 +542,9 @@ export function StudentExamRunnerClient({
               <Card>
                 <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="gold" className="font-mono">
-                        Question {currentIndex + 1} / {data.questions.length}
-                      </Badge>
-                      <Badge variant="outline" className="uppercase">
-                        {currentQuestion.difficulty}
-                      </Badge>
-                      <Badge variant="outline">
-                        {currentQuestion.points} Marks
-                      </Badge>
-                    </div>
+                    <Badge variant="gold" className="font-mono">
+                      Question {currentIndex + 1}:
+                    </Badge>
                     {lastSavedIso && (
                       <span className="font-mono text-[11px] text-muted-foreground">
                         Saved {lastSavedIso.slice(11, 19)}
@@ -559,7 +552,11 @@ export function StudentExamRunnerClient({
                     )}
                   </div>
                   <CardTitle className="mt-3 text-base leading-relaxed">
-                    {currentQuestion.prompt}
+                    {sanitizeQuizQuestionPrompt(currentQuestion.prompt, {
+                      courseCode: data.course.code,
+                      courseTitle: data.course.title,
+                      subjectName: data.course.category,
+                    })}
                   </CardTitle>
                 </CardHeader>
 
@@ -579,7 +576,7 @@ export function StudentExamRunnerClient({
                   {(currentQuestion.questionType === "single_choice" ||
                     currentQuestion.questionType === "true_false") && (
                     <div className="space-y-2.5">
-                      {currentQuestion.options.map((opt) => {
+                      {currentQuestion.options.map((opt, optIdx) => {
                         const selected =
                           currentAnswer.selectedOptionId === opt.id;
                         return (
@@ -605,7 +602,10 @@ export function StudentExamRunnerClient({
                                   : "size-4 shrink-0 rounded-full border border-muted-foreground"
                               }
                             />
-                            <span>{opt.optionText}</span>
+                            <span className="font-semibold text-gold-foreground">
+                              {getOptionLetter(optIdx)}.
+                            </span>
+                            <span>{sanitizeQuizOptionText(opt.optionText)}</span>
                           </button>
                         );
                       })}
@@ -615,7 +615,7 @@ export function StudentExamRunnerClient({
                   {/* Multiple Choice (Multiple Correct) */}
                   {currentQuestion.questionType === "multiple_choice" && (
                     <div className="space-y-2.5">
-                      {currentQuestion.options.map((opt) => {
+                      {currentQuestion.options.map((opt, optIdx) => {
                         const selected =
                           currentAnswer.selectedOptionIds.includes(opt.id);
                         return (
@@ -639,7 +639,10 @@ export function StudentExamRunnerClient({
                               readOnly
                               checked={selected}
                             />
-                            <span>{opt.optionText}</span>
+                            <span className="font-semibold text-gold-foreground">
+                              {getOptionLetter(optIdx)}.
+                            </span>
+                            <span>{sanitizeQuizOptionText(opt.optionText)}</span>
                           </button>
                         );
                       })}
@@ -952,7 +955,7 @@ export function StudentExamRunnerClient({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 text-xs">
-                  {data.questions.map((q) => {
+                  {data.questions.map((q, qIdx) => {
                     const ans = data.savedAnswers.find(
                       (a) => a.question_id === q.id,
                     );
@@ -972,7 +975,12 @@ export function StudentExamRunnerClient({
                               <XCircle className="size-4 text-destructive" />
                             )}
                             <span className="font-semibold text-foreground">
-                              Q{q.position}. {q.prompt}
+                              Question {qIdx + 1}:{" "}
+                              {sanitizeQuizQuestionPrompt(q.prompt, {
+                                courseCode: data.course.code,
+                                courseTitle: data.course.title,
+                                subjectName: data.course.category,
+                              })}
                             </span>
                           </div>
                           <Badge variant={isFull ? "gold" : "outline"}>
@@ -982,7 +990,7 @@ export function StudentExamRunnerClient({
 
                         {q.options.length > 0 && (
                           <div className="mt-2.5 grid gap-1.5 sm:grid-cols-2">
-                            {q.options.map((opt) => {
+                            {q.options.map((opt, optIdx) => {
                               const picked =
                                 ans?.selected_option_id === opt.id ||
                                 (ans?.selected_option_ids ?? []).includes(
@@ -999,7 +1007,8 @@ export function StudentExamRunnerClient({
                                         : "rounded-lg border border-border/60 p-2 text-muted-foreground"
                                   }
                                 >
-                                  {opt.optionText}{" "}
+                                  {getOptionLetter(optIdx)}.{" "}
+                                  {sanitizeQuizOptionText(opt.optionText)}{" "}
                                   {opt.isCorrect && (
                                     <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400">
                                       (Correct Answer)
@@ -1066,10 +1075,7 @@ export function StudentExamRunnerClient({
 
       <Card className="border-gold-primary/50">
         <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Badge variant="outline" className="font-mono">
-              {data.course.code} — {data.course.title}
-            </Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Badge variant="gold">
               Attempt {data.attemptsUsed + 1} of {data.exam.max_attempts}
             </Badge>

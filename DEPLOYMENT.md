@@ -11,11 +11,11 @@ Configure these environment variables in your production host (Vercel / Docker /
 | `NEXT_PUBLIC_SITE_URL` | Public | Yes | Canonical production URL (e.g., `https://learnix.edu`) |
 | `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`) | **Server-Only** | Recommended | Service-role key for Admin provisioning & bulk user import |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | **Supabase Dashboard** | Optional | Configured in Supabase Auth → Providers → Google for Google Sign-In |
-| `GEMINI_API_KEY` | **Server-Only** | Recommended | Google Gemini API key for Learnix AI Student/Teacher/Essay Grading |
-| `GEMINI_MODEL` | **Server-Only** | Optional | Defaults to `gemini-2.5-flash` |
-| `OPENAI_API_KEY` | **Server-Only** | Optional | Secondary LLM provider fallback (`gpt-4o-mini`) |
+| `AI_PROVIDER` | **Supabase Edge Secrets / Server-Only** | Yes | Set to `groq` |
+| `GROQ_API_KEY` | **Supabase Edge Secrets / Server-Only** | Yes | Groq API key for Learnix AI Student/Teacher/Quiz/Grading |
+| `GROQ_MODEL` | **Supabase Edge Secrets / Server-Only** | Recommended | Defaults to `openai/gpt-oss-120b` |
 
-> **Security Note:** All AI provider keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`) and `SUPABASE_SECRET_KEY` are read exclusively inside server-only modules (`src/services/ai/engine.ts`, `src/services/admin/actions.ts`). They are never exposed to the browser bundle.
+> **Security Note:** `GROQ_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are read exclusively inside Supabase Edge Functions (`supabase/functions/learnix-ai/index.ts`) and server-only modules (`src/services/ai/engine.ts`, `src/services/admin/actions.ts`). They are never exposed to the browser bundle. Legacy `GEMINI_API_KEY` / `GEMINI_MODEL` secrets may be retained temporarily in Supabase Secrets until Groq production verification is complete.
 
 ---
 
@@ -84,4 +84,4 @@ Learnix is architected to support a future Windows Electron wrapper without dupl
 - **Recommended Electron Architecture**:
   - Load the hosted production HTTPS URL inside an isolated `BrowserWindow` (`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`).
   - Expose only whitelisted IPC methods via a preload script implementing `LearnixDesktopBridge`.
-  - Never bundle `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY`, or `OPENAI_API_KEY` inside the Electron installer.
+  - Never bundle `SUPABASE_SECRET_KEY` or `GROQ_API_KEY` inside the Electron installer.

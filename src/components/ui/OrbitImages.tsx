@@ -862,27 +862,29 @@ export function OrbitImages({
   const interactive = !!onItemClick;
 
   const config = useRef<OrbitConfig>({} as OrbitConfig);
-  config.current = {
-    baseWidth,
-    rotation,
-    duration,
-    itemSize,
-    direction,
-    fill,
-    pathWidth,
-    pathDash,
-    easing,
-    paused,
-    depth,
-    hoverScale,
-    hoverSpeed,
-    draggable,
-    clickToFront,
-    onItemClick,
-    alignToPath,
-    intro,
-    sources: items.map(item => item.src)
-  };
+  useIsomorphicLayoutEffect(() => {
+    config.current = {
+      baseWidth,
+      rotation,
+      duration,
+      itemSize,
+      direction,
+      fill,
+      pathWidth,
+      pathDash,
+      easing,
+      paused,
+      depth,
+      hoverScale,
+      hoverSpeed,
+      draggable,
+      clickToFront,
+      onItemClick,
+      alignToPath,
+      intro,
+      sources: items.map(item => item.src)
+    };
+  });
 
   useIsomorphicLayoutEffect(() => {
     if (!rootRef.current) return;

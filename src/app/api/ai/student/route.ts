@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import {
+  buildLearnixScopeAndRedirectionPolicy,
+  detectAssistantLanguage,
+  detectClearlyUnrelatedOffTopicPrompt,
+} from "@/lib/ai-assistant-scope";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   checkAiRateLimit,
@@ -9,15 +14,15 @@ import {
   extractReadableTextFromUpload,
   logAiUsage,
   persistAiConversationTurn,
-  runGeminiStudentAgentLoop,
+  runStudentAiAgentLoop,
+  type AiAgentHistoryTurn,
+  type AiAgentToolExecutionOutcome,
   type AiCitation,
   type AiInlineMediaPart,
-  type GeminiAgentHistoryTurn,
-  type GeminiAgentToolExecutionOutcome,
 } from "@/services/ai/engine";
 import {
   executeStudentAiTool,
-  STUDENT_AI_GEMINI_TOOLS,
+  STUDENT_AI_TOOLS,
 } from "@/services/ai/student-tools";
 import { requireRole } from "@/services/db/utils";
 
@@ -113,15 +118,7 @@ export interface AttachmentMetadataSummary {
 }
 
 export function detectPromptLanguage(prompt: string): "ar" | "en" {
-  const arabicMatches = prompt.match(/[\u0600-\u06FF]/g);
-  const latinMatches = prompt.match(/[a-zA-Z]/g);
-  const arabicCount = arabicMatches ? arabicMatches.length : 0;
-  const latinCount = latinMatches ? latinMatches.length : 0;
-
-  if (arabicCount > 0 && arabicCount >= latinCount * 0.35) {
-    return "ar";
-  }
-  return "en";
+  return detectAssistantLanguage(prompt);
 }
 
 function classifyAndValidateFile(file: File): {
@@ -217,44 +214,41 @@ function classifyAndValidateFile(file: File): {
 }
 
 /**
- * Builds the system instruction for the Unified Gemini Agent.
- * Gemini dynamically understands natural-language student questions in any phrasing or dialect
- * and invokes the appropriate server-validated database and RAG tools via Function Calling.
+ * Builds the system instruction for the Unified Learnix Student AI Assistant (Groq `llama-3.3-70b-versatile`).
  */
-export function buildUnifiedGeminiAgentSystemInstruction(params: {
+export function buildUnifiedStudentAgentSystemInstruction(params: {
   studentDisplayName: string;
   selectedCourseLabel: string | null;
   mode: string;
 }): string {
   return [
-    "You are Learnix AI Study Assistant, a unified, strictly grounded academic tutor and platform-aware assistant for the authenticated student.",
+    "You are the Learnix AI Educational Assistant, an academic tutor and platform-aware assistant for the authenticated student.",
     `Authenticated Student Name: ${params.studentDisplayName}.`,
     params.selectedCourseLabel
       ? `Active UI Selected Course Context: ${params.selectedCourseLabel}.`
       : "Active UI Selected Course Context: General AI Assistant (No specific course pre-selected).",
     `Requested Study Mode: ${params.mode}.`,
-    "AUTOMATIC LANGUAGE RULE: Detect the language used in the student's latest text or voice message and respond in that EXACT same language (Arabic -> Arabic, English -> English, mixed -> primary language of the question).",
-    "AGENTIC TOOL-CALLING POLICY: Understand the student's natural-language intent regardless of phrasing or dialect (including formal Arabic, Egyptian/regional colloquial Arabic, or English) and dynamically call the appropriate tools:",
-    "1. COURSE CATALOG DISCOVERY & COMPARISONS: Call `search_published_courses`, `get_published_course_details`, `compare_published_courses`, or `get_available_course_categories` when the student asks what courses exist on Learnix, asks about courses in a subject/category, or compares courses. Public catalog discovery works for all published courses even when the student is not enrolled.",
-    "2. COURSE DURATION & STRUCTURED METADATA: Call `get_course_duration` or `get_course_metadata` when the student asks how many hours/minutes a course takes or what its metadata is. Report ONLY the verified duration from the tool (`courses.estimated_hours` when > 0, or the complete sum of published `lessons.duration_seconds`). If the tool reports incomplete lesson duration data, explicitly state that lesson duration data is incomplete and NEVER report a partial sum as the total course duration.",
-    "3. ENROLLED COURSE EDUCATIONAL CONTENT (RAG): Call `search_enrolled_course_content` whenever the student asks for educational explanations, lecture summaries, concept explanations, flashcards, or practice questions from their course materials. CRITICAL GROUNDING POLICY: You are STRICTLY PROHIBITED from answering academic or course-topic questions using general pretrained knowledge when authorized course sources are required. If `search_enrolled_course_content` returns `accessDeniedNotEnrolled: true`, explain that the student must enroll in that course via 'Explore Courses' (`/student/courses`) to access its internal lessons. If `hasRelevantMatches` is false and no uploaded document covers the topic, clearly state that the authorized course materials do not contain sufficient information on that topic.",
-    "4. PERSONAL GRADES, PROGRESS, ASSIGNMENTS, EXAMS & ATTENDANCE: Call `get_my_enrolled_courses`, `get_my_enrollment_details`, `get_my_assignments`, `get_assignment_details`, `get_assignment_submission_status`, `get_my_exams`, `get_exam_details`, `get_my_exam_results`, `get_my_grades`, `get_my_academic_progress`, `get_my_attendance`, or `get_my_academic_report` when the student asks about their personal records. All personal tools are strictly scoped to the authenticated student. If the student asks for another student's private grades, attendance, or records, refuse and explain that student data is strictly isolated.",
-    "5. PLATFORM HELP & NAVIGATION: Call `get_platform_help_and_navigation` when the student asks how Learnix works, how to enroll, how to upload documents/images/audio, how to use live voice recording, or where to find pages in the student dashboard. If a feature is not supported in Learnix, state clearly that it is not available.",
-    "6. COMBINING MULTIPLE TOOLS: When a student asks a multi-part or mixed question (for example, asking for their grades AND explaining a lecture, or asking if a mobile course exists AND how many hours it takes), call all required tools and synthesize their verified results into one coherent response.",
-    "7. MULTIPLE MATCHING COURSES DISAMBIGUATION: When a tool returns multiple matching courses for a broad topic, list the matching courses with their verified details and ask the student which one they want to focus on rather than guessing randomly.",
-    "8. FOLLOW-UP CONTINUITY: Use the conversation history to resolve pronouns or references (such as 'it', 'the second one', 'how long does it take?', 'كم مدتها؟'), and call the relevant tool to fetch current verified database data.",
-    "9. MULTIMODAL ATTACHMENTS: When the student attaches documents, images, audio files, or a live voice recording in the current turn, analyze the provided extracted text or inline media directly.",
-    "Never solve active official exams or reveal official exam answer keys.",
+    "AUTOMATIC LANGUAGE RULE: Detect the language used in the student's latest text or voice message and respond in that EXACT same language (Arabic -> natural, friendly Arabic; English -> clear, friendly English).",
+    "AGENTIC TOOL-CALLING & EDUCATIONAL ASSISTANCE POLICY:",
+    "1. COURSE CATALOG DISCOVERY & COMPARISONS: Call `search_published_courses`, `get_published_course_details`, `compare_published_courses`, or `get_available_course_categories` when the student asks what courses exist on Learnix, asks about courses in a subject/category, or compares courses.",
+    "2. COURSE DURATION & STRUCTURED METADATA: Call `get_course_duration` or `get_course_metadata` when the student asks how many hours/minutes a course takes or what its metadata is. Report ONLY the verified duration from the tool (`courses.estimated_hours` when > 0, or the complete sum of published `lessons.duration_seconds`). Never fabricate course metadata.",
+    "3. COURSE CONTENT & ACADEMIC / TECHNICAL QUESTIONS: Call `search_enrolled_course_content` first when the student asks about their course lessons, uploaded materials, summaries, flashcards, or practice questions so you ground your answer in their actual course content. IMPORTANT: Do NOT reject legitimate educational, academic, or course-related technical questions (such as programming, SQL, databases, mathematics, algorithms, cybersecurity, data analysis, or exam preparation) simply because they are not explicitly written in the current lesson! If the question is educational or relevant to the student's course/subject, explain it clearly and helpfully. Only if the student specifically asks to open internal lessons of a published course in which they are NOT enrolled (`accessDeniedNotEnrolled: true`), explain how they can enroll via 'Explore Courses' (`/student/courses`).",
+    "4. PERSONAL GRADES, PROGRESS, ASSIGNMENTS, EXAMS & ATTENDANCE: Call `get_my_enrolled_courses`, `get_my_enrollment_details`, `get_my_assignments`, `get_assignment_details`, `get_assignment_submission_status`, `get_my_exams`, `get_exam_details`, `get_my_exam_results`, `get_my_grades`, `get_my_academic_progress`, `get_my_attendance`, or `get_my_academic_report` when the student asks about their personal records. Never fabricate grades/progress, and refuse requests for another student's private records.",
+    "5. PLATFORM HELP & WORKFLOWS: Call `get_platform_help_and_navigation` whenever the user asks how to use Learnix, Learnix platform features, or student/teacher workflows.",
+    "6. PRACTICE QUIZ OUTPUT FORMAT: Whenever `mode` is `practice_quiz` or the student asks you to generate quiz/multiple-choice questions, output ONLY sequential questions (`Question 1:`, `Question 2:`, ...) and clearly labeled answer choices (`A.`, `B.`, `C.`, `D.`). Do NOT display course codes, subject codes, course names, internal IDs, introductory AI descriptions before Question 1, or unrelated commentary between questions.",
+    "7. AMBIGUITY & FOLLOW-UPS: Use conversation history for follow-ups. When a question is ambiguous, ask a short, helpful clarification instead of rejecting it immediately.",
+    "8. ACADEMIC INTEGRITY: Never solve active official exams or reveal official exam answer keys.",
+    buildLearnixScopeAndRedirectionPolicy(),
   ].join("\n");
 }
 
 /**
- * Builds a safe, strictly grounded response when the external Gemini API returns HTTP 503 or is temporarily unreachable.
- * Uses only verified tool outputs or current-turn uploaded document excerpts—never fabricates ungrounded academic answers.
+ * Builds a safe, grounded response when the external Groq AI service is temporarily unreachable.
+ * Uses only verified tool outputs or current-turn uploaded document excerpts—never fabricates ungrounded answers.
  */
 export function buildSafeAgentProviderFailureResponse(params: {
   detectedLang: "ar" | "en";
-  toolOutcomes: GeminiAgentToolExecutionOutcome[];
+  toolOutcomes: AiAgentToolExecutionOutcome[];
   documentCitations: AiCitation[];
   attachmentSummaries: AttachmentMetadataSummary[];
   errorCode?: string;
@@ -292,53 +286,72 @@ export function buildSafeAgentProviderFailureResponse(params: {
     if (params.detectedLang === "ar") {
       return [
         `### تحليل المستندات المرفقة (${statusTag})`,
-        `تعذر الاتصال بمحرك Gemini في الوقت الحالي، ولكن تم استخراج المحتوى النصي الموثق من ملفاتك المرفقة بنجاح:`,
+        `تعذر الاتصال بخدمة Learnix AI في الوقت الحالي، ولكن تم استخراج المحتوى النصي الموثق من ملفاتك المرفقة بنجاح:`,
         docList,
       ].join("\n\n");
     }
 
     return [
       `### Uploaded Document Excerpts (${statusTag})`,
-      `The Gemini AI service is temporarily unavailable, but here is the verified content extracted from your uploaded document(s):`,
+      `The Learnix AI service is temporarily unavailable, but here is the verified content extracted from your uploaded document(s):`,
       docList,
     ].join("\n\n");
   }
 
   const isTimeout = code.includes("TIMEOUT") || code.includes("ABORT");
+  const isRateLimit =
+    code.includes("RATE_LIMITED") || params.errorStatus === 429;
   const isAuthOrConfig =
     code.includes("KEY_NOT_CONFIGURED") ||
+    code.includes("SECRET_NOT_SET") ||
+    code.includes("INVALID_API_KEY") ||
     code.includes("AUTH_CONFIG") ||
     params.errorStatus === 401 ||
     params.errorStatus === 403;
+  const isInvalidModel = code.includes("INVALID_MODEL");
   const isInvalidRequest =
-    code.includes("INVALID_REQUEST") ||
-    params.errorStatus === 400 ||
-    params.errorStatus === 404;
+    !isInvalidModel &&
+    (code.includes("INVALID_REQUEST") ||
+      code.includes("ENDPOINT_NOT_FOUND") ||
+      params.errorStatus === 400 ||
+      params.errorStatus === 404);
 
   if (params.detectedLang === "ar") {
+    if (isRateLimit) {
+      return `### تم الوصول للحد المؤقت للطلبات (${statusTag})\n\nخدمة Learnix AI تشهد ضغطاً مؤقتاً حالياً. يرجى الانتظار لحظات والمحاولة مرة أخرى.`;
+    }
     if (isTimeout) {
-      return `### انتهت مهلة الاتصال بمحرك الذكاء الاصطناعي (${statusTag})\n\nاستغرق الطلب وقتاً أطول من المهلة المحددة للاتصال بخدمة Gemini. التزاماً بسياسة الموثوقية الأكاديمية في Learnix، لن يتم توليد إجابة غير موثقة. يرجى المحاولة مرة أخرى بعد قليل.`;
+      return `### انتهت مهلة الاتصال بخدمة الذكاء الاصطناعي (${statusTag})\n\nاستغرق الطلب وقتاً أطول من المهلة المحددة للاتصال بخدمة Learnix AI. يرجى المحاولة مرة أخرى بعد قليل.`;
     }
     if (isAuthOrConfig) {
-      return `### خطأ في إعدادات الاتصال بمحرك الذكاء الاصطناعي (${statusTag})\n\nخدمة الذكاء الاصطناعي بحاجة إلى التحقق من إعدادات مفتاح الخادم. التزاماً بسياسة الموثوقية الأكاديمية، لن يتم توليد إجابة افتراضية غير موثقة.`;
+      return `### خطأ في إعدادات الاتصال بخدمة الذكاء الاصطناعي (${statusTag})\n\nخدمة الذكاء الاصطناعي بحاجة إلى التحقق من إعدادات مفتاح الخادم.`;
+    }
+    if (isInvalidModel) {
+      return `### نموذج الذكاء الاصطناعي المحدد غير متاح (${statusTag})\n\nالنموذج المحدد في إعدادات الخادم (\`GROQ_MODEL\`) غير متاح حالياً أو تم إيقافه من قِبل المزود. يرجى تحديث \`GROQ_MODEL\` إلى نموذج مدعوم (مثل \`openai/gpt-oss-120b\`).`;
     }
     if (isInvalidRequest) {
-      return `### تعذر معالجة الطلب عبر نموذج الذكاء الاصطناعي (${statusTag})\n\nلم يتمكن النموذج المحدد من معالجة هذا الطلب حالياً. التزاماً بسياسة الموثوقية الأكاديمية في Learnix، لن يتم توليد إجابة غير موثقة.`;
+      return `### تعذر معالجة الطلب عبر خدمة الذكاء الاصطناعي (${statusTag})\n\nتعذر معالجة صيغة الطلب الحالية عبر مزود الذكاء الاصطناعي.`;
     }
-    return `### تعذر إكمال الطلب عبر محرك الذكاء الاصطناعي (${statusTag})\n\nعذراً، خدمة الذكاء الاصطناعي (Gemini) تواجه ضغطاً مؤقتاً أو غير متاحة حالياً لمعالجة هذا الطلب. التزاماً بسياسة الموثوقية الأكاديمية في Learnix، لن يتم توليد إجابة افتراضية غير موثقة. يرجى المحاولة مرة أخرى بعد قليل.`;
+    return `### تعذر إكمال الطلب عبر خدمة الذكاء الاصطناعي (${statusTag})\n\nعذراً، خدمة Learnix AI تواجه ضغطاً مؤقتاً أو غير متاحة حالياً لمعالجة هذا الطلب. يرجى المحاولة مرة أخرى بعد قليل.`;
   }
 
+  if (isRateLimit) {
+    return `### AI Rate Limit Reached (${statusTag})\n\nThe Learnix AI service is momentarily rate-limited. Please wait a few seconds and try again.`;
+  }
   if (isTimeout) {
-    return `### AI Request Timed Out (${statusTag})\n\nThe request to the Gemini AI service timed out before a response was received. Under Learnix's strict academic grounding policy, an ungrounded fallback answer will not be generated. Please try again shortly.`;
+    return `### AI Request Timed Out (${statusTag})\n\nThe request to the Learnix AI service timed out before a response was received. Please try again shortly.`;
   }
   if (isAuthOrConfig) {
-    return `### AI Provider Configuration Error (${statusTag})\n\nThe server could not authenticate with the Gemini AI provider. Under Learnix's strict academic grounding policy, an ungrounded fallback answer will not be generated.`;
+    return `### AI Provider Configuration Error (${statusTag})\n\nThe server could not authenticate with the configured AI provider.`;
+  }
+  if (isInvalidModel) {
+    return `### Configured AI Model Unavailable (${statusTag})\n\nThe configured \`GROQ_MODEL\` does not exist, was decommissioned by Groq, or is not enabled for this API key. Update \`GROQ_MODEL\` to an active model such as \`openai/gpt-oss-120b\`.`;
   }
   if (isInvalidRequest) {
-    return `### AI Model Request Error (${statusTag})\n\nThe configured Gemini model could not process this request format. Under Learnix's strict academic grounding policy, an ungrounded fallback answer will not be generated.`;
+    return `### AI Request Error (${statusTag})\n\nThe AI provider rejected the request parameters or endpoint.`;
   }
 
-  return `### AI Service Temporarily Unavailable (${statusTag})\n\nThe Gemini AI service is temporarily unavailable or experiencing high demand right now. Under Learnix's strict academic grounding policy, an ungrounded fallback answer will not be generated. Please try your request again shortly.`;
+  return `### AI Service Temporarily Unavailable (${statusTag})\n\nThe Learnix AI service is temporarily unavailable right now. Please try your request again shortly.`;
 }
 
 export async function POST(request: Request) {
@@ -617,13 +630,6 @@ export async function POST(request: Request) {
           sourceType: "document",
           excerpt: extractedText.slice(0, 260),
         });
-      } else if (validation.normalizedMime === "application/pdf") {
-        inlineMediaParts.push({
-          fileName: file.name,
-          mimeType: "application/pdf",
-          base64Data: buffer.toString("base64"),
-          kind: "document",
-        });
       }
 
       attachmentSummaries.push({
@@ -635,10 +641,11 @@ export async function POST(request: Request) {
         chunksIndexed,
       });
     } else if (validation.kind === "image") {
+      // Pass lightweight descriptor only (avoid sending large base64 image blobs to text-only LLM)
       inlineMediaParts.push({
         fileName: file.name,
         mimeType: validation.normalizedMime,
-        base64Data: buffer.toString("base64"),
+        base64Data: "",
         kind: "image",
       });
       attachmentSummaries.push({
@@ -648,12 +655,14 @@ export async function POST(request: Request) {
         sizeBytes: file.size,
       });
     } else if (validation.kind === "audio") {
-      inlineMediaParts.push({
-        fileName: file.name,
-        mimeType: validation.normalizedMime,
-        base64Data: buffer.toString("base64"),
-        kind: "audio",
-      });
+      if (!clientSpeechTranscript) {
+        inlineMediaParts.push({
+          fileName: file.name,
+          mimeType: validation.normalizedMime,
+          base64Data: buffer.toString("base64"),
+          kind: "audio",
+        });
+      }
       attachmentSummaries.push({
         fileName: file.name,
         mimeType: validation.normalizedMime,
@@ -667,7 +676,7 @@ export async function POST(request: Request) {
   // 4. Fetch recent conversation history (up to last 8 messages) for natural follow-up questions
   // Also recover any conversation-scoped uploaded document excerpts from `ai_messages.structured_payload`
   // so follow-up questions work seamlessly even when `selectedCourseId = null` (strictly isolated by `conversation_id` and `user_id`).
-  const conversationHistory: GeminiAgentHistoryTurn[] = [];
+  const conversationHistory: AiAgentHistoryTurn[] = [];
   const priorConversationDocumentBlocks: string[] = [];
   if (conversationId) {
     const { data: recentMsgs } = await supabase
@@ -741,8 +750,63 @@ export async function POST(request: Request) {
         ? "🎤 Voice Message"
         : `Attached: ${attachmentSummaries.map((a) => a.fileName).join(", ")}`);
 
-  // 5. Assemble current turn prompt for the Unified Gemini Agent
-  const systemInstruction = buildUnifiedGeminiAgentSystemInstruction({
+  // Polite redirection when the student asks an unmistakably non-educational, off-topic question
+  if (uploadedFiles.length === 0) {
+    const offTopicCheck = detectClearlyUnrelatedOffTopicPrompt(
+      `${promptText} ${clientSpeechTranscript}`.trim(),
+    );
+    if (offTopicCheck.isOffTopic && offTopicCheck.redirectionMessage) {
+      const savedOffTopicTurn = await persistAiConversationTurn({
+        conversationId,
+        userId,
+        roleContext: "student",
+        courseId: selectedCourseId,
+        lessonId: null,
+        mode,
+        userMessage: displayUserMessage,
+        assistantMessage: offTopicCheck.redirectionMessage,
+        citations: [],
+        structuredPayload: {
+          offTopicRedirected: true,
+          provider: "learnix-scope-guard",
+        },
+      });
+
+      await logAiUsage({
+        userId,
+        roleContext: "student",
+        feature: `student:${mode}`,
+        provider: "learnix-scope-guard",
+        courseId: selectedCourseId,
+        promptChars: displayUserMessage.length,
+        responseChars: offTopicCheck.redirectionMessage.length,
+        status: "success",
+      });
+
+      return NextResponse.json({
+        ok: true,
+        data: {
+          conversationId: savedOffTopicTurn.conversationId,
+          messageId: savedOffTopicTurn.assistantMessageId,
+          userMessage: displayUserMessage,
+          content: offTopicCheck.redirectionMessage,
+          citations: [],
+          attachments: [],
+          calledTools: [],
+          provider: "learnix-scope-guard",
+          usage: {
+            usedLastMinute: rateLimit.usedLastMinute + 1,
+            minuteLimit: rateLimit.minuteLimit,
+            usedLastDay: rateLimit.usedLastDay + 1,
+            dailyLimit: rateLimit.dailyLimit,
+          },
+        },
+      });
+    }
+  }
+
+  // 5. Assemble current turn prompt for the Unified Learnix Student AI Assistant (Groq)
+  const systemInstruction = buildUnifiedStudentAgentSystemInstruction({
     studentDisplayName,
     selectedCourseLabel,
     mode,
@@ -783,13 +847,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // 6. Execute Unified Gemini Agent Loop with Secure Server-Side Database & RAG Tools
-  const agentResult = await runGeminiStudentAgentLoop({
+  // 6. Execute Unified Learnix Student Agent Loop (Groq `llama-3.3-70b-versatile`) with Server-Validated Tools
+  const agentResult = await runStudentAiAgentLoop({
     systemInstruction,
     conversationHistory,
     userPrompt: userPromptParts.join("\n"),
     mediaParts: inlineMediaParts,
-    tools: STUDENT_AI_GEMINI_TOOLS,
+    tools: STUDENT_AI_TOOLS,
     executeTool: async (toolName, rawArgs) =>
       executeStudentAiTool({
         toolName,
@@ -814,7 +878,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 7. Safe Provider Failure Handling (e.g., Gemini HTTP 503)
+  // 7. Safe Provider Failure Handling
   let finalAssistantText = agentResult.text;
   let finalStatus: "success" | "error" = "success";
   let sanitizedErrorLog: string | null = null;

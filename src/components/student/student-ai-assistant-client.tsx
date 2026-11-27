@@ -831,7 +831,7 @@ export function StudentAiAssistantClient({
         : mimeType.includes("ogg")
           ? "ogg"
           : "webm";
-      const fileName = `voice-message-${Date.now()}.${ext}`;
+      const fileName = `voice-message-${crypto.randomUUID().slice(0, 8)}.${ext}`;
       const audioFile = new File([finalizedBlob], fileName, {
         type: mimeType.split(";")[0] || "audio/webm",
       });
@@ -913,7 +913,7 @@ export function StudentAiAssistantClient({
           ? "🎤 Voice Message"
           : `Attached: ${optimisticAttachments.map((a) => a.fileName).join(", ")}`);
 
-    const optimisticId = `user-${Date.now()}`;
+    const optimisticId = `user-${crypto.randomUUID()}`;
     setLocalTurns((prev) => [
       ...prev,
       {

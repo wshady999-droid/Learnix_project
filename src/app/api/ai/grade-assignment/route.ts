@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
-  type AiInlineMediaPart,
   callServerAiProvider,
   checkAiRateLimit,
   extractReadableTextFromUpload,
@@ -91,7 +90,7 @@ export async function POST(request: Request) {
 
   // Read submitted file from Supabase Storage (`assignment-attachments`) when available
   let extractedFileText = "";
-  const mediaParts: AiInlineMediaPart[] = [];
+  let attachedFileDescriptor = "";
 
   if (submission.attachment_storage_path) {
     try {
@@ -109,18 +108,7 @@ export async function POST(request: Request) {
         const mime =
           submission.attachment_mime_type || fileBlob.type || "application/octet-stream";
 
-        if (
-          (mime === "application/pdf" || mime.startsWith("image/")) &&
-          buf.byteLength <= 6 * 1024 * 1024
-        ) {
-          mediaParts.push({
-            fileName,
-            mimeType: mime,
-            base64Data: buf.toString("base64"),
-            kind: mime.startsWith("image/") ? "image" : "document",
-          });
-        }
-
+        attachedFileDescriptor = `${fileName} (${mime}, ${Math.max(1, Math.round(buf.byteLength / 1024))} KB)`;
         extractedFileText = extractReadableTextFromUpload(fileName, buf).slice(
           0,
           12000,
@@ -136,13 +124,16 @@ export async function POST(request: Request) {
   const combinedStudentContent = [
     writtenText ? `Written Answer:\n${writtenText}` : "",
     extractedFileText ? `Extracted File Content:\n${extractedFileText}` : "",
+    !extractedFileText && attachedFileDescriptor
+      ? `Attached Submission File: ${attachedFileDescriptor}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
 
   const contentLength = combinedStudentContent.length;
   const fallbackPoints =
-    contentLength === 0 && mediaParts.length === 0
+    contentLength === 0
       ? 0
       : contentLength >= 400
         ? Number((maxPoints * 0.88).toFixed(2))
@@ -153,11 +144,11 @@ export async function POST(request: Request) {
   const fallbackJson = JSON.stringify({
     suggestedPoints: fallbackPoints,
     explanation:
-      contentLength === 0 && mediaParts.length === 0
+      contentLength === 0
         ? "No written answer or readable file content was detected in the submission."
         : `Evaluated submission (${contentLength} extracted characters) against assignment instructions and rubric. Teacher review is required before publishing.`,
     feedback:
-      contentLength === 0 && mediaParts.length === 0
+      contentLength === 0
         ? "Please attach your completed work or write your solution in the submission box."
         : "Good effort addressing the assignment requirements. Review the instructor rubric for additional depth and edge-case coverage.",
   });
@@ -167,7 +158,7 @@ export async function POST(request: Request) {
       "You are Learnix AI Assignment Grading Assistant.",
       'Return ONLY valid JSON with keys: {"suggestedPoints": number, "explanation": string, "feedback": string}.',
       `suggestedPoints MUST be between 0 and ${maxPoints}.`,
-      "Evaluate the student's written answer and/or attached file strictly against the assignment description, instructions, and grading rubric.",
+      "Evaluate the student's written answer and/or extracted file content strictly against the assignment description, instructions, and grading rubric.",
       "Explain WHY you suggested the score in `explanation`, and write constructive student-facing comments in `feedback`.",
       "Remember: AI grades are strictly suggestions until approved by the teacher.",
     ].join(" "),
@@ -181,13 +172,12 @@ export async function POST(request: Request) {
         : "Grading Rubric: Assess accuracy, completeness, clarity, and adherence to instructions.",
       combinedStudentContent
         ? `\nStudent Submission:\n${combinedStudentContent}`
-        : "\nStudent Submission: (See attached file media or empty text)",
+        : "\nStudent Submission: (Empty submission)",
     ]
       .filter(Boolean)
       .join("\n"),
     fallbackResponse: fallbackJson,
     jsonMode: true,
-    mediaParts,
   });
 
   let suggestedPoints = fallbackPoints;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -46,6 +46,10 @@ interface StudentLessonViewerClientProps {
   data: StudentLessonViewerData;
 }
 
+function readClockMs(): number {
+  return Date.now();
+}
+
 export function StudentLessonViewerClient({
   data,
 }: StudentLessonViewerClientProps) {
@@ -58,7 +62,10 @@ export function StudentLessonViewerClient({
   const lastTrackedSecondRef = useRef<number>(
     Number(data.progress?.last_position_seconds ?? 0),
   );
-  const sessionMountedAtRef = useRef<number>(Date.now());
+  const sessionMountedAtRef = useRef<number>(0);
+  useEffect(() => {
+    sessionMountedAtRef.current = new Date().getTime();
+  }, []);
   const [activeTab, setActiveTab] = useState<
     "overview" | "notes" | "quiz" | "related"
   >("overview");
@@ -81,14 +88,15 @@ export function StudentLessonViewerClient({
     const currentVideoSec = videoRef.current
       ? Math.round(videoRef.current.currentTime)
       : Number(resumePosition) || 0;
+    const nowMs = readClockMs();
     const elapsedSec = Math.max(
       15,
       Math.min(
         3600,
-        Math.round((Date.now() - sessionMountedAtRef.current) / 1000),
+        Math.round((nowMs - (sessionMountedAtRef.current || nowMs)) / 1000),
       ),
     );
-    sessionMountedAtRef.current = Date.now();
+    sessionMountedAtRef.current = nowMs;
 
     startTransition(async () => {
       const res = await studentUpdateLessonProgressAction({

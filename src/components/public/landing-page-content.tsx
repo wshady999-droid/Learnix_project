@@ -523,7 +523,7 @@ export function LandingPageContent() {
                       {t.aiSection.previewCard.studentPromptLabel}
                     </p>
                     <p className="mt-1.5 text-sm text-[#0a1f1d] dark:text-[#FAF9F4]">
-                      "{t.aiSection.previewCard.studentPromptText}"
+                      &ldquo;{t.aiSection.previewCard.studentPromptText}&rdquo;
                     </p>
                   </div>
 
