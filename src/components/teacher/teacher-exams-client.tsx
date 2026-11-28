@@ -56,6 +56,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
+import { getNowDateTimeLocalString } from "@/lib/date-validation";
 import {
   getOptionLetter,
   sanitizeQuizOptionText,
@@ -109,6 +110,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
   const [genDurationMinutes, setGenDurationMinutes] = useState("30");
   const [genMaxAttempts, setGenMaxAttempts] = useState("1");
   const [genTopicFocus, setGenTopicFocus] = useState("");
+  const [selectedMaterialIds, setSelectedMaterialIds] = useState<string[]>([]);
   const [generatingAiQuiz, setGeneratingAiQuiz] = useState(false);
   const [replacingIndex, setReplacingIndex] = useState<number | null>(null);
   const [draftQuestions, setDraftQuestions] = useState<
@@ -281,6 +283,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
           totalMarks: Math.max(1, Number(genTotalMarks) || 50),
           difficultyMix: genDifficulty,
           questionTypes: genTypes,
+          materialIds: selectedMaterialIds,
         }),
       });
       const json = (await res.json()) as {
@@ -402,6 +405,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
           ? new Date(genDeadline).toISOString()
           : null,
         status,
+        materialIds: selectedMaterialIds,
         questions: draftQuestions,
       });
 
@@ -626,7 +630,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
       const storagePath = `${activeExam.course_id}/exam_diagrams_${Date.now()}_${safeName}`;
       const { error } = await supabase.storage
         .from("course-thumbnails")
-        .upload(storagePath, file, { upsert: true });
+        .upload(storagePath, file, { upsert: false });
 
       if (error) {
         toast.error(error.message);
@@ -837,8 +841,8 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between gap-2">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {course?.code ?? "COURSE"}
+                        <Badge variant="outline" className="max-w-44 truncate text-xs">
+                          {course?.title ?? "Course"}
                         </Badge>
                         <Badge
                           variant={
@@ -970,11 +974,14 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                   <select
                     className={cn(fieldBase, "h-9 w-full")}
                     value={genCourseId}
-                    onChange={(e) => setGenCourseId(e.target.value)}
+                    onChange={(e) => {
+                      setGenCourseId(e.target.value);
+                      setSelectedMaterialIds([]);
+                    }}
                   >
                     {data.courses.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.code} — {c.title}
+                        {c.title}
                       </option>
                     ))}
                   </select>
@@ -1048,6 +1055,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                   <Label>Deadline (Optional)</Label>
                   <Input
                     type="datetime-local"
+                    min={getNowDateTimeLocalString()}
                     value={genDeadline}
                     onChange={(e) => setGenDeadline(e.target.value)}
                   />
@@ -1100,6 +1108,104 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
                     placeholder="Optional: specify chapters, concepts, or formulas to emphasize..."
                   />
                 </div>
+              </div>
+
+              {/* Source Material Selection (Uploaded Lessons, Assignment Materials & Resources) */}
+              <div className="space-y-2">
+                <Label>Select Uploaded Course Materials</Label>
+                <p className="text-xs text-muted-foreground">
+                  Select any uploaded lesson files (PDF, Word, PowerPoint, Excel, text) or course materials to generate exam questions directly from their content.
+                </p>
+                <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-border bg-muted/30 p-2">
+                  {[
+                    ...data.lessons
+                      .filter(
+                        (l) =>
+                          l.course_id === genCourseId &&
+                          Boolean(
+                            l.attachment_storage_path ||
+                              (l.content_markdown &&
+                                l.content_markdown.trim().length > 0),
+                          ),
+                      )
+                      .map((l) => ({
+                        id: l.id,
+                        title: l.title,
+                        kindLabel: l.attachment_storage_path
+                          ? `Lesson File (${l.content_type.toUpperCase()})`
+                          : "Lesson Notes",
+                      })),
+                    ...data.assignmentMaterials
+                      .filter((m) => m.course_id === genCourseId)
+                      .map((m) => ({
+                        id: m.id,
+                        title: m.file_name,
+                        kindLabel: "Assignment Material",
+                      })),
+                    ...data.learningResources
+                      .filter((r) => r.course_id === genCourseId)
+                      .map((r) => ({
+                        id: r.id,
+                        title: r.title,
+                        kindLabel: r.resource_type.toUpperCase(),
+                      })),
+                  ].map((item) => {
+                    const isSelected = selectedMaterialIds.includes(item.id);
+                    return (
+                      <label
+                        key={item.id}
+                        className="flex cursor-pointer items-center justify-between gap-2 rounded p-1.5 select-none hover:bg-emerald-500/10"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedMaterialIds((prev) =>
+                                  prev.includes(item.id)
+                                    ? prev
+                                    : [...prev, item.id],
+                                );
+                              } else {
+                                setSelectedMaterialIds((prev) =>
+                                  prev.filter((id) => id !== item.id),
+                                );
+                              }
+                            }}
+                            className="size-4 accent-emerald-500"
+                          />
+                          <span className="truncate text-xs font-medium text-foreground">
+                            {item.title}
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 text-[10px]">
+                          {item.kindLabel}
+                        </Badge>
+                      </label>
+                    );
+                  })}
+                  {data.lessons.filter(
+                    (l) =>
+                      l.course_id === genCourseId &&
+                      Boolean(l.attachment_storage_path || l.content_markdown),
+                  ).length === 0 &&
+                    data.assignmentMaterials.filter(
+                      (m) => m.course_id === genCourseId,
+                    ).length === 0 &&
+                    data.learningResources.filter(
+                      (r) => r.course_id === genCourseId,
+                    ).length === 0 && (
+                      <p className="py-4 text-center text-xs text-muted-foreground">
+                        Upload PDFs, Word documents, or presentations inside your course lessons to select them here.
+                      </p>
+                    )}
+                </div>
+                {selectedMaterialIds.length > 0 && (
+                  <p className="text-xs font-medium text-emerald-500">
+                    {selectedMaterialIds.length} uploaded material(s) selected for AI grounding
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1791,7 +1897,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>{t.exams.courseLabel}</Label>
               <select
                 className={cn(fieldBase, "h-9 w-full")}
@@ -1800,23 +1906,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
               >
                 {data.courses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.code} — {c.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>{t.exams.classLabel}</Label>
-              <select
-                className={cn(fieldBase, "h-9 w-full")}
-                value={examClassId}
-                onChange={(e) => setExamClassId(e.target.value)}
-              >
-                <option value="none">— All Enrolled Students —</option>
-                {data.classes.map((cls) => (
-                  <option key={cls.id} value={cls.id}>
-                    {cls.code} — {cls.name}
+                    {c.title}
                   </option>
                 ))}
               </select>
@@ -1893,6 +1983,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
               <Label>{t.exams.availableFromLabel}</Label>
               <Input
                 type="datetime-local"
+                min={getNowDateTimeLocalString()}
                 value={examAvailableFrom}
                 onChange={(e) => setExamAvailableFrom(e.target.value)}
               />
@@ -1902,6 +1993,7 @@ export function TeacherExamsClient({ data }: TeacherExamsClientProps) {
               <Label>{t.exams.availableUntilLabel} (Deadline)</Label>
               <Input
                 type="datetime-local"
+                min={examAvailableFrom || getNowDateTimeLocalString()}
                 value={examAvailableUntil}
                 onChange={(e) => setExamAvailableUntil(e.target.value)}
               />

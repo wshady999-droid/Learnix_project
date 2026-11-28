@@ -45,6 +45,44 @@ export async function sharedMarkNotificationReadAction(params: {
   return { ok: true, data: { updated: true } };
 }
 
+/**
+ * Explicitly deletes an individual notification recipient entry or all notifications
+ * for the signed-in user. Notifications remain persistently until explicitly deleted.
+ */
+export async function sharedDeleteNotificationAction(params: {
+  recipientId?: string;
+  deleteAll?: boolean;
+}): Promise<ServiceResult<{ deleted: boolean }>> {
+  const auth = await requireRole(["student", "teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const supabase = await createSupabaseServerClient();
+
+  if (params.deleteAll) {
+    const { error } = await supabase
+      .from("notification_recipients")
+      .delete()
+      .eq("recipient_id", auth.data.userId);
+    if (error) return { ok: false, error: error.message };
+  } else if (params.recipientId) {
+    const { error } = await supabase
+      .from("notification_recipients")
+      .delete()
+      .eq("id", params.recipientId)
+      .eq("recipient_id", auth.data.userId);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    return { ok: false, error: "Select a notification to delete." };
+  }
+
+  revalidatePath("/notifications");
+  revalidatePath("/messages");
+  revalidatePath("/student");
+  revalidatePath("/teacher");
+  revalidatePath("/admin");
+  return { ok: true, data: { deleted: true } };
+}
+
 const notifPrefsSchema = z.object({
   email_updates: z.boolean(),
   course_alerts: z.boolean(),
@@ -178,6 +216,7 @@ export async function sharedStartConversationAction(
       conversation_id: convId,
       sender_id: senderId,
       body: trimmedBody,
+      message_type: "text",
     });
 
     if (msgErr) return { ok: false, error: msgErr.message };
@@ -199,9 +238,125 @@ export async function sharedStartConversationAction(
   return { ok: true, data: { conversationId: convId } };
 }
 
+const createGroupChatSchema = z.object({
+  subject: z.string().trim().min(2, "Group name is required.").max(140),
+  courseId: z.string().uuid().nullable().optional(),
+  participantIds: z
+    .array(z.string().uuid())
+    .min(1, "Select at least one student for the group chat."),
+  initialMessage: z.string().trim().max(2000).optional(),
+});
+
+/**
+ * Allows teachers (and admins) to create a course/study group chat with enrolled students.
+ */
+export async function sharedCreateGroupConversationAction(
+  input: z.infer<typeof createGroupChatSchema>,
+): Promise<ServiceResult<{ conversationId: string }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = createGroupChatSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid group chat details.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const creatorId = auth.data.userId;
+  const creatorName =
+    auth.data.fullName?.trim() || auth.data.email || "Instructor";
+  const nowIso = new Date().toISOString();
+
+  if (auth.data.role === "teacher" && parsed.data.courseId) {
+    const { data: courseRow } = await supabase
+      .from("courses")
+      .select("id, teacher_id")
+      .eq("id", parsed.data.courseId)
+      .maybeSingle();
+    if (!courseRow || courseRow.teacher_id !== creatorId) {
+      return { ok: false, error: "You do not own the selected course." };
+    }
+  }
+
+  const uniqueMemberIds = Array.from(
+    new Set(parsed.data.participantIds.filter((id) => id !== creatorId)),
+  );
+  if (uniqueMemberIds.length === 0) {
+    return {
+      ok: false,
+      error: "Select at least one student to add to the group chat.",
+    };
+  }
+
+  const { data: conv, error: convErr } = await supabase
+    .from("conversations")
+    .insert({
+      created_by: creatorId,
+      course_id: parsed.data.courseId ?? null,
+      subject: parsed.data.subject,
+      is_group: true,
+    })
+    .select("id")
+    .single();
+
+  if (convErr || !conv) {
+    return {
+      ok: false,
+      error: convErr?.message ?? "Failed to create group chat.",
+    };
+  }
+
+  const participantRows = [
+    { conversation_id: conv.id, user_id: creatorId, last_read_at: nowIso },
+    ...uniqueMemberIds.map((uid) => ({
+      conversation_id: conv.id,
+      user_id: uid,
+    })),
+  ];
+
+  const { error: partErr } = await supabase
+    .from("conversation_participants")
+    .insert(participantRows);
+
+  if (partErr) {
+    return { ok: false, error: partErr.message };
+  }
+
+  const welcomeBody =
+    parsed.data.initialMessage?.trim() ||
+    `Welcome to "${parsed.data.subject}"!`;
+
+  await supabase.from("messages").insert({
+    conversation_id: conv.id,
+    sender_id: creatorId,
+    body: welcomeBody,
+    message_type: "text",
+  });
+
+  await supabase.rpc("dispatch_event_notification", {
+    p_recipient_ids: uniqueMemberIds,
+    p_type: "message",
+    p_title: `Added to Group Chat: ${parsed.data.subject}`,
+    p_body: `${creatorName} added you to "${parsed.data.subject}".`,
+    p_course_id: parsed.data.courseId ?? undefined,
+    p_action_url: `/messages?convId=${conv.id}`,
+    p_metadata: { conversationId: conv.id, isGroup: true },
+    p_is_announcement: false,
+    p_target_scope: "class",
+  });
+
+  revalidatePath("/messages");
+  return { ok: true, data: { conversationId: conv.id } };
+}
+
 const sendMessageSchema = z.object({
   conversationId: z.string().uuid(),
   body: z.string().trim().min(1).max(4000),
+  messageType: z.enum(["text", "voice", "file", "system"]).default("text"),
+  voiceDurationSeconds: z.coerce.number().int().min(0).max(3600).nullable().optional(),
   attachment: z
     .object({
       fileName: z.string().min(1).max(200),
@@ -232,12 +387,23 @@ export async function sharedSendMessageAction(
   const senderName = auth.data.fullName?.trim() || auth.data.email || "User";
   const nowIso = new Date().toISOString();
 
+  const resolvedType =
+    parsed.data.messageType !== "text"
+      ? parsed.data.messageType
+      : parsed.data.attachment
+        ? parsed.data.attachment.mimeType.startsWith("audio/")
+          ? "voice"
+          : "file"
+        : "text";
+
   const { data: msg, error: msgErr } = await supabase
     .from("messages")
     .insert({
       conversation_id: parsed.data.conversationId,
       sender_id: senderId,
       body: parsed.data.body,
+      message_type: resolvedType,
+      voice_duration_seconds: parsed.data.voiceDurationSeconds ?? null,
     })
     .select("id")
     .single();
@@ -271,23 +437,31 @@ export async function sharedSendMessageAction(
       .neq("user_id", senderId),
     supabase
       .from("conversations")
-      .select("course_id")
+      .select("course_id, is_group, subject")
       .eq("id", parsed.data.conversationId)
       .maybeSingle(),
   ]);
 
   const recipientIds = (otherParts ?? []).map((p) => p.user_id);
   if (recipientIds.length > 0) {
+    const title = convRow?.is_group
+      ? `${senderName} in ${convRow.subject || "Group Chat"}`
+      : `New Message from ${senderName}`;
+    const previewBody =
+      resolvedType === "voice"
+        ? "Sent a voice message"
+        : parsed.data.body.slice(0, 180);
+
     await supabase.rpc("dispatch_event_notification", {
       p_recipient_ids: recipientIds,
       p_type: "message",
-      p_title: `New Message from ${senderName}`,
-      p_body: parsed.data.body.slice(0, 180),
+      p_title: title,
+      p_body: previewBody,
       p_course_id: convRow?.course_id ?? undefined,
       p_action_url: `/messages?convId=${parsed.data.conversationId}`,
       p_metadata: { conversationId: parsed.data.conversationId },
       p_is_announcement: false,
-      p_target_scope: "individual",
+      p_target_scope: convRow?.is_group ? "class" : "individual",
     });
   }
 

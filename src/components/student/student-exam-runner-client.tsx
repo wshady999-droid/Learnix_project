@@ -12,8 +12,9 @@ import {
   Camera,
   CheckCircle2,
   Clock,
-  EyeOff,
   Lock,
+  MessageSquare,
+  RefreshCw,
   Save,
   Send,
   ShieldAlert,
@@ -46,6 +47,7 @@ import {
   sanitizeQuizOptionText,
   sanitizeQuizQuestionPrompt,
 } from "@/lib/quiz-format";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   studentLogExamViolationAction,
   studentSaveExamAnswerAction,
@@ -97,15 +99,35 @@ export function StudentExamRunnerClient({
   const [isSavingAnswer, setIsSavingAnswer] = useState(false);
   const [lastSavedIso, setLastSavedIso] = useState<string | null>(null);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
-  const [isContentObscured, setIsContentObscured] = useState(false);
+  const [isPaused, setIsPaused] = useState<boolean>(
+    Boolean(data.activeAttempt?.is_paused),
+  );
+  const [pausedReason, setPausedReason] = useState<string | null>(
+    data.activeAttempt?.paused_reason ?? null,
+  );
+  const [pausedAtIso, setPausedAtIso] = useState<string | null>(
+    data.activeAttempt?.paused_at ?? null,
+  );
   const [localViolationCount, setLocalViolationCount] = useState(
     data.activeAttempt?.violations_count ?? 0,
   );
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(
-    data.exam.duration_minutes * 60,
-  );
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
+    if (
+      data.activeAttempt?.is_paused &&
+      typeof data.activeAttempt.remaining_seconds === "number"
+    ) {
+      return Math.max(0, data.activeAttempt.remaining_seconds);
+    }
+    return data.exam.duration_minutes * 60;
+  });
 
   const autoSubmitTriggeredRef = useRef(false);
+  const pauseInFlightRef = useRef(false);
+  const hadFullscreenRef = useRef(false);
+  const remainingSecondsRef = useRef<number>(remainingSeconds);
+  useEffect(() => {
+    remainingSecondsRef.current = remainingSeconds;
+  }, [remainingSeconds]);
 
   const [answersMap, setAnswersMap] = useState<Record<string, LocalAnswerState>>(
     () => {
@@ -123,6 +145,78 @@ export function StudentExamRunnerClient({
 
   const activeAttempt = data.activeAttempt;
   const currentQuestion = data.questions[currentIndex] ?? null;
+  const answersMapRef = useRef(answersMap);
+  const currentQuestionRef = useRef(currentQuestion);
+  useEffect(() => {
+    answersMapRef.current = answersMap;
+  }, [answersMap]);
+  useEffect(() => {
+    currentQuestionRef.current = currentQuestion;
+  }, [currentQuestion]);
+
+  // Sync server pause/resume state when attempt snapshot changes
+  const attemptSyncKey = activeAttempt
+    ? `${activeAttempt.id}:${Boolean(activeAttempt.is_paused)}:${activeAttempt.paused_at ?? ""}:${activeAttempt.remaining_seconds ?? ""}`
+    : "none";
+  const [prevAttemptSyncKey, setPrevAttemptSyncKey] = useState(attemptSyncKey);
+  if (prevAttemptSyncKey !== attemptSyncKey) {
+    setPrevAttemptSyncKey(attemptSyncKey);
+    if (activeAttempt) {
+      setIsPaused(Boolean(activeAttempt.is_paused));
+      setPausedReason(activeAttempt.paused_reason ?? null);
+      setPausedAtIso(activeAttempt.paused_at ?? null);
+      if (
+        activeAttempt.is_paused &&
+        typeof activeAttempt.remaining_seconds === "number"
+      ) {
+        setRemainingSeconds(Math.max(0, activeAttempt.remaining_seconds));
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!isPaused) {
+      pauseInFlightRef.current = false;
+    }
+  }, [isPaused]);
+
+  useEffect(() => {
+    if (!activeAttempt) return;
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`learnix-exam-attempt-${activeAttempt.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "exam_attempts",
+          filter: `id=eq.${activeAttempt.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as {
+            is_paused?: boolean;
+            status?: string;
+            resume_status?: string;
+          };
+          if (updated.is_paused === false && updated.resume_status === "approved") {
+            toast.success(
+              "Your instructor approved resuming your examination!",
+            );
+            setIsPaused(false);
+            pauseInFlightRef.current = false;
+          } else if (updated.status === "invalidated") {
+            toast.error("Your examination attempt was closed by your instructor.");
+          }
+          router.refresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeAttempt, router]);
 
   const stopCameraStream = useCallback(() => {
     if (mediaStreamRef.current) {
@@ -189,25 +283,62 @@ export function StudentExamRunnerClient({
       violationType: string,
       severity: "low" | "medium" | "high" | "critical",
       details: Record<string, unknown> = {},
+      pauseExam = false,
     ) => {
       if (!activeAttempt) return;
+      if (pauseExam && (isPaused || pauseInFlightRef.current)) return;
+
+      const timestampIso = new Date().toISOString();
+      const snapshotRemaining = remainingSecondsRef.current;
+
+      if (pauseExam) {
+        pauseInFlightRef.current = true;
+        // 1. Save current answer progress BEFORE pausing the attempt on the server
+        const q = currentQuestionRef.current;
+        const curAns = q ? answersMapRef.current[q.id] : undefined;
+        if (
+          q &&
+          curAns &&
+          (Boolean(curAns.selectedOptionId) ||
+            curAns.selectedOptionIds.length > 0 ||
+            curAns.answerText.trim().length > 0)
+        ) {
+          await studentSaveExamAnswerAction({
+            examId: data.exam.id,
+            attemptId: activeAttempt.id,
+            questionId: q.id,
+            selectedOptionId: curAns.selectedOptionId,
+            selectedOptionIds: curAns.selectedOptionIds,
+            answerText: curAns.answerText || null,
+          });
+          setLastSavedIso(timestampIso);
+        }
+
+        // 2. Immediately halt & lock the exam client-side awaiting teacher approval
+        setIsPaused(true);
+        setPausedReason(violationType);
+        setPausedAtIso(timestampIso);
+      }
+
       setLocalViolationCount((c) => c + 1);
       await studentLogExamViolationAction({
         attemptId: activeAttempt.id,
         violationType,
         severity,
+        pauseExam,
+        remainingSeconds: snapshotRemaining,
         details: {
           ...details,
-          clientTimestamp: new Date().toISOString(),
+          clientTimestamp: timestampIso,
         },
       });
     },
-    [activeAttempt],
+    [activeAttempt, data.exam.id, isPaused],
   );
 
   const handleFinalSubmit = useCallback(
     async (dueToExpiration = false) => {
-      if (!activeAttempt) return;
+      if (!activeAttempt || isPaused) return;
       stopCameraStream();
       startTransition(async () => {
         const res = await studentSubmitExamAttemptAction({
@@ -230,6 +361,7 @@ export function StudentExamRunnerClient({
     [
       activeAttempt,
       data.exam.id,
+      isPaused,
       router,
       stopCameraStream,
       t.exams.submittedSuccessToast,
@@ -237,9 +369,9 @@ export function StudentExamRunnerClient({
     ],
   );
 
-  // Countdown timer & automatic submission on expiration
+  // Countdown timer & automatic submission on expiration (halted while paused)
   useEffect(() => {
-    if (!activeAttempt) return;
+    if (!activeAttempt || isPaused) return;
     const updateRemaining = () => {
       const diffMs =
         new Date(activeAttempt.expires_at).getTime() - Date.now();
@@ -255,30 +387,40 @@ export function StudentExamRunnerClient({
     updateRemaining();
     const interval = setInterval(updateRemaining, 1000);
     return () => clearInterval(interval);
-  }, [activeAttempt, handleFinalSubmit]);
+  }, [activeAttempt, isPaused, handleFinalSubmit]);
 
-  // Browser security deterrence: tab switching, focus loss, copy/cut/contextmenu/print blocking
+  // Browser security monitoring: tab switching, focus loss, fullscreen exit, camera disconnect, copy/cut/shortcut blocking
   useEffect(() => {
-    if (!activeAttempt) return;
+    if (!activeAttempt || isPaused) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        setIsContentObscured(true);
-        void recordViolation("tab_switch", "high", {
-          visibilityState: document.visibilityState,
-        });
+        void recordViolation(
+          "tab_switch",
+          "high",
+          { visibilityState: document.visibilityState },
+          true,
+        );
       }
     };
 
     const handleWindowBlur = () => {
-      setIsContentObscured(true);
-      void recordViolation("window_focus_lost", "medium", {});
+      void recordViolation("window_focus_lost", "high", {}, true);
+    };
+
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) {
+        hadFullscreenRef.current = true;
+      } else if (hadFullscreenRef.current) {
+        hadFullscreenRef.current = false;
+        void recordViolation("fullscreen_exit", "high", {}, true);
+      }
     };
 
     const handleCopyOrCut = (e: ClipboardEvent) => {
       e.preventDefault();
       toast.warning("Copying examination content is disabled.");
-      void recordViolation("copy_attempt", "medium", { eventType: e.type });
+      void recordViolation("copy_attempt", "medium", { eventType: e.type }, false);
     };
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -286,10 +428,20 @@ export function StudentExamRunnerClient({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && ["p", "c", "s"].includes(e.key.toLowerCase())) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ["p", "c", "s"].includes(e.key.toLowerCase())
+      ) {
         e.preventDefault();
-        toast.warning("Printing and copying shortcuts are discouraged during active examinations.");
-        void recordViolation("prohibited_shortcut", "medium", { key: e.key });
+        toast.warning(
+          "Printing and copying shortcuts are disabled during active examinations.",
+        );
+        void recordViolation(
+          "prohibited_shortcut",
+          "medium",
+          { key: e.key },
+          false,
+        );
       }
     };
 
@@ -298,8 +450,17 @@ export function StudentExamRunnerClient({
       e.returnValue = "";
     };
 
+    const tracks = mediaStreamRef.current?.getVideoTracks() ?? [];
+    const handleCameraEnded = () => {
+      if (data.exam.camera_monitoring_enabled) {
+        void recordViolation("camera_disconnected", "high", {}, true);
+      }
+    };
+    tracks.forEach((tr) => tr.addEventListener("ended", handleCameraEnded));
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleWindowBlur);
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
     document.addEventListener("copy", handleCopyOrCut);
     document.addEventListener("cut", handleCopyOrCut);
     document.addEventListener("contextmenu", handleContextMenu);
@@ -307,15 +468,22 @@ export function StudentExamRunnerClient({
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
+      tracks.forEach((tr) => tr.removeEventListener("ended", handleCameraEnded));
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("copy", handleCopyOrCut);
       document.removeEventListener("cut", handleCopyOrCut);
       document.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [activeAttempt, recordViolation]);
+  }, [
+    activeAttempt,
+    isPaused,
+    data.exam.camera_monitoring_enabled,
+    recordViolation,
+  ]);
 
   // Persist answer to backend immediately (auto-save)
   const persistAnswer = useCallback(
@@ -439,6 +607,63 @@ export function StudentExamRunnerClient({
 
     const watermarkText = `${data.studentName} • ${data.studentEmail}`;
 
+    // Paused Exam Gate: Questions are NOT rendered in the DOM until the instructor approves resuming
+    if (isPaused) {
+      return (
+        <div className="mx-auto max-w-xl py-10">
+          <Card className="border-destructive/50 bg-[#0F1115]/90 text-foreground shadow-xl backdrop-blur-xl">
+            <CardHeader className="text-center">
+              <div className="mx-auto flex size-14 items-center justify-center rounded-2xl border border-destructive/40 bg-destructive/15 text-destructive">
+                <Lock className="size-7" />
+              </div>
+              <CardTitle className="mt-3 text-xl">
+                Examination Paused — Instructor Approval Required
+              </CardTitle>
+              <CardDescription className="text-xs leading-relaxed">
+                A browser monitoring event (
+                <strong className="text-foreground">
+                  {(pausedReason || "focus_change").replace(/_/g, " ")}
+                </strong>
+                ) was recorded
+                {pausedAtIso
+                  ? ` at ${pausedAtIso.slice(11, 19)} UTC`
+                  : ""}. Your current answers ({answeredCount} /{" "}
+                {data.questions.length}) and remaining timer (
+                {formatSecondsToClock(remainingSeconds)}) have been saved, and
+                your instructor has been notified.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-xs">
+              <div className="rounded-xl border border-white/10 bg-[#141922] p-3.5 text-muted-foreground">
+                You cannot resume this examination until your instructor reviews
+                and approves your attempt. This page updates automatically in
+                real time as soon as approval is granted.
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <Button
+                  type="button"
+                  variant="gold"
+                  size="sm"
+                  onClick={() => router.refresh()}
+                >
+                  <RefreshCw className="size-3.5" />
+                  <span>Check Approval Status</span>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    href={`/messages?userId=${data.course.teacher_id}&courseId=${data.course.id}`}
+                  >
+                    <MessageSquare className="size-3.5" />
+                    <span>Message Instructor</span>
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="relative select-none space-y-6 print:hidden">
         {/* Dynamic Security Watermark Overlay */}
@@ -454,33 +679,6 @@ export function StudentExamRunnerClient({
             ))}
           </div>
         </div>
-
-        {/* Temporary Obscuring Overlay when Student Leaves Tab / Focus */}
-        {isContentObscured && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 p-6 backdrop-blur-md">
-            <Card className="max-w-md border-destructive/50 text-center">
-              <CardHeader>
-                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/15 text-destructive">
-                  <EyeOff className="size-6" />
-                </div>
-                <CardTitle className="mt-2 text-lg">
-                  {t.exams.focusObscuredHeading}
-                </CardTitle>
-                <CardDescription>
-                  {t.exams.focusObscuredDescription}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="gold"
-                  onClick={() => setIsContentObscured(false)}
-                >
-                  {t.exams.returnToExamButton}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {/* Sticky Exam Header Bar: Timer, Auto-Save, Camera Indicator, Submit */}
         <Card className="relative z-20 border-gold-primary/50 bg-card/95 backdrop-blur">

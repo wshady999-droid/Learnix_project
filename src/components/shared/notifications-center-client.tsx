@@ -11,6 +11,7 @@ import {
   Mail,
   MailOpen,
   Settings2,
+  Trash2,
 } from "lucide-react";
 
 import { EmptyState } from "@/components/feedback/empty-state";
@@ -26,6 +27,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import {
+  sharedDeleteNotificationAction,
   sharedMarkNotificationReadAction,
   sharedUpdateNotificationPreferencesAction,
 } from "@/services/shared/actions";
@@ -110,6 +112,37 @@ export function NotificationsCenterClient({
         return;
       }
       toast.success("All notifications marked as read.");
+      router.refresh();
+    });
+  }
+
+  function handleDeleteOne(recipientId: string) {
+    startTransition(async () => {
+      const res = await sharedDeleteNotificationAction({ recipientId });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Notification deleted.");
+      router.refresh();
+    });
+  }
+
+  function handleDeleteAll() {
+    if (
+      !window.confirm(
+        "Delete all notifications permanently? Notifications remain until explicitly deleted.",
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await sharedDeleteNotificationAction({ deleteAll: true });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("All notifications deleted.");
       router.refresh();
     });
   }
@@ -199,6 +232,18 @@ export function NotificationsCenterClient({
               Mark All Read
             </Button>
           )}
+          {items.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={handleDeleteAll}
+              className="border-destructive/35 bg-destructive/10 text-destructive hover:bg-destructive/20"
+            >
+              <Trash2 className="mr-1.5 size-4" />
+              Delete All
+            </Button>
+          )}
         </div>
       </div>
 
@@ -210,7 +255,8 @@ export function NotificationsCenterClient({
               <span>Notification History</span>
             </CardTitle>
             <CardDescription>
-              Delivered automatically in real time as academic events occur.
+              Notifications remain in your history until you explicitly delete
+              them.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
@@ -282,6 +328,17 @@ export function NotificationsCenterClient({
                           <span className="text-xs">Mark Read</span>
                         </>
                       )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => handleDeleteOne(item.recipientId)}
+                      title="Delete notification"
+                      className="text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                      <span className="sr-only">Delete</span>
                     </Button>
                   </div>
                 </div>

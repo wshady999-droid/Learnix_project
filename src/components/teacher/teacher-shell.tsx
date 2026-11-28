@@ -108,7 +108,7 @@ export function TeacherShell({
           {
             id: "teacher-grading",
             label: teacherT.nav.grading,
-            href: "/teacher/grading",
+            href: "/teacher/assignments",
             icon: FileCheck2,
           },
         ],

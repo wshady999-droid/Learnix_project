@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { sharedMarkNotificationReadAction } from "@/services/shared/actions";
+import {
+  sharedDeleteNotificationAction,
+  sharedMarkNotificationReadAction,
+} from "@/services/shared/actions";
 
 interface BellItem {
   recipientId: string;
@@ -130,6 +133,15 @@ export function NotificationBell() {
     });
   }
 
+  function handleDeleteItem(e: React.MouseEvent, recipientId: string) {
+    e.stopPropagation();
+    startTransition(async () => {
+      await sharedDeleteNotificationAction({ recipientId });
+      await loadNotifications();
+      router.refresh();
+    });
+  }
+
   function handleItemClick(item: BellItem) {
     startTransition(async () => {
       if (!item.isRead) {
@@ -207,9 +219,20 @@ export function NotificationBell() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-semibold">{item.title}</span>
-                  <Badge variant={item.isRead ? "outline" : "gold"}>
-                    {item.category}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Badge variant={item.isRead ? "outline" : "gold"}>
+                      {item.category}
+                    </Badge>
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={(e) => handleDeleteItem(e, item.recipientId)}
+                      title="Delete notification"
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
                 </div>
                 <p className="mt-1 line-clamp-2 text-[11px]">{item.body}</p>
                 <p className="mt-1 font-mono text-[10px] opacity-70">

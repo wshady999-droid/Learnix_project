@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   ArrowRight,
@@ -10,7 +11,6 @@ import {
   Eye,
   RefreshCw,
   Search,
-  Sparkles,
   Star,
   Tag,
   User,
@@ -21,7 +21,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TiltedCard } from "@/components/ui/TiltedCard";
 import {
   useCoursesCatalog,
   type CatalogCourseItem,
@@ -52,9 +51,6 @@ export function CoursesCatalogSection({
 }: CoursesCatalogSectionProps) {
   const { courses, loading, error, refetch } = useCoursesCatalog(initialCourses);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [enrollmentFilter, setEnrollmentFilter] = useState<
-    "all" | "enrolled" | "available"
-  >("all");
   const [internalSearch, setInternalSearch] = useState<string>("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -90,10 +86,6 @@ export function CoursesCatalogSection({
   const filteredCourses = useMemo(() => {
     const q = activeSearch.trim().toLowerCase();
     return courses.filter((course) => {
-      const isEnrolled = enrolledCourseIds?.has(course.id) ?? false;
-      if (enrollmentFilter === "enrolled" && !isEnrolled) return false;
-      if (enrollmentFilter === "available" && isEnrolled) return false;
-
       const matchesCategory =
         selectedCategory === "All" ||
         course.category.trim().toLowerCase() === selectedCategory.toLowerCase();
@@ -109,13 +101,12 @@ export function CoursesCatalogSection({
 
       return (
         course.title.toLowerCase().includes(q) ||
-        course.code.toLowerCase().includes(q) ||
         course.category.toLowerCase().includes(q) ||
         (course.description ?? "").toLowerCase().includes(q) ||
         teacherName.includes(q)
       );
     });
-  }, [courses, selectedCategory, activeSearch, enrollmentFilter, enrolledCourseIds]);
+  }, [courses, selectedCategory, activeSearch]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!scrollRef.current) return;
@@ -160,7 +151,7 @@ export function CoursesCatalogSection({
                 aria-selected={isActive}
                 onClick={() => setSelectedCategory(category)}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-all duration-200",
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-semibold transition-colors",
                   isActive
                     ? "border-[#10b981] bg-[#10b981] text-white shadow-[0_4px_14px_rgba(16,185,129,0.35)]"
                     : "border-border bg-white/20 text-muted-foreground backdrop-blur-md hover:border-[#10b981]/60 hover:text-foreground dark:bg-[#121a19]",
@@ -179,45 +170,17 @@ export function CoursesCatalogSection({
           })}
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {enrolledCourseIds && (
-            <div className="inline-flex rounded-xl border border-border bg-white/20 p-1 backdrop-blur-md dark:bg-[#121a19]">
-              {(
-                [
-                  { id: "all", label: "All" },
-                  { id: "available", label: "Not Enrolled" },
-                  { id: "enrolled", label: "Enrolled" },
-                ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setEnrollmentFilter(opt.id)}
-                  className={cn(
-                    "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
-                    enrollmentFilter === opt.id
-                      ? "bg-[#10b981] text-white"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {searchQuery === undefined && (
-            <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={activeSearch}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search courses or teachers..."
-                className="bg-white/20 pl-9 backdrop-blur-md dark:bg-[#121a19]"
-              />
-            </div>
-          )}
-        </div>
+        {searchQuery === undefined && (
+          <div className="relative w-full shrink-0 sm:w-64">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={activeSearch}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search courses or teachers..."
+              className="bg-white/20 pl-9 backdrop-blur-md dark:bg-[#121a19]"
+            />
+          </div>
+        )}
       </div>
 
       {loading && courses.length === 0 && (
@@ -282,7 +245,8 @@ export function CoursesCatalogSection({
               No Courses Found
             </h3>
             <p className="max-w-md text-xs text-muted-foreground">
-              No published courses matched your current filters.
+              No available courses matched your current category or search
+              filters.
             </p>
           </div>
           <Button
@@ -290,7 +254,6 @@ export function CoursesCatalogSection({
             size="sm"
             onClick={() => {
               setSelectedCategory("All");
-              setEnrollmentFilter("all");
               handleSearchChange("");
             }}
           >
@@ -313,181 +276,133 @@ export function CoursesCatalogSection({
                 : course.image_url || "/learnix-hero.jpg";
 
             return (
-              <div key={course.id} className="h-[395px] w-full">
-                <TiltedCard
-                  imageSrc={coverImageSrc}
-                  altText={course.title}
-                  captionText="Click card to flip for details"
-                  containerHeight="395px"
-                  containerWidth="100%"
-                  imageHeight="100%"
-                  imageWidth="100%"
-                  rotateAmplitude={10}
-                  scaleOnHover={1.02}
-                  showTooltip={true}
-                  displayOverlayContent={true}
-                  overlayContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-[#090A10]/95 via-[#090A10]/60 to-black/30 p-5 text-white">
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge className="border border-[#10b981]/60 bg-[#11131F]/85 px-3 py-1 text-[11px] font-semibold text-[#10b981] backdrop-blur-md">
-                          <Tag className="mr-1 size-3" aria-hidden="true" />
-                          {course.category}
-                        </Badge>
+              <article
+                key={course.id}
+                className="flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-[#0F1115]/80 text-foreground shadow-md backdrop-blur-md transition-colors hover:border-[#10b981]/50"
+              >
+                <div>
+                  <div className="relative h-48 w-full overflow-hidden">
+                    <img
+                      src={coverImageSrc}
+                      alt={course.title}
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent p-3.5">
+                      <Badge className="border border-[#10b981]/60 bg-[#11131F]/85 px-3 py-1 text-[11px] font-semibold text-[#10b981] backdrop-blur-md">
+                        <Tag className="mr-1 size-3" aria-hidden="true" />
+                        {course.category}
+                      </Badge>
 
-                        {isEnrolled ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs">
-                            <CheckCircle2 className="size-3" />
-                            Enrolled
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
-                            Available
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded bg-[#10b981]/20 px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#34d399] uppercase">
-                              {course.code}
-                            </span>
-                            {(course.reviewCount ?? 0) > 0 && (
-                              <span className="inline-flex items-center gap-1 rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                                <Star className="size-3 fill-amber-300 text-amber-300" />
-                                {course.ratingAvg} ({course.reviewCount})
-                              </span>
-                            )}
-                            {typeof course.enrollmentCount === "number" && (
-                              <span className="inline-flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/85">
-                                <Users className="size-3" />
-                                {course.enrollmentCount} students
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="line-clamp-2 text-lg leading-snug font-bold tracking-tight text-white drop-shadow-xs">
-                            {course.title}
-                          </h3>
-                        </div>
-
-                        <div className="flex items-center justify-between border-t border-white/15 pt-3 text-xs text-white/90">
-                          <div className="flex min-w-0 items-center gap-2">
-                            {course.teacher.avatar_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={course.teacher.avatar_url}
-                                alt={teacherName}
-                                className="size-6 shrink-0 rounded-full border border-[#10b981]/60 object-cover"
-                              />
-                            ) : (
-                              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[#10b981]/50 bg-[#10b981]/20 text-[#10b981]">
-                                <User className="size-3.5" aria-hidden="true" />
-                              </span>
-                            )}
-                            <span className="truncate font-medium">
-                              {teacherName}
-                            </span>
-                          </div>
-                          <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-[#34d399]">
-                            <Clock className="size-3" aria-hidden="true" />
-                            {course.duration}
-                          </span>
-                        </div>
-                      </div>
+                      {isEnrolled ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/50 bg-emerald-500/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-xs">
+                          <CheckCircle2 className="size-3" />
+                          Enrolled
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm">
+                          Available
+                        </span>
+                      )}
                     </div>
-                  }
-                  backContent={
-                    <div className="flex h-full w-full flex-col justify-between border border-white/20 bg-white/25 p-6 text-foreground backdrop-blur-md dark:border-[#353644] dark:bg-[#121a19]">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <Badge
-                            variant="gold-subtle"
-                            className="border-[#10b981]/40 bg-[#10b981]/15 text-[#047857] dark:text-[#10b981]"
-                          >
-                            <Sparkles className="mr-1 size-3" aria-hidden="true" />
-                            {course.category}
-                          </Badge>
-                          <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-foreground">
-                            <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                            {(course.reviewCount ?? 0) > 0
-                              ? `${course.ratingAvg}/5 (${course.reviewCount})`
-                              : "New"}
-                          </span>
-                        </div>
-                        <h3 className="line-clamp-2 text-base font-bold text-foreground">
-                          {course.title}
-                        </h3>
-                        <p className="line-clamp-4 text-xs leading-relaxed text-muted-foreground">
-                          {course.description}
-                        </p>
-                      </div>
+                  </div>
 
-                      <div className="space-y-3 border-t border-white/20 pt-3 dark:border-[#252630]">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="inline-flex items-center gap-1.5 font-medium">
-                            <User
-                              className="size-3.5 text-[#10b981]"
-                              aria-hidden="true"
-                            />
-                            <span className="max-w-36 truncate">
-                              {teacherName}
-                            </span>
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 font-mono">
-                            <Clock
-                              className="size-3.5 text-[#10b981]"
-                              aria-hidden="true"
-                            />
-                            <span>{course.duration}</span>
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          {onInspectCourse && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              data-no-flip="true"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onInspectCourse(course, isEnrolled);
-                              }}
-                              className="justify-center gap-1.5 text-xs"
-                            >
-                              <Eye className="size-3.5" />
-                              <span>Details</span>
-                            </Button>
-                          )}
-                          <Button
-                            type="button"
-                            variant="gold"
-                            size="sm"
-                            disabled={isSubmitting}
-                            data-no-flip="true"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectCourse?.(course, isEnrolled);
-                            }}
-                            className={cn(
-                              "justify-center gap-1.5 font-semibold",
-                              !onInspectCourse && "col-span-2",
-                            )}
-                          >
-                            <span>
-                              {isEnrolled ? "Open Course" : "Enroll Now"}
-                            </span>
-                            <ArrowRight
-                              className="size-3.5"
-                              aria-hidden="true"
-                            />
-                          </Button>
-                        </div>
-                      </div>
+                  <div className="space-y-2.5 p-5">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      {(course.reviewCount ?? 0) > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-400">
+                          <Star className="size-3 fill-amber-400 text-amber-400" />
+                          {course.ratingAvg} ({course.reviewCount})
+                        </span>
+                      )}
+                      {typeof course.enrollmentCount === "number" && (
+                        <span className="inline-flex items-center gap-1 rounded bg-white/10 px-2 py-0.5 font-medium text-muted-foreground">
+                          <Users className="size-3 text-[#10b981]" />
+                          {course.enrollmentCount} students
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 font-mono text-muted-foreground">
+                        <Clock className="size-3 text-[#10b981]" />
+                        {course.duration}
+                      </span>
                     </div>
-                  }
-                />
-              </div>
+
+                    <h3 className="line-clamp-2 text-lg leading-snug font-bold tracking-tight text-foreground">
+                      {course.title}
+                    </h3>
+
+                    <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {course.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-white/10 px-5 py-4">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {course.teacher.avatar_url ? (
+                        <img
+                          src={course.teacher.avatar_url}
+                          alt={teacherName}
+                          className="size-6 shrink-0 rounded-full border border-[#10b981]/60 object-cover"
+                        />
+                      ) : (
+                        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[#10b981]/50 bg-[#10b981]/20 text-[#10b981]">
+                          <User className="size-3.5" aria-hidden="true" />
+                        </span>
+                      )}
+                      {course.teacher_id ? (
+                        <Link
+                          href={`/teachers/${course.teacher_id}`}
+                          className="truncate font-semibold text-foreground hover:text-[#10b981] hover:underline"
+                        >
+                          {teacherName}
+                        </Link>
+                      ) : (
+                        <span className="truncate font-semibold text-foreground">
+                          {teacherName}
+                        </span>
+                      )}
+                    </div>
+                    {course.teacher_id && (
+                      <Link
+                        href={`/teachers/${course.teacher_id}`}
+                        className="shrink-0 text-[11px] font-medium text-[#10b981] hover:underline"
+                      >
+                        Profile
+                      </Link>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {onInspectCourse && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onInspectCourse(course, isEnrolled)}
+                        className="justify-center gap-1.5 text-xs"
+                      >
+                        <Eye className="size-3.5" />
+                        <span>Details</span>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="gold"
+                      size="sm"
+                      disabled={isSubmitting}
+                      onClick={() => onSelectCourse?.(course, isEnrolled)}
+                      className={cn(
+                        "justify-center gap-1.5 font-semibold",
+                        !onInspectCourse && "col-span-2",
+                      )}
+                    >
+                      <span>{isEnrolled ? "Open Course" : "Enroll Now"}</span>
+                      <ArrowRight className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+              </article>
             );
           })}
         </div>

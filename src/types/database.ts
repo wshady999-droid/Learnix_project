@@ -337,6 +337,127 @@ export type Database = {
           },
         ]
       }
+      assignment_materials: {
+        Row: {
+          assignment_id: string
+          course_id: string
+          created_at: string
+          file_name: string
+          file_size_bytes: number
+          id: string
+          mime_type: string
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string
+          version_number: number
+        }
+        Insert: {
+          assignment_id: string
+          course_id: string
+          created_at?: string
+          file_name: string
+          file_size_bytes: number
+          id?: string
+          mime_type: string
+          storage_bucket?: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by: string
+          version_number?: number
+        }
+        Update: {
+          assignment_id?: string
+          course_id?: string
+          created_at?: string
+          file_name?: string
+          file_size_bytes?: number
+          id?: string
+          mime_type?: string
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_materials_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_materials_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_materials_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assignment_submission_versions: {
+        Row: {
+          file_name: string
+          file_size_bytes: number | null
+          id: string
+          mime_type: string
+          storage_bucket: string
+          storage_path: string
+          student_id: string
+          submission_id: string
+          submitted_at: string
+          version_number: number
+        }
+        Insert: {
+          file_name: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string
+          storage_bucket?: string
+          storage_path: string
+          student_id: string
+          submission_id: string
+          submitted_at?: string
+          version_number?: number
+        }
+        Update: {
+          file_name?: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string
+          storage_bucket?: string
+          storage_path?: string
+          student_id?: string
+          submission_id?: string
+          submitted_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assignment_submission_versions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assignment_submission_versions_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "assignment_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assignment_submissions: {
         Row: {
           assignment_id: string
@@ -1470,6 +1591,14 @@ export type Database = {
           expires_at: string
           guardian_consent_confirmed: boolean
           id: string
+          is_paused: boolean
+          paused_at: string | null
+          paused_reason: string | null
+          remaining_seconds: number | null
+          resume_review_notes: string | null
+          resume_reviewed_at: string | null
+          resume_reviewed_by: string | null
+          resume_status: string
           started_at: string
           status: Database["public"]["Enums"]["attempt_status"]
           student_id: string
@@ -1489,6 +1618,14 @@ export type Database = {
           expires_at: string
           guardian_consent_confirmed?: boolean
           id?: string
+          is_paused?: boolean
+          paused_at?: string | null
+          paused_reason?: string | null
+          remaining_seconds?: number | null
+          resume_review_notes?: string | null
+          resume_reviewed_at?: string | null
+          resume_reviewed_by?: string | null
+          resume_status?: string
           started_at?: string
           status?: Database["public"]["Enums"]["attempt_status"]
           student_id: string
@@ -1508,6 +1645,14 @@ export type Database = {
           expires_at?: string
           guardian_consent_confirmed?: boolean
           id?: string
+          is_paused?: boolean
+          paused_at?: string | null
+          paused_reason?: string | null
+          remaining_seconds?: number | null
+          resume_review_notes?: string | null
+          resume_reviewed_at?: string | null
+          resume_reviewed_by?: string | null
+          resume_status?: string
           started_at?: string
           status?: Database["public"]["Enums"]["attempt_status"]
           student_id?: string
@@ -1531,10 +1676,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "exam_attempts_resume_reviewed_by_fkey"
+            columns: ["resume_reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "exam_attempts_student_id_fkey"
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exam_question_materials: {
+        Row: {
+          course_id: string
+          created_at: string
+          exam_id: string
+          excerpt: string | null
+          id: string
+          material_name: string
+          material_source_id: string
+          material_source_type: string
+          page_number: number | null
+          question_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          exam_id: string
+          excerpt?: string | null
+          id?: string
+          material_name: string
+          material_source_id: string
+          material_source_type: string
+          page_number?: number | null
+          question_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          exam_id?: string
+          excerpt?: string | null
+          id?: string
+          material_name?: string
+          material_source_id?: string
+          material_source_type?: string
+          page_number?: number | null
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exam_question_materials_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_question_materials_exam_id_fkey"
+            columns: ["exam_id"]
+            isOneToOne: false
+            referencedRelation: "exams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exam_question_materials_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
             referencedColumns: ["id"]
           },
         ]
@@ -1611,6 +1824,7 @@ export type Database = {
           occurred_at: string
           severity: Database["public"]["Enums"]["violation_severity"]
           student_id: string
+          triggered_pause: boolean
           violation_type: string
         }
         Insert: {
@@ -1620,6 +1834,7 @@ export type Database = {
           occurred_at?: string
           severity?: Database["public"]["Enums"]["violation_severity"]
           student_id: string
+          triggered_pause?: boolean
           violation_type: string
         }
         Update: {
@@ -1629,6 +1844,7 @@ export type Database = {
           occurred_at?: string
           severity?: Database["public"]["Enums"]["violation_severity"]
           student_id?: string
+          triggered_pause?: boolean
           violation_type?: string
         }
         Relationships: [
@@ -2086,6 +2302,66 @@ export type Database = {
           },
         ]
       }
+      material_file_versions: {
+        Row: {
+          course_id: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          file_name: string
+          file_size_bytes: number | null
+          id: string
+          mime_type: string | null
+          storage_bucket: string
+          storage_path: string
+          uploaded_by: string
+          version_number: number
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          file_name: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          storage_bucket: string
+          storage_path: string
+          uploaded_by: string
+          version_number?: number
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          file_name?: string
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          storage_bucket?: string
+          storage_path?: string
+          uploaded_by?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_file_versions_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "material_file_versions_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           created_at: string
@@ -2132,9 +2408,11 @@ export type Database = {
           deleted_at: string | null
           id: string
           is_edited: boolean
+          message_type: string
           reply_to_id: string | null
           sender_id: string
           updated_at: string
+          voice_duration_seconds: number | null
         }
         Insert: {
           body: string
@@ -2143,9 +2421,11 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_edited?: boolean
+          message_type?: string
           reply_to_id?: string | null
           sender_id: string
           updated_at?: string
+          voice_duration_seconds?: number | null
         }
         Update: {
           body?: string
@@ -2154,9 +2434,11 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_edited?: boolean
+          message_type?: string
           reply_to_id?: string | null
           sender_id?: string
           updated_at?: string
+          voice_duration_seconds?: number | null
         }
         Relationships: [
           {
@@ -2925,6 +3207,62 @@ export type Database = {
           },
         ]
       }
+      teacher_public_profiles: {
+        Row: {
+          biography: string | null
+          certifications: string | null
+          created_at: string
+          display_name: string | null
+          education: string | null
+          experience_years: number | null
+          headline: string | null
+          id: string
+          is_public_visible: boolean
+          linkedin_url: string | null
+          teacher_id: string
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          biography?: string | null
+          certifications?: string | null
+          created_at?: string
+          display_name?: string | null
+          education?: string | null
+          experience_years?: number | null
+          headline?: string | null
+          id?: string
+          is_public_visible?: boolean
+          linkedin_url?: string | null
+          teacher_id: string
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          biography?: string | null
+          certifications?: string | null
+          created_at?: string
+          display_name?: string | null
+          education?: string | null
+          experience_years?: number | null
+          headline?: string | null
+          id?: string
+          is_public_visible?: boolean
+          linkedin_url?: string | null
+          teacher_id?: string
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_public_profiles_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       teacher_requests: {
         Row: {
           created_at: string
@@ -3480,4 +3818,3 @@ export const Constants = {
     },
   },
 } as const
-

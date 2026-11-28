@@ -283,7 +283,7 @@ const en: TeacherDictionary = {
     exams: "Smart Exam Builder",
     students: "Student Management",
     aiAssistant: "AI Teacher Assistant",
-    grading: "Grading & Results",
+    grading: "Assignments",
     ratings: "Course Ratings",
   },
   common: {
@@ -438,7 +438,7 @@ const en: TeacherDictionary = {
   },
   students: {
     title: "Assigned Student Management",
-    subtitle: "Monitor progress, identify at-risk learners, record attendance, and send personal feedback or announcements.",
+    subtitle: "Monitor progress, identify at-risk learners, and send personal feedback or announcements.",
     tabRoster: "Assigned Students",
     tabFallingBehind: "Falling Behind Alerts",
     tabAttendance: "Attendance Tracking",
@@ -556,7 +556,7 @@ const ar: TeacherDictionary = {
     exams: "منشئ الاختبارات الذكي",
     students: "إدارة الطلاب",
     aiAssistant: "مساعد المعلم الذكي",
-    grading: "التصحيح والنتائج",
+    grading: "المهام",
     ratings: "تقييمات الدورات",
   },
   common: {
@@ -830,7 +830,7 @@ const de: TeacherDictionary = {
     exams: "Smart Exam Builder",
     students: "Schülerverwaltung",
     aiAssistant: "KI-Lehrerassistent",
-    grading: "Bewertung & Ergebnisse",
+    grading: "Aufgaben",
     ratings: "Kursbewertungen",
   },
   overview: {
@@ -851,7 +851,7 @@ const it: TeacherDictionary = {
     exams: "Smart Exam Builder",
     students: "Gestione Studenti",
     aiAssistant: "Assistente IA Docente",
-    grading: "Valutazioni e Risultati",
+    grading: "Compiti",
     ratings: "Valutazioni Corsi",
   },
   overview: {
@@ -872,7 +872,7 @@ const fr: TeacherDictionary = {
     exams: "Générateur d'Examens",
     students: "Gestion des Étudiants",
     aiAssistant: "Assistant IA Enseignant",
-    grading: "Notation & Résultats",
+    grading: "Devoirs",
     ratings: "Évaluations des Cours",
   },
   overview: {

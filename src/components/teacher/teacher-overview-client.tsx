@@ -12,11 +12,9 @@ import {
 } from "recharts";
 import {
   Bell,
-  BookCheck,
   BookOpen,
   ClipboardCheck,
   FileCheck2,
-  FileEdit,
   GraduationCap,
   MessageSquare,
   Plus,
@@ -55,16 +53,6 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
       highlight: true,
     },
     {
-      label: "Published Courses",
-      value: data.publishedCoursesCount,
-      icon: BookCheck,
-    },
-    {
-      label: "Draft Courses",
-      value: data.draftCoursesCount,
-      icon: FileEdit,
-    },
-    {
       label: t.overview.enrolledStudents,
       value: data.enrolledStudentsCount,
       icon: Users,
@@ -75,11 +63,6 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
       icon: FileCheck2,
     },
     {
-      label: "Active Quizzes",
-      value: data.activeQuizzesCount,
-      icon: ClipboardCheck,
-    },
-    {
       label: t.overview.averagePerformance,
       value: `${data.averageStudentPerformance}%`,
       icon: TrendingUp,
@@ -87,7 +70,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
   ];
 
   const chartData = data.courses.map((course) => ({
-    name: course.code || course.title.slice(0, 16),
+    name: course.title.slice(0, 18),
     students: course.enrolledCount,
     avgScore: course.averageExamScore,
   }));
@@ -111,8 +94,8 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
         </Button>
       </div>
 
-      {/* 7 Real-Time KPI Metric Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      {/* 4 KPI Metric Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {kpiCards.map((item) => {
           const Icon = item.icon;
           return (
@@ -363,7 +346,7 @@ export function TeacherOverviewClient({ data }: TeacherOverviewClientProps) {
               </CardDescription>
             </div>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/teacher/grading">Grade</Link>
+              <Link href="/teacher/assignments">Grade</Link>
             </Button>
           </CardHeader>
           <CardContent>

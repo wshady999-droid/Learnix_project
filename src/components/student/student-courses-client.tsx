@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  CheckCircle2,
+  BookOpen,
   Clock,
+  ExternalLink,
   Search,
   Star,
   Tag,
@@ -36,7 +38,7 @@ interface StudentCoursesClientProps {
 }
 
 const DARK_GLASS_MODAL =
-  "max-h-[85dvh] overflow-y-auto border-white/10 bg-[#0F1115]/80 text-foreground backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/80 sm:max-w-2xl";
+  "max-h-[85dvh] overflow-y-auto border-white/10 bg-[#0F1115]/85 text-foreground backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/85 sm:max-w-2xl";
 
 const DARK_GLASS_BOX =
   "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
@@ -51,17 +53,9 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
   const [inspectedCourse, setInspectedCourse] =
     useState<CatalogCourseItem | null>(null);
 
-  const enrolledCourseIdSet = useMemo(
-    () => new Set(data.enrolledCourses.map((c) => c.id)),
-    [data.enrolledCourses],
-  );
-
+  // Explore Courses strictly shows available non-enrolled courses (separate from My Courses)
   const initialCatalogCourses = useMemo<CatalogCourseItem[]>(() => {
-    const combined = [
-      ...data.enrolledCourses,
-      ...data.availablePublishedCourses,
-    ];
-    return combined.map((c) => {
+    return data.availablePublishedCourses.map((c) => {
       const hours = Number(c.estimated_hours ?? 0);
       const unit = c.duration_unit === "days" ? "day" : "hour";
       const revs = data.approvedReviews.filter((r) => r.courseId === c.id);
@@ -98,18 +92,9 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
         approvedReviews: revs,
       };
     });
-  }, [
-    data.enrolledCourses,
-    data.availablePublishedCourses,
-    data.approvedReviews,
-  ]);
+  }, [data.availablePublishedCourses, data.approvedReviews]);
 
   function handleEnroll(courseId: string) {
-    if (enrolledCourseIdSet.has(courseId)) {
-      router.push(`/student/my-learning?courseId=${courseId}`);
-      return;
-    }
-
     startTransition(async () => {
       try {
         const res = await studentEnrollInCourseAction({ courseId });
@@ -129,10 +114,6 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
     });
   }
 
-  const isInspectedEnrolled = inspectedCourse
-    ? enrolledCourseIdSet.has(inspectedCourse.id)
-    : false;
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -141,39 +122,42 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
             Explore Courses
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Discover published courses, inspect approved student reviews, and enroll instantly.
+            Browse available courses by category, view instructor profiles, and
+            enroll instantly.
           </p>
         </div>
 
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by course, category, or instructor..."
-            className="border-white/10 bg-[#0F1115]/75 pl-9 backdrop-blur-md dark:bg-[#0F1115]/75"
-          />
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by course, category, or instructor..."
+              className="border-white/10 bg-[#0F1115]/75 pl-9 backdrop-blur-md dark:bg-[#0F1115]/75"
+            />
+          </div>
+
+          <Button asChild variant="outline" size="sm">
+            <Link href="/student/my-learning">
+              <BookOpen className="size-4 text-[#10b981]" />
+              <span>My Courses ({data.enrolledCourses.length})</span>
+            </Link>
+          </Button>
         </div>
       </div>
 
       <CoursesCatalogSection
         initialCourses={initialCatalogCourses}
         availableCategories={data.categories}
-        enrolledCourseIds={enrolledCourseIdSet}
         isSubmitting={isPending}
         searchQuery={search}
         onSearchQueryChange={setSearch}
         onInspectCourse={(course) => setInspectedCourse(course)}
-        onSelectCourse={(course, isEnrolled) => {
-          if (isEnrolled) {
-            router.push(`/student/my-learning?courseId=${course.id}`);
-            return;
-          }
-          handleEnroll(course.id);
-        }}
+        onSelectCourse={(course) => handleEnroll(course.id)}
       />
 
-      {/* Course Details & Approved Reviews Modal */}
+      {/* Course Details, Instructor Public Profile Link & Approved Reviews Modal */}
       <Dialog
         open={Boolean(inspectedCourse)}
         onOpenChange={(open) => {
@@ -189,18 +173,6 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                     <Tag className="mr-1 size-3" />
                     {inspectedCourse.category}
                   </Badge>
-                  <Badge
-                    variant="outline"
-                    className="border-white/15 bg-[#0F1115]/60 font-mono text-xs"
-                  >
-                    {inspectedCourse.code}
-                  </Badge>
-                  {isInspectedEnrolled && (
-                    <Badge variant="gold">
-                      <CheckCircle2 className="mr-1 size-3" />
-                      Enrolled
-                    </Badge>
-                  )}
                 </div>
                 <DialogTitle className="pt-1 text-xl">
                   {inspectedCourse.title}
@@ -211,20 +183,18 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
               </DialogHeader>
 
               <div className="space-y-5 py-2">
-                {/* Cover Banner */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={inspectedCourse.image_url}
                   alt={inspectedCourse.title}
                   className="h-48 w-full rounded-xl border border-white/10 object-cover"
                 />
 
-                {/* Key Metadata */}
+                {/* Key Metadata with Public Teacher Profile Link */}
                 <div
-                  className={`grid grid-cols-3 gap-3 rounded-xl border p-3 text-xs ${DARK_GLASS_BOX}`}
+                  className={`grid grid-cols-1 gap-3 rounded-xl border p-3.5 text-xs sm:grid-cols-3 ${DARK_GLASS_BOX}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <User className="size-4 text-[#C99A22]" />
+                  <div className="flex items-center gap-2.5">
+                    <User className="size-4 shrink-0 text-[#C99A22]" />
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground">
                         Instructor
@@ -232,10 +202,19 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                       <p className="truncate font-semibold text-foreground">
                         {inspectedCourse.teacher.full_name || "Instructor"}
                       </p>
+                      {inspectedCourse.teacher_id && (
+                        <Link
+                          href={`/teachers/${inspectedCourse.teacher_id}`}
+                          className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-400 hover:underline"
+                        >
+                          <span>Public Profile</span>
+                          <ExternalLink className="size-2.5" />
+                        </Link>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="size-4 text-[#C99A22]" />
+                  <div className="flex items-center gap-2.5">
+                    <Clock className="size-4 shrink-0 text-[#C99A22]" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">
                         Duration
@@ -245,8 +224,8 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="size-4 text-[#C99A22]" />
+                  <div className="flex items-center gap-2.5">
+                    <Users className="size-4 shrink-0 text-[#C99A22]" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">
                         Enrollment & Rating
@@ -283,7 +262,7 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                   </div>
 
                   {!inspectedCourse.approvedReviews ||
-                    inspectedCourse.approvedReviews.length === 0 ? (
+                  inspectedCourse.approvedReviews.length === 0 ? (
                     <p
                       className={`rounded-lg border p-3 text-xs text-muted-foreground ${DARK_GLASS_BOX}`}
                     >
@@ -322,26 +301,13 @@ export function StudentCoursesClient({ data }: StudentCoursesClientProps) {
                 >
                   Close
                 </Button>
-                {isInspectedEnrolled ? (
-                  <Button
-                    variant="gold"
-                    onClick={() => {
-                      const cid = inspectedCourse.id;
-                      setInspectedCourse(null);
-                      router.push(`/student/my-learning?courseId=${cid}`);
-                    }}
-                  >
-                    Open in My Courses
-                  </Button>
-                ) : (
-                  <Button
-                    variant="gold"
-                    disabled={isPending}
-                    onClick={() => handleEnroll(inspectedCourse.id)}
-                  >
-                    Enroll in Course
-                  </Button>
-                )}
+                <Button
+                  variant="gold"
+                  disabled={isPending}
+                  onClick={() => handleEnroll(inspectedCourse.id)}
+                >
+                  Enroll in Course
+                </Button>
               </DialogFooter>
             </>
           )}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { serverStrongPasswordSchema } from "@/lib/auth/validation";
+import { validateNotPastDateTime } from "@/lib/date-validation";
 import { getPublicEnv } from "@/lib/env";
 import {
   createSupabaseServerClient,
@@ -118,8 +119,8 @@ export async function adminCreateUserAccountAction(
       full_name: parsed.data.fullName,
       role: parsed.data.role,
       phone: parsed.data.phone || null,
-      department_id: parsed.data.departmentId || null,
-      educational_level_id: parsed.data.educationalLevelId || null,
+      department_id: null,
+      educational_level_id: null,
       status: "active",
     })
     .eq("id", createdUserId);
@@ -191,17 +192,6 @@ export async function adminBulkImportUsersAction(
   }
 
   const supabase = await createSupabaseServerClient();
-  const [deptsRes, levelsRes] = await Promise.all([
-    supabase.from("departments").select("id, code"),
-    supabase.from("educational_levels").select("id, code"),
-  ]);
-
-  const deptByCode = new Map(
-    (deptsRes.data ?? []).map((d) => [d.code.toLowerCase(), d.id]),
-  );
-  const levelByCode = new Map(
-    (levelsRes.data ?? []).map((l) => [l.code.toLowerCase(), l.id]),
-  );
 
   let importedCount = 0;
   const failures: Array<{ email: string; reason: string }> = [];
@@ -222,12 +212,6 @@ export async function adminBulkImportUsersAction(
         }
         const row = parsed.data;
         const tempPassword = `Lrx!${Math.random().toString(36).slice(2, 8)}A9#`;
-        const departmentId = row.departmentCode
-          ? (deptByCode.get(row.departmentCode.toLowerCase()) ?? null)
-          : null;
-        const educationalLevelId = row.levelCode
-          ? (levelByCode.get(row.levelCode.toLowerCase()) ?? null)
-          : null;
 
         const { data: created, error: authErr } =
           await serviceClient.auth.admin.createUser({
@@ -254,8 +238,8 @@ export async function adminBulkImportUsersAction(
             full_name: row.fullName,
             role: row.role,
             phone: row.phone || null,
-            department_id: departmentId,
-            educational_level_id: educationalLevelId,
+            department_id: null,
+            educational_level_id: null,
             status: "active",
           })
           .eq("id", created.user.id);
@@ -287,26 +271,12 @@ export async function adminChangeUserRoleAction(params: {
 }): Promise<ServiceResult<{ updated: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
+  void params;
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("profiles")
-    .update({ role: params.role })
-    .eq("id", params.targetUserId);
-
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.user_role_changed",
-    entityType: "profiles",
-    entityId: params.targetUserId,
-    newValues: { role: params.role },
-  });
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/users");
-  return { ok: true, data: { updated: true } };
+  return {
+    ok: false,
+    error: "User roles are protected from unauthorized modification.",
+  };
 }
 
 export async function adminChangeUserStatusAction(params: {
@@ -834,30 +804,16 @@ export async function adminAssignCourseTeacherAction(params: {
 }): Promise<ServiceResult<{ updated: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
+  void params;
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("courses")
-    .update({ teacher_id: params.teacherId })
-    .eq("id", params.courseId);
-
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.course_teacher_reassigned",
-    entityType: "courses",
-    entityId: params.courseId,
-    newValues: { teacherId: params.teacherId },
-  });
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/courses");
-  return { ok: true, data: { updated: true } };
+  return {
+    ok: false,
+    error: "A course's assigned teacher cannot be reassigned after creation.",
+  };
 }
 
 // -----------------------------------------------------------------------------
-// 3. DEPARTMENT, LEVEL, CLASS & ASSIGNMENT ACTIONS
+// 3. RETIRED DEPARTMENT, LEVEL, CLASS & SCHEDULE ACTIONS
 // -----------------------------------------------------------------------------
 const departmentSchema = z.object({
   id: z.string().uuid().optional(),
@@ -872,45 +828,8 @@ export async function adminSaveDepartmentAction(
 ): Promise<ServiceResult<{ saved: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const parsed = departmentSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid department input.",
-    };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const payload = {
-    code: parsed.data.code.toUpperCase(),
-    name: parsed.data.name,
-    description: parsed.data.description || null,
-    head_teacher_id: parsed.data.headTeacherId || null,
-    is_active: true,
-  };
-
-  if (parsed.data.id) {
-    const { error } = await supabase
-      .from("departments")
-      .update(payload)
-      .eq("id", parsed.data.id);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { error } = await supabase.from("departments").insert(payload);
-    if (error) return { ok: false, error: error.message };
-  }
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: parsed.data.id ? "admin.department_updated" : "admin.department_created",
-    entityType: "departments",
-    entityId: parsed.data.id ?? parsed.data.code,
-    newValues: payload,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { saved: true } };
+  void departmentSchema.safeParse(input);
+  return { ok: false, error: "Departments module has been retired." };
 }
 
 export async function adminDeleteDepartmentAction(
@@ -918,34 +837,8 @@ export async function adminDeleteDepartmentAction(
 ): Promise<ServiceResult<{ deleted: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-
-  const { count: classCount } = await supabase
-    .from("classes")
-    .select("id", { count: "exact", head: true })
-    .eq("department_id", departmentId);
-
-  if ((classCount ?? 0) > 0) {
-    return {
-      ok: false,
-      error:
-        "Cannot delete department while classes are assigned to it. Reassign or remove its classes first.",
-    };
-  }
-
-  const { error } = await supabase.from("departments").delete().eq("id", departmentId);
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.department_deleted",
-    entityType: "departments",
-    entityId: departmentId,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { deleted: true } };
+  void departmentId;
+  return { ok: false, error: "Departments module has been retired." };
 }
 
 const educationalLevelSchema = z.object({
@@ -962,45 +855,8 @@ export async function adminSaveEducationalLevelAction(
 ): Promise<ServiceResult<{ saved: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const parsed = educationalLevelSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid educational level.",
-    };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const payload = {
-    department_id: parsed.data.departmentId || null,
-    code: parsed.data.code.toUpperCase(),
-    name: parsed.data.name,
-    rank_order: parsed.data.rankOrder,
-    description: parsed.data.description || null,
-  };
-
-  if (parsed.data.id) {
-    const { error } = await supabase
-      .from("educational_levels")
-      .update(payload)
-      .eq("id", parsed.data.id);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { error } = await supabase.from("educational_levels").insert(payload);
-    if (error) return { ok: false, error: error.message };
-  }
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: parsed.data.id ? "admin.level_updated" : "admin.level_created",
-    entityType: "educational_levels",
-    entityId: parsed.data.id ?? parsed.data.code,
-    newValues: payload,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { saved: true } };
+  void educationalLevelSchema.safeParse(input);
+  return { ok: false, error: "Educational levels module has been retired." };
 }
 
 export async function adminDeleteEducationalLevelAction(
@@ -1008,20 +864,8 @@ export async function adminDeleteEducationalLevelAction(
 ): Promise<ServiceResult<{ deleted: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("educational_levels").delete().eq("id", levelId);
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.level_deleted",
-    entityType: "educational_levels",
-    entityId: levelId,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { deleted: true } };
+  void levelId;
+  return { ok: false, error: "Educational levels module has been retired." };
 }
 
 const classSchema = z.object({
@@ -1040,45 +884,8 @@ export async function adminSaveClassAction(
 ): Promise<ServiceResult<{ saved: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const parsed = classSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid class configuration.",
-    };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const payload = {
-    department_id: parsed.data.departmentId,
-    educational_level_id: parsed.data.educationalLevelId,
-    advisor_teacher_id: parsed.data.advisorTeacherId || null,
-    code: parsed.data.code.toUpperCase(),
-    name: parsed.data.name,
-    academic_year: parsed.data.academicYear,
-    max_capacity: parsed.data.maxCapacity,
-    is_active: true,
-  };
-
-  if (parsed.data.id) {
-    const { error } = await supabase.from("classes").update(payload).eq("id", parsed.data.id);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { error } = await supabase.from("classes").insert(payload);
-    if (error) return { ok: false, error: error.message };
-  }
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: parsed.data.id ? "admin.class_updated" : "admin.class_created",
-    entityType: "classes",
-    entityId: parsed.data.id ?? parsed.data.code,
-    newValues: payload,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { saved: true } };
+  void classSchema.safeParse(input);
+  return { ok: false, error: "Classes module has been retired." };
 }
 
 export async function adminDeleteClassAction(
@@ -1086,20 +893,8 @@ export async function adminDeleteClassAction(
 ): Promise<ServiceResult<{ deleted: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("classes").delete().eq("id", classId);
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.class_deleted",
-    entityType: "classes",
-    entityId: classId,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { deleted: true } };
+  void classId;
+  return { ok: false, error: "Classes module has been retired." };
 }
 
 export async function adminAssignStudentToTeacherAction(params: {
@@ -1109,31 +904,8 @@ export async function adminAssignStudentToTeacherAction(params: {
 }): Promise<ServiceResult<{ assigned: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  if (params.studentId === params.teacherId) {
-    return { ok: false, error: "Student and teacher cannot be the same user." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("student_teacher_assignments").insert({
-    student_id: params.studentId,
-    teacher_id: params.teacherId,
-    class_id: params.classId || null,
-    assigned_by: adminCheck.data.userId,
-    is_active: true,
-  });
-
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.student_teacher_assigned",
-    entityType: "student_teacher_assignments",
-    newValues: params,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { assigned: true } };
+  void params;
+  return { ok: false, error: "Class assignments module has been retired." };
 }
 
 export async function adminDeleteStudentTeacherAssignmentAction(
@@ -1141,21 +913,12 @@ export async function adminDeleteStudentTeacherAssignmentAction(
 ): Promise<ServiceResult<{ deleted: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("student_teacher_assignments")
-    .delete()
-    .eq("id", assignmentId);
-
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/admin");
-  return { ok: true, data: { deleted: true } };
+  void assignmentId;
+  return { ok: false, error: "Class assignments module has been retired." };
 }
 
 // -----------------------------------------------------------------------------
-// 4. SCHEDULE ACTIONS
+// 4. RETIRED SCHEDULE ACTIONS
 // -----------------------------------------------------------------------------
 const createScheduleSlotSchema = z.object({
   classId: z.string().uuid(),
@@ -1172,42 +935,8 @@ export async function adminCreateClassScheduleSlotAction(
 ): Promise<ServiceResult<{ created: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const parsed = createScheduleSlotSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid timetable slot.",
-    };
-  }
-
-  if (parsed.data.endTime <= parsed.data.startTime) {
-    return { ok: false, error: "End time must be after start time." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("class_schedules").insert({
-    class_id: parsed.data.classId,
-    course_id: parsed.data.courseId,
-    teacher_id: parsed.data.teacherId,
-    day_of_week: parsed.data.dayOfWeek,
-    start_time: parsed.data.startTime,
-    end_time: parsed.data.endTime,
-    room: parsed.data.room || null,
-    is_active: true,
-  });
-
-  if (error) return { ok: false, error: error.message };
-
-  await logAdminAudit({
-    actorId: adminCheck.data.userId,
-    action: "admin.schedule_slot_created",
-    entityType: "class_schedules",
-    newValues: parsed.data,
-  });
-
-  revalidatePath("/admin");
-  return { ok: true, data: { created: true } };
+  void createScheduleSlotSchema.safeParse(input);
+  return { ok: false, error: "Class schedule module has been retired." };
 }
 
 export async function adminDeleteClassScheduleSlotAction(
@@ -1215,13 +944,8 @@ export async function adminDeleteClassScheduleSlotAction(
 ): Promise<ServiceResult<{ deleted: true }>> {
   const adminCheck = await requireRole(["admin"]);
   if (!adminCheck.ok) return adminCheck;
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("class_schedules").delete().eq("id", scheduleId);
-  if (error) return { ok: false, error: error.message };
-
-  revalidatePath("/admin");
-  return { ok: true, data: { deleted: true } };
+  void scheduleId;
+  return { ok: false, error: "Class schedule module has been retired." };
 }
 
 // -----------------------------------------------------------------------------
@@ -1300,8 +1024,6 @@ const dispatchNotificationSchema = z.object({
     "all_students",
     "all_teachers",
     "all_users",
-    "department",
-    "class",
     "individual",
     "one_student",
     "one_teacher",
@@ -1315,7 +1037,6 @@ const dispatchNotificationSchema = z.object({
       "assignment",
       "grade",
       "message",
-      "attendance",
       "review",
       "security",
     ])
@@ -1340,6 +1061,18 @@ export async function adminDispatchNotificationAction(
     };
   }
 
+  let scheduledForIso: string | null = null;
+  if (parsed.data.scheduledFor && parsed.data.scheduledFor.trim()) {
+    const scheduleCheck = validateNotPastDateTime({
+      dateTime: parsed.data.scheduledFor,
+      fieldName: "Scheduled announcement time",
+    });
+    if (!scheduleCheck.ok) {
+      return scheduleCheck;
+    }
+    scheduledForIso = scheduleCheck.data.dateTime;
+  }
+
   const supabase = await createSupabaseServerClient();
 
   let recipientIds: string[] = [];
@@ -1347,8 +1080,6 @@ export async function adminDispatchNotificationAction(
     | "all_students"
     | "all_teachers"
     | "all_users"
-    | "department"
-    | "class"
     | "individual" = "all_users";
 
   if (
@@ -1384,32 +1115,7 @@ export async function adminDispatchNotificationAction(
       .eq("status", "active");
     recipientIds = (data ?? []).map((p) => p.id);
     dbTargetScope = "all_users";
-  } else if (parsed.data.targetScope === "department") {
-    if (!parsed.data.targetId) {
-      return { ok: false, error: "Please select a department." };
-    }
-    const { data } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("department_id", parsed.data.targetId);
-    recipientIds = (data ?? []).map((p) => p.id);
-    dbTargetScope = "department";
-  } else if (parsed.data.targetScope === "class") {
-    if (!parsed.data.targetId) {
-      return { ok: false, error: "Please select a class cohort." };
-    }
-    const { data } = await supabase
-      .from("student_teacher_assignments")
-      .select("student_id")
-      .eq("class_id", parsed.data.targetId);
-    recipientIds = Array.from(new Set((data ?? []).map((r) => r.student_id)));
-    dbTargetScope = "class";
   }
-
-  const scheduledForIso =
-    parsed.data.scheduledFor && parsed.data.scheduledFor.trim()
-      ? new Date(parsed.data.scheduledFor).toISOString()
-      : null;
 
   const { data: notification, error: notifError } = await supabase
     .from("notifications")
@@ -1420,7 +1126,7 @@ export async function adminDispatchNotificationAction(
       body: parsed.data.body,
       target_scope: dbTargetScope,
       scheduled_for: scheduledForIso,
-      is_announcement: parsed.data.isAnnouncement,
+      is_announcement: true,
       sent_at: scheduledForIso ?? new Date().toISOString(),
     })
     .select("*")

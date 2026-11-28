@@ -492,6 +492,9 @@ export interface TeacherExamBuilderData {
     submittedAt: string | null;
     scorePercent: number | null;
   }>;
+  learningResources: Array<TableRow<"learning_resources">>;
+  lessons: Array<TableRow<"lessons">>;
+  assignmentMaterials: Array<TableRow<"assignment_materials">>;
 }
 
 export async function getTeacherExamBuilderData(): Promise<ServiceResult<TeacherExamBuilderData>> {
@@ -519,27 +522,51 @@ export async function getTeacherExamBuilderData(): Promise<ServiceResult<Teacher
   const courses = coursesRes.data ?? [];
   const courseIds = courses.map((c) => c.id);
 
-  const [chaptersRes, enrollmentsRes, examsRes] = await Promise.all([
-    courseIds.length > 0
-      ? supabase
-          .from("chapters")
-          .select("*")
-          .in("course_id", courseIds)
-          .order("position", { ascending: true })
-      : Promise.resolve({ data: [] as Array<TableRow<"chapters">>, error: null }),
-    courseIds.length > 0
-      ? supabase.from("course_enrollments").select("*").in("course_id", courseIds)
-      : Promise.resolve({ data: [] as Array<TableRow<"course_enrollments">>, error: null }),
-    courseIds.length > 0
-      ? supabase
-          .from("exams")
-          .select("*")
-          .in("course_id", courseIds)
-          .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] as Array<TableRow<"exams">>, error: null }),
-  ]);
+  const [chaptersRes, enrollmentsRes, examsRes, resourcesRes, lessonsRes, assignmentMatsRes] =
+    await Promise.all([
+      courseIds.length > 0
+        ? supabase
+            .from("chapters")
+            .select("*")
+            .in("course_id", courseIds)
+            .order("position", { ascending: true })
+        : Promise.resolve({ data: [] as Array<TableRow<"chapters">>, error: null }),
+      courseIds.length > 0
+        ? supabase.from("course_enrollments").select("*").in("course_id", courseIds)
+        : Promise.resolve({ data: [] as Array<TableRow<"course_enrollments">>, error: null }),
+      courseIds.length > 0
+        ? supabase
+            .from("exams")
+            .select("*")
+            .in("course_id", courseIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as Array<TableRow<"exams">>, error: null }),
+      courseIds.length > 0
+        ? supabase
+            .from("learning_resources")
+            .select("*")
+            .in("course_id", courseIds)
+            .eq("is_published", true)
+            .order("position", { ascending: true })
+        : Promise.resolve({ data: [] as Array<TableRow<"learning_resources">>, error: null }),
+      courseIds.length > 0
+        ? supabase
+            .from("lessons")
+            .select("*")
+            .in("course_id", courseIds)
+            .order("position", { ascending: true })
+        : Promise.resolve({ data: [] as Array<TableRow<"lessons">>, error: null }),
+      courseIds.length > 0
+        ? supabase
+            .from("assignment_materials")
+            .select("*")
+            .in("course_id", courseIds)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as Array<TableRow<"assignment_materials">>, error: null }),
+    ]);
 
   if (examsRes.error) return { ok: false, error: examsRes.error.message };
+  if (resourcesRes.error) return { ok: false, error: resourcesRes.error.message };
   const exams = examsRes.data ?? [];
   const examIds = exams.map((e) => e.id);
 
@@ -658,6 +685,9 @@ export async function getTeacherExamBuilderData(): Promise<ServiceResult<Teacher
       questionOptions: optionsRes.data ?? [],
       enrollments,
       examAttemptsSummary,
+      learningResources: resourcesRes.data ?? [],
+      lessons: lessonsRes.data ?? [],
+      assignmentMaterials: assignmentMatsRes.data ?? [],
     },
   };
 }
@@ -915,8 +945,7 @@ export async function getTeacherStudentsData(): Promise<ServiceResult<TeacherStu
     const isFallingBehind =
       (stuEnrollments.length > 0 && avgProgress < 35) ||
       (stuResults.length > 0 && avgExam < 60) ||
-      (stuGradedSubs.length > 0 && avgAssignment < 60) ||
-      (stuAttendance.length > 0 && attendanceRate < 70);
+      (stuGradedSubs.length > 0 && avgAssignment < 60);
 
     const recentActivity: AssignedStudentRow["recentActivity"] = [
       ...stuLessons.slice(0, 5).map((lp) => ({
@@ -1077,9 +1106,13 @@ export interface TeacherGradingData {
     TableRow<"exam_violations"> & {
       studentName: string;
       examTitle: string;
+      courseId: string;
+      isAttemptPaused: boolean;
+      attemptResumeStatus: string;
     }
   >;
   assignments: Array<TableRow<"assignments">>;
+  assignmentMaterials: Array<TableRow<"assignment_materials">>;
   assignmentSubmissions: Array<
     TableRow<"assignment_submissions"> & {
       studentName: string;
@@ -1093,6 +1126,7 @@ export interface TeacherGradingData {
       aiExplanation: string | null;
       aiSuggestedFeedback: string | null;
       gradePublished: boolean;
+      versionCount: number;
     }
   >;
 }
@@ -1195,24 +1229,59 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
   const assignmentIds = assignments.map((a) => a.id);
   const assignmentMap = new Map(assignments.map((a) => [a.id, a]));
 
-  const assignmentSubsRes =
+  const [assignmentSubsRes, assignmentMaterialsRes] = await Promise.all([
     assignmentIds.length > 0
-      ? await supabase
+      ? supabase
           .from("assignment_submissions")
           .select("*")
           .in("assignment_id", assignmentIds)
           .neq("status", "draft")
           .order("submitted_at", { ascending: false })
-      : { data: [] as Array<TableRow<"assignment_submissions">>, error: null };
+      : Promise.resolve({
+          data: [] as Array<TableRow<"assignment_submissions">>,
+          error: null,
+        }),
+    assignmentIds.length > 0
+      ? supabase
+          .from("assignment_materials")
+          .select("*")
+          .in("assignment_id", assignmentIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({
+          data: [] as Array<TableRow<"assignment_materials">>,
+          error: null,
+        }),
+  ]);
 
   const submissionIds = (assignmentSubsRes.data ?? []).map((s) => s.id);
-  const assignmentGradesRes =
+  const [assignmentGradesRes, submissionVersionsRes] = await Promise.all([
     submissionIds.length > 0
-      ? await supabase
+      ? supabase
           .from("assignment_grades")
           .select("*")
           .in("submission_id", submissionIds)
-      : { data: [] as Array<TableRow<"assignment_grades">>, error: null };
+      : Promise.resolve({
+          data: [] as Array<TableRow<"assignment_grades">>,
+          error: null,
+        }),
+    submissionIds.length > 0
+      ? supabase
+          .from("assignment_submission_versions")
+          .select("submission_id")
+          .in("submission_id", submissionIds)
+      : Promise.resolve({
+          data: [] as Array<{ submission_id: string }>,
+          error: null,
+        }),
+  ]);
+
+  const versionCountBySubMap = new Map<string, number>();
+  for (const v of submissionVersionsRes.data ?? []) {
+    versionCountBySubMap.set(
+      v.submission_id,
+      (versionCountBySubMap.get(v.submission_id) ?? 0) + 1,
+    );
+  }
 
   const aiGradeBySubmissionMap = new Map(
     (assignmentGradesRes.data ?? []).map((g) => [g.submission_id, g]),
@@ -1299,6 +1368,7 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
       aiExplanation: aiGrade?.ai_suggested_explanation ?? null,
       aiSuggestedFeedback: aiGrade?.ai_suggested_feedback ?? null,
       gradePublished: Boolean(sub.is_grade_published || aiGrade?.is_published),
+      versionCount: (versionCountBySubMap.get(sub.id) ?? 0) + (sub.attachment_storage_path ? 1 : 0),
     };
   });
 
@@ -1310,6 +1380,9 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
       ...v,
       studentName: profile?.full_name || "Student",
       examTitle: exam?.title || "Quiz",
+      courseId: exam?.course_id || "",
+      isAttemptPaused: Boolean(attempt?.is_paused),
+      attemptResumeStatus: attempt?.resume_status ?? "none",
     };
   });
 
@@ -1326,6 +1399,7 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
       studentAnswers: enrichedAnswers,
       violations: enrichedViolations,
       assignments,
+      assignmentMaterials: assignmentMaterialsRes.data ?? [],
       assignmentSubmissions: enrichedAssignmentSubs,
     },
   };
@@ -1336,6 +1410,8 @@ export async function getTeacherGradingData(): Promise<ServiceResult<TeacherGrad
 // -----------------------------------------------------------------------------
 export interface TeacherRatingsData {
   teacherId: string;
+  teacherFullName: string;
+  publicProfile: TableRow<"teacher_public_profiles"> | null;
   averageCourseRating: number;
   averageTeacherRating: number;
   courseReviews: Array<
@@ -1359,7 +1435,7 @@ export async function getTeacherRatingsData(): Promise<ServiceResult<TeacherRati
   const supabase = await createSupabaseServerClient();
   const teacherId = auth.data.userId;
 
-  const [coursesRes, teacherReviewsRes] = await Promise.all([
+  const [coursesRes, teacherReviewsRes, publicProfileRes] = await Promise.all([
     supabase
       .from("courses")
       .select("id, title")
@@ -1371,6 +1447,11 @@ export async function getTeacherRatingsData(): Promise<ServiceResult<TeacherRati
       .eq("teacher_id", teacherId)
       .eq("moderation_status", "approved")
       .order("created_at", { ascending: false }),
+    supabase
+      .from("teacher_public_profiles")
+      .select("*")
+      .eq("teacher_id", teacherId)
+      .maybeSingle(),
   ]);
 
   if (coursesRes.error) return { ok: false, error: coursesRes.error.message };
@@ -1447,6 +1528,8 @@ export async function getTeacherRatingsData(): Promise<ServiceResult<TeacherRati
     ok: true,
     data: {
       teacherId,
+      teacherFullName: auth.data.fullName || auth.data.email || "Instructor",
+      publicProfile: publicProfileRes.data ?? null,
       averageCourseRating,
       averageTeacherRating,
       courseReviews,

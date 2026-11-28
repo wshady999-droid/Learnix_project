@@ -17,13 +17,11 @@ import {
   Award,
   Bell,
   BookOpen,
-  BookOpenCheck,
   CheckCheck,
   ClipboardCheck,
   Compass,
   FileText,
   MessageSquare,
-  PlayCircle,
   TrendingUp,
 } from "lucide-react";
 
@@ -72,18 +70,6 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
       highlight: true,
     },
     {
-      label: "Completed Courses",
-      value: data.completedCoursesCount,
-      icon: BookOpenCheck,
-      href: "/student/my-learning",
-    },
-    {
-      label: "In Progress",
-      value: data.inProgressCoursesCount,
-      icon: PlayCircle,
-      href: "/student/my-learning",
-    },
-    {
       label: t.overview.completionProgress,
       value: `${data.averageCompletionPercent}%`,
       icon: TrendingUp,
@@ -101,22 +87,10 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
       icon: ClipboardCheck,
       href: "/student/exams",
     },
-    {
-      label: t.overview.recentGrades,
-      value: `${data.latestGradePercent}%`,
-      icon: Award,
-      href: "/student/performance",
-    },
-    {
-      label: t.overview.unreadNotifications,
-      value: data.unreadNotificationsCount,
-      icon: Bell,
-      href: "/notifications",
-    },
   ];
 
   const chartData = data.enrolledCourses.map((c) => ({
-    name: c.code || c.title.slice(0, 15),
+    name: c.title.slice(0, 18),
     progress: c.progressPercent,
     examScore: c.averageExamScore,
   }));
@@ -233,9 +207,9 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                     <div className="flex items-center justify-between gap-2">
                       <Badge
                         variant="outline"
-                        className="border-white/15 bg-[#0F1115]/60 font-mono text-xs"
+                        className="border-white/15 bg-[#0F1115]/60 text-xs"
                       >
-                        {course.code}
+                        {course.category || "Course"}
                       </Badge>
                       <Badge
                         className={cn(
@@ -252,7 +226,12 @@ export function StudentOverviewClient({ data }: StudentOverviewClientProps) {
                       {course.title}
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      {course.teacherName}
+                      <Link
+                        href={`/teachers/${course.teacher_id}`}
+                        className="hover:text-emerald-400 hover:underline"
+                      >
+                        {course.teacherName}
+                      </Link>
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pb-3">

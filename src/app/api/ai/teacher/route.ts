@@ -14,10 +14,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   callServerAiProvider,
   checkAiRateLimit,
+  extractReadableTextFromUpload,
   getVerifiedPlatformHelpContext,
   logAiUsage,
   persistAiConversationTurn,
   retrieveGroundedCourseContext,
+  type AiInlineMediaPart,
 } from "@/services/ai/engine";
 import { requireRole } from "@/services/db/utils";
 
@@ -38,7 +40,7 @@ const teacherAiRequestSchema = z.object({
     "learning_recommendations",
     "course_summary",
   ]),
-  prompt: z.string().trim().min(2).max(4000),
+  prompt: z.string().trim().min(1).max(4000),
   questionCount: z.coerce.number().int().min(1).max(30).default(5),
   totalMarks: z.coerce.number().min(1).max(1000).optional(),
   difficultyMix: z
@@ -56,6 +58,15 @@ const teacherAiRequestSchema = z.object({
     )
     .optional(),
   existingQuestionPrompt: z.string().max(1500).optional(),
+  materialIds: z.array(z.string().uuid()).default([]),
+  audioAttachment: z
+    .object({
+      fileName: z.string().min(1).max(200),
+      mimeType: z.string().min(1).max(120),
+      base64Data: z.string().min(8).max(15 * 1024 * 1024),
+    })
+    .nullable()
+    .optional(),
 });
 
 export interface GeneratedDraftQuestion {
@@ -146,8 +157,19 @@ export async function POST(request: Request) {
     "exam_generator",
   ].includes(parsed.data.mode);
 
+  const mediaParts: AiInlineMediaPart[] = parsed.data.audioAttachment
+    ? [
+        {
+          fileName: parsed.data.audioAttachment.fileName,
+          mimeType: parsed.data.audioAttachment.mimeType,
+          base64Data: parsed.data.audioAttachment.base64Data,
+          kind: "audio",
+        },
+      ]
+    : [];
+
   // Polite redirection for clearly unrelated off-topic inquiries in assistant chat modes
-  if (!isQuestionMode) {
+  if (!isQuestionMode && mediaParts.length === 0) {
     const offTopicCheck = detectClearlyUnrelatedOffTopicPrompt(
       parsed.data.prompt,
     );
@@ -214,6 +236,177 @@ export async function POST(request: Request) {
         .eq("course_id", parsed.data.courseId)
         .eq("is_published", true),
     ]);
+
+  // When specific materials are selected, pull both their indexed chunks AND actual uploaded Storage files
+  const materialIds = parsed.data.materialIds ?? [];
+  let selectedMaterialChunks: Array<{
+    sourceTitle: string;
+    content: string;
+    lessonId?: string | null;
+  }> = [];
+  if (materialIds.length > 0) {
+    const [materialsRes, selectedLessonsRes, assignmentMatsRes, materialChunksRes] =
+      await Promise.all([
+        supabase
+          .from("learning_resources")
+          .select(
+            "id, title, file_name, resource_type, storage_bucket, storage_path",
+          )
+          .eq("course_id", parsed.data.courseId)
+          .in("id", materialIds),
+        supabase
+          .from("lessons")
+          .select(
+            "id, title, content_type, summary, content_markdown, attachment_storage_path",
+          )
+          .eq("course_id", parsed.data.courseId)
+          .in("id", materialIds),
+        supabase
+          .from("assignment_materials")
+          .select("id, file_name, storage_bucket, storage_path")
+          .eq("course_id", parsed.data.courseId)
+          .in("id", materialIds),
+        supabase
+          .from("ai_document_chunks")
+          .select("id, source_title, source_type, content, lesson_id")
+          .in("course_id", [parsed.data.courseId])
+          .order("created_at", { ascending: false })
+          .limit(120),
+      ]);
+
+    const materials = materialsRes.data ?? [];
+    const selectedLessons = selectedLessonsRes.data ?? [];
+    const assignmentMats = assignmentMatsRes.data ?? [];
+    const materialFileNames = new Set(
+      materials.map((m) => m.file_name).filter(Boolean),
+    );
+    const selectedLessonIdSet = new Set(selectedLessons.map((l) => l.id));
+
+    const allChunks = materialChunksRes.data ?? [];
+    selectedMaterialChunks = allChunks
+      .filter(
+        (c) =>
+          materialFileNames.has(c.source_title) ||
+          (c.lesson_id && selectedLessonIdSet.has(c.lesson_id)),
+      )
+      .map((c) => ({
+        sourceTitle: c.source_title,
+        content: c.content,
+        lessonId: c.lesson_id ?? null,
+      }));
+
+    const downloadAndExtract = async (
+      buckets: string[],
+      path: string,
+      fallbackName: string,
+    ): Promise<string> => {
+      for (const bucket of buckets) {
+        try {
+          const { data: blob } = await supabase.storage
+            .from(bucket)
+            .download(path);
+          if (blob) {
+            const buf = Buffer.from(await blob.arrayBuffer());
+            const text = extractReadableTextFromUpload(fallbackName, buf).trim();
+            if (text.length > 0) return text.slice(0, 6000);
+          }
+        } catch {
+          // Try next bucket candidate
+        }
+      }
+      return "";
+    };
+
+    for (const les of selectedLessons) {
+      const lessonBody = [les.summary, les.content_markdown]
+        .filter(Boolean)
+        .join("\n\n")
+        .trim();
+      if (lessonBody) {
+        selectedMaterialChunks.push({
+          sourceTitle: les.title,
+          content: lessonBody.slice(0, 5000),
+          lessonId: les.id,
+        });
+      }
+      if (les.attachment_storage_path) {
+        const primaryBucket =
+          les.content_type === "presentation"
+            ? "course-presentations"
+            : les.content_type === "pdf"
+              ? "course-pdfs"
+              : "course-materials";
+        const fileName =
+          les.attachment_storage_path.split("/").pop() || `${les.title}.pdf`;
+        const extracted = await downloadAndExtract(
+          Array.from(
+            new Set([
+              primaryBucket,
+              "course-materials",
+              "course-pdfs",
+              "course-presentations",
+            ]),
+          ),
+          les.attachment_storage_path,
+          fileName,
+        );
+        if (extracted) {
+          selectedMaterialChunks.push({
+            sourceTitle: `${les.title} (${fileName})`,
+            content: extracted,
+            lessonId: les.id,
+          });
+        }
+      }
+    }
+
+    for (const mat of materials) {
+      if (mat.storage_path) {
+        const fileName =
+          mat.file_name || mat.storage_path.split("/").pop() || mat.title;
+        const extracted = await downloadAndExtract(
+          Array.from(
+            new Set([
+              mat.storage_bucket || "course-materials",
+              "course-materials",
+              "course-pdfs",
+              "course-presentations",
+            ]),
+          ),
+          mat.storage_path,
+          fileName,
+        );
+        if (extracted) {
+          selectedMaterialChunks.push({
+            sourceTitle: mat.title || fileName,
+            content: extracted,
+            lessonId: null,
+          });
+        }
+      }
+    }
+
+    for (const amat of assignmentMats) {
+      if (amat.storage_path) {
+        const fileName =
+          amat.file_name ||
+          amat.storage_path.split("/").pop() ||
+          "assignment-material";
+        const extracted = await downloadAndExtract(
+          [amat.storage_bucket || "assignment-attachments"],
+          amat.storage_path,
+          fileName,
+        );
+        if (extracted) {
+          selectedMaterialChunks.push({
+            sourceTitle: fileName,
+            content: extracted,
+            lessonId: null,
+          });
+        }
+      }
+    }
+  }
 
   const results = resultsRes.data ?? [];
   const enrollments = enrollmentsRes.data ?? [];
@@ -325,11 +518,21 @@ export async function POST(request: Request) {
     (c) => c.sourceType !== "course" && c.sourceType !== "course_metadata",
   );
 
+  const prioritizedCitations =
+    selectedMaterialChunks.length > 0
+      ? selectedMaterialChunks.map((c) => ({
+          sourceTitle: c.sourceTitle,
+          sourceType: "selected_material",
+          excerpt: c.content.slice(0, 260),
+          lessonId: c.lessonId ?? null,
+        }))
+      : lessonAndDocCitations;
+
   const fallbackQuestions: GeneratedDraftQuestion[] = isQuestionMode
     ? buildGroundedDraftQuestions({
         count: Math.min(requestedCount, 15),
         difficultyMix: parsed.data.difficultyMix,
-        citations: lessonAndDocCitations,
+        citations: prioritizedCitations,
         prompt: parsed.data.prompt,
         allowedTypes: [...allowedTypes],
         pointsPerQuestion: defaultPointsPerQuestion,
@@ -339,13 +542,27 @@ export async function POST(request: Request) {
 
   if (isQuestionMode) {
     // Clean material context stripped of internal course code prefixes so the model focuses purely on educational content
-    const cleanMaterialPassages = lessonAndDocCitations
-      .map((c, idx) => `Passage ${idx + 1}:\n${c.excerpt}`)
+    const selectedMaterialsBlock = selectedMaterialChunks
+      .map(
+        (c, idx) =>
+          `Selected Uploaded Material ${idx + 1} (${c.sourceTitle}):\n${c.content.slice(0, 3500)}`,
+      )
+      .join("\n\n");
+
+    const cleanMaterialPassages = [
+      selectedMaterialsBlock,
+      ...(selectedMaterialChunks.length === 0
+        ? lessonAndDocCitations.map(
+            (c, idx) => `Passage ${idx + 1}:\n${c.excerpt}`,
+          )
+        : []),
+    ]
+      .filter(Boolean)
       .join("\n\n");
 
     const jsonSystemInstruction = [
       "You are Learnix AI Assessment Architect.",
-      "Generate academically rigorous quiz questions grounded in the supplied learning material and selected lesson content.",
+      "Generate academically rigorous quiz questions grounded strictly in the teacher's selected uploaded materials and lesson content.",
       "When supplied learning material covers the topic, rely strictly on those facts and do not invent unsupported claims. If no detailed passages cover the teacher's requested academic topic yet, generate accurate educational questions directly on the requested topic.",
       'ALWAYS output ONLY a valid JSON object (never plain-text apologies or prose outside JSON) matching: {"questions": Array<{"prompt": string, "questionType": "single_choice"|"multiple_choice"|"true_false"|"short_answer"|"essay", "difficulty": "easy"|"medium"|"hard", "points": number, "explanation": string, "options": Array<{"optionText": string, "isCorrect": boolean}>}>}.',
       "CRITICAL STUDENT-FACING QUIZ OUTPUT RULES:",
@@ -371,11 +588,13 @@ export async function POST(request: Request) {
     const jsonUserPrompt = [
       `Requested Difficulty: ${parsed.data.difficultyMix}`,
       `Assessment Topic / Instruction: ${parsed.data.prompt}`,
-      grounded.contextBlock
-        ? `\nLearning Material Content:\n${grounded.contextBlock}`
-        : cleanMaterialPassages
-          ? `\nLearning Material Content:\n${cleanMaterialPassages}`
-          : "\nLearning Material Content: Generate questions strictly aligned with the assessment topic above.",
+      selectedMaterialsBlock
+        ? `\nSelected Uploaded Materials (Primary Grounding Source):\n${selectedMaterialsBlock}`
+        : grounded.contextBlock
+          ? `\nLearning Material Content:\n${grounded.contextBlock}`
+          : cleanMaterialPassages
+            ? `\nLearning Material Content:\n${cleanMaterialPassages}`
+            : "\nLearning Material Content: Generate questions strictly aligned with the assessment topic above.",
     ].join("\n");
 
     const aiRes = await callServerAiProvider({
@@ -385,6 +604,7 @@ export async function POST(request: Request) {
         questions: fallbackQuestions,
       }),
       jsonMode: true,
+      mediaParts,
     });
 
     let parsedQuestions = fallbackQuestions;
@@ -568,8 +788,9 @@ export async function POST(request: Request) {
 
   const aiResult = await callServerAiProvider({
     systemInstruction,
-    userPrompt,
+    userPrompt: `Course: ${grounded.courseTitle}\n${userPrompt.replace(/^Course:[^\n]*\n/, "")}`,
     fallbackResponse,
+    mediaParts,
   });
 
   const savedTurn = await persistAiConversationTurn({

@@ -8,8 +8,6 @@ import {
   BarChart3,
   Bell,
   BookOpen,
-  Building2,
-  CalendarClock,
   LayoutDashboard,
   LogOut,
   MessageSquareWarning,
@@ -83,12 +81,6 @@ export function AdminShell({
             icon: Users,
             mobilePrimary: true,
           },
-          {
-            id: "admin-departments",
-            label: adminT.nav.departments,
-            href: "/admin/departments",
-            icon: Building2,
-          },
         ],
       },
       {
@@ -107,12 +99,6 @@ export function AdminShell({
             label: "Reviews Moderation",
             href: "/admin/reviews",
             icon: MessageSquareWarning,
-          },
-          {
-            id: "admin-schedule",
-            label: adminT.nav.schedule,
-            href: "/admin/schedule",
-            icon: CalendarClock,
           },
           {
             id: "admin-analytics",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -14,10 +14,11 @@ import {
   Lightbulb,
   Loader2,
   MessageSquarePlus,
+  Mic,
   Plus,
   Send,
   Sparkles,
-  Trash2, // <-- تمت الإضافة
+  Trash2,
   Upload,
   User,
   X,
@@ -87,11 +88,15 @@ const DARK_GLASS_COMPOSER =
 const DARK_GLASS_PILL =
   "border-white/12 bg-[#0F1115]/65 text-foreground hover:border-emerald-400/40 hover:bg-[#18202C]/80";
 
+function getEpochMs(): number {
+  return Date.now();
+}
+
 const ANALYTICAL_QUICK_PROMPTS: Array<{
   label: string;
   mode: TeacherAiMode;
   prompt: string;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
 }> = [
   {
     label: "Individual Student Performance",
@@ -141,6 +146,8 @@ interface ChatTurn {
   id: string;
   sender: "user" | "assistant";
   content: string;
+  voiceUrl?: string | null;
+  voiceDurationSeconds?: number | null;
   citations?: AiCitation[];
   draftQuestions?: GeneratedDraftQuestion[];
 }
@@ -355,6 +362,37 @@ export function TeacherAiAssistantClient({
   >(null);
   const [localTurns, setLocalTurns] = useState<ChatTurn[]>([]);
 
+  // Voice recording state for Teacher AI Assistant
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [spokenTranscript, setSpokenTranscript] = useState("");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const speechRecognitionRef = useRef<{ stop: () => void } | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingStartMsRef = useRef<number>(0);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {
+          // Ignore speech recognition stop errors on unmount
+        }
+      }
+    };
+  }, []);
+
   const courseLessons = useMemo(
     () =>
       coursesData.lessons.filter((l) => l.course_id === selectedCourseId),
@@ -472,9 +510,216 @@ export function TeacherAiAssistantClient({
     }
   }
 
+  async function startVoiceRecording() {
+    if (!selectedCourseId) {
+      toast.error("Select a course first.");
+      return;
+    }
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      toast.error("Voice recording is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferredMime =
+        typeof MediaRecorder !== "undefined" &&
+        MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : typeof MediaRecorder !== "undefined" &&
+              MediaRecorder.isTypeSupported("audio/webm")
+            ? "audio/webm"
+            : "";
+
+      const recorder = preferredMime
+        ? new MediaRecorder(stream, { mimeType: preferredMime })
+        : new MediaRecorder(stream);
+
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      recordedChunksRef.current = [];
+      recordingStartMsRef.current = getEpochMs();
+      setRecordingSeconds(0);
+      setSpokenTranscript("");
+      setIsRecordingVoice(true);
+
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) {
+          recordedChunksRef.current.push(ev.data);
+        }
+      };
+
+      recorder.start(250);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingSeconds(
+          Math.max(
+            0,
+            Math.floor((getEpochMs() - recordingStartMsRef.current) / 1000),
+          ),
+        );
+      }, 500);
+
+      // Optional browser SpeechRecognition live transcript preview
+      const win = window as unknown as {
+        SpeechRecognition?: new () => {
+          continuous: boolean;
+          interimResults: boolean;
+          onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+          start: () => void;
+          stop: () => void;
+        };
+        webkitSpeechRecognition?: new () => {
+          continuous: boolean;
+          interimResults: boolean;
+          onresult: ((ev: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+          start: () => void;
+          stop: () => void;
+        };
+      };
+      const SpeechCtor = win.SpeechRecognition || win.webkitSpeechRecognition;
+      if (SpeechCtor) {
+        try {
+          const rec = new SpeechCtor();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.onresult = (ev) => {
+            const parts: string[] = [];
+            for (let i = 0; i < ev.results.length; i++) {
+              const item = ev.results[i]?.[0]?.transcript;
+              if (item) parts.push(item);
+            }
+            setSpokenTranscript(parts.join(" ").trim());
+          };
+          rec.start();
+          speechRecognitionRef.current = rec;
+        } catch {
+          // Continue with server-side Whisper audio transcription
+        }
+      }
+    } catch {
+      toast.error(
+        "Microphone access denied. Allow microphone permissions to send voice messages.",
+      );
+    }
+  }
+
+  function cleanupVoiceRecording() {
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {
+        // Ignore
+      }
+      speechRecognitionRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+    setIsRecordingVoice(false);
+    setRecordingSeconds(0);
+  }
+
+  function cancelVoiceRecording() {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state !== "inactive"
+    ) {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
+    recordedChunksRef.current = [];
+    setSpokenTranscript("");
+    cleanupVoiceRecording();
+  }
+
+  async function finishAndSendVoicePrompt() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder) return;
+
+    const elapsedSeconds = Math.max(
+      1,
+      Math.round((getEpochMs() - recordingStartMsRef.current) / 1000),
+    );
+    const capturedTranscript = spokenTranscript.trim();
+
+    const audioBlob = await new Promise<Blob>((resolve) => {
+      if (recorder.state === "inactive") {
+        const mime = (recorder.mimeType || "audio/webm").split(";")[0] || "audio/webm";
+        resolve(new Blob(recordedChunksRef.current, { type: mime }));
+        return;
+      }
+      recorder.onstop = () => {
+        const mime = (recorder.mimeType || "audio/webm").split(";")[0] || "audio/webm";
+        resolve(new Blob(recordedChunksRef.current, { type: mime }));
+      };
+      recorder.stop();
+    });
+
+    cleanupVoiceRecording();
+    setSpokenTranscript("");
+
+    if (audioBlob.size < 200) {
+      toast.error("Voice recording was too short.");
+      return;
+    }
+
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const res = typeof reader.result === "string" ? reader.result : "";
+        const commaIdx = res.indexOf(",");
+        resolve(commaIdx >= 0 ? res.slice(commaIdx + 1) : res);
+      };
+      reader.onerror = () => reject(new Error("Failed to read audio."));
+      reader.readAsDataURL(audioBlob);
+    });
+
+    const localAudioUrl = URL.createObjectURL(audioBlob);
+    const baseMime = (audioBlob.type || "audio/webm").split(";")[0] || "audio/webm";
+    const ext = baseMime.includes("ogg")
+      ? "ogg"
+      : baseMime.includes("mp4")
+        ? "m4a"
+        : "webm";
+
+    const combinedText = [promptInput.trim(), capturedTranscript]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    await handleGenerate({
+      prompt:
+        combinedText ||
+        "Please listen to my voice message and respond to my teaching request.",
+      voiceUrl: localAudioUrl,
+      voiceDurationSeconds: elapsedSeconds,
+      audioAttachment: {
+        fileName: `teacher_voice_${getEpochMs()}.${ext}`,
+        mimeType: baseMime,
+        base64Data,
+      },
+    });
+  }
+
   async function handleGenerate(override?: {
     mode?: TeacherAiMode;
     prompt?: string;
+    voiceUrl?: string;
+    voiceDurationSeconds?: number;
+    audioAttachment?: {
+      fileName: string;
+      mimeType: string;
+      base64Data: string;
+    };
   }) {
     if (!selectedCourseId) {
       toast.error("Create and select a course first.");
@@ -486,11 +731,19 @@ export function TeacherAiAssistantClient({
       `Generate ${effectiveMode.replace(/_/g, " ")} grounded in the selected course materials`;
 
     if (override?.mode) setMode(override.mode);
-    if (override?.prompt) setPromptInput(override.prompt);
+    if (override?.prompt && !override?.audioAttachment) {
+      setPromptInput(override.prompt);
+    }
 
-    if (!prompt && !override?.prompt) return;
+    if (!prompt && !override?.prompt && !override?.audioAttachment) return;
 
-    const optimisticUserContent = prompt;
+    const optimisticUserContent = override?.audioAttachment
+      ? override.prompt &&
+        override.prompt !==
+          "Please listen to my voice message and respond to my teaching request."
+        ? `🎤 Voice message: "${override.prompt}"`
+        : "🎤 Voice message"
+      : prompt;
     const optimisticId = `user-${crypto.randomUUID()}`;
     setLocalTurns((prev) => [
       ...prev,
@@ -498,6 +751,8 @@ export function TeacherAiAssistantClient({
         id: optimisticId,
         sender: "user",
         content: optimisticUserContent,
+        voiceUrl: override?.voiceUrl ?? null,
+        voiceDurationSeconds: override?.voiceDurationSeconds ?? null,
       },
     ]);
 
@@ -518,6 +773,7 @@ export function TeacherAiAssistantClient({
           prompt,
           questionCount: Number(questionCount) || 5,
           difficultyMix,
+          audioAttachment: override?.audioAttachment ?? null,
         }),
       });
       const json = (await res.json()) as {
@@ -827,12 +1083,22 @@ export function TeacherAiAssistantClient({
                       )}
                     >
                       {isUser ? (
-                        <p
-                          className="whitespace-pre-wrap text-sm leading-relaxed"
-                          dir="auto"
-                        >
-                          {turn.content}
-                        </p>
+                        <div className="space-y-2">
+                          <p
+                            className="whitespace-pre-wrap text-sm leading-relaxed"
+                            dir="auto"
+                          >
+                            {turn.content}
+                          </p>
+                          {turn.voiceUrl && (
+                            <audio
+                              controls
+                              preload="metadata"
+                              src={turn.voiceUrl}
+                              className="h-9 w-full min-w-[200px] max-w-[280px]"
+                            />
+                          )}
+                        </div>
                       ) : (
                         <div className="space-y-4">
                           <FormattedMarkdownContent content={turn.content} />
@@ -1045,11 +1311,51 @@ export function TeacherAiAssistantClient({
           )}
 
           <div className={DARK_GLASS_COMPOSER}>
+            {isRecordingVoice && (
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 py-2 text-xs">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="size-2.5 shrink-0 animate-pulse rounded-full bg-rose-500" />
+                  <span className="font-semibold text-emerald-300">
+                    Recording voice message •{" "}
+                    {Math.floor(recordingSeconds / 60)}:
+                    {String(recordingSeconds % 60).padStart(2, "0")}
+                  </span>
+                  {spokenTranscript && (
+                    <span className="truncate text-muted-foreground">
+                      — &ldquo;{spokenTranscript}&rdquo;
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={cancelVoiceRecording}
+                    className="h-7 border-white/15 px-2.5 text-xs"
+                  >
+                    <Trash2 className="size-3.5 text-rose-400" />
+                    <span>Cancel</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="gold"
+                    size="sm"
+                    onClick={() => void finishAndSendVoicePrompt()}
+                    className="h-7 px-2.5 text-xs"
+                  >
+                    <Send className="size-3.5" />
+                    <span>Send Voice</span>
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <textarea
               rows={2}
               dir="auto"
               value={promptInput}
-              disabled={loading}
+              disabled={loading || isRecordingVoice}
               onChange={(e) => setPromptInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -1057,7 +1363,7 @@ export function TeacherAiAssistantClient({
                   void handleGenerate();
                 }
               }}
-              placeholder="Ask about student performance, missing work, difficult topics, or generate quizzes..."
+              placeholder="Ask about student performance, missing work, difficult topics, generate quizzes, or send a voice message..."
               className="max-h-40 min-h-[48px] w-full resize-none bg-transparent px-2 py-1 text-sm text-foreground outline-none placeholder:text-muted-foreground/80 disabled:cursor-not-allowed disabled:opacity-60"
             />
 
@@ -1245,9 +1551,22 @@ export function TeacherAiAssistantClient({
               <div className="flex items-center gap-1.5">
                 <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || isRecordingVoice}
+                  onClick={() => void startVoiceRecording()}
+                  title="Send Voice Message to AI Assistant"
+                  className={cn("h-8 rounded-xl px-2.5 text-xs", DARK_GLASS_PILL)}
+                >
+                  <Mic className="size-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Voice</span>
+                </Button>
+
+                <Button
+                  type="button"
                   variant="gold"
                   size="sm"
-                  disabled={loading || !promptInput.trim()}
+                  disabled={loading || isRecordingVoice || !promptInput.trim()}
                   onClick={() => void handleGenerate()}
                   className="h-8 rounded-xl px-3.5"
                 >

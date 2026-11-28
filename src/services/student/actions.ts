@@ -737,6 +737,23 @@ export async function studentSaveExamAnswerAction(
   }
 
   const supabase = await createSupabaseServerClient();
+  const { data: attemptCheck } = await supabase
+    .from("exam_attempts")
+    .select("id, is_paused, status")
+    .eq("id", parsed.data.attemptId)
+    .eq("student_id", auth.data.userId)
+    .maybeSingle();
+
+  if (!attemptCheck || attemptCheck.status !== "in_progress") {
+    return { ok: false, error: "Active examination attempt not found." };
+  }
+  if (attemptCheck.is_paused) {
+    return {
+      ok: false,
+      error: "Exam is paused awaiting instructor approval before resuming.",
+    };
+  }
+
   const { data: existing } = await supabase
     .from("student_answers")
     .select("id")
@@ -778,12 +795,14 @@ const logViolationSchema = z.object({
   attemptId: z.string().uuid(),
   violationType: z.string().trim().min(2).max(80),
   severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  pauseExam: z.boolean().default(false),
+  remainingSeconds: z.coerce.number().int().min(0).optional(),
   details: z.record(z.string(), z.unknown()).default({}),
 });
 
 export async function studentLogExamViolationAction(
   input: z.infer<typeof logViolationSchema>,
-): Promise<ServiceResult<{ recorded: boolean }>> {
+): Promise<ServiceResult<{ recorded: boolean; paused: boolean }>> {
   const auth = await requireRole(["student", "teacher", "admin"]);
   if (!auth.ok) return auth;
 
@@ -796,16 +815,62 @@ export async function studentLogExamViolationAction(
   }
 
   const supabase = await createSupabaseServerClient();
+  const nowIso = new Date().toISOString();
+  const studentName =
+    auth.data.fullName?.trim() || auth.data.email || "Student";
+
+  const { data: attempt } = await supabase
+    .from("exam_attempts")
+    .select("id, exam_id, expires_at, is_paused")
+    .eq("id", parsed.data.attemptId)
+    .eq("student_id", auth.data.userId)
+    .maybeSingle();
+
+  if (!attempt) {
+    return { ok: false, error: "Examination attempt not found." };
+  }
+
+  if (parsed.data.pauseExam && !attempt.is_paused) {
+    const computedRem =
+      parsed.data.remainingSeconds ??
+      Math.max(
+        0,
+        Math.floor(
+          (new Date(attempt.expires_at).getTime() - Date.now()) / 1000,
+        ),
+      );
+    await supabase
+      .from("exam_attempts")
+      .update({
+        is_paused: true,
+        paused_at: nowIso,
+        remaining_seconds: computedRem,
+        paused_reason: parsed.data.violationType,
+        resume_status: "pending",
+      })
+      .eq("id", attempt.id)
+      .eq("student_id", auth.data.userId);
+  }
+
+  const enrichedDetails = {
+    ...parsed.data.details,
+    recordedAt: nowIso,
+  };
+
   const { error } = await supabase.from("exam_violations").insert({
     attempt_id: parsed.data.attemptId,
     student_id: auth.data.userId,
     violation_type: parsed.data.violationType,
     severity: parsed.data.severity,
-    details: parsed.data.details as Json,
+    triggered_pause: parsed.data.pauseExam,
+    details: enrichedDetails as Json,
   });
 
   if (error) return { ok: false, error: error.message };
-  return { ok: true, data: { recorded: true } };
+
+  revalidatePath("/teacher/assignments");
+  revalidatePath(`/student/exams/${attempt.exam_id}`);
+  return { ok: true, data: { recorded: true, paused: parsed.data.pauseExam } };
 }
 
 export async function studentSubmitExamAttemptAction(params: {
@@ -822,6 +887,19 @@ export async function studentSubmitExamAttemptAction(params: {
   if (!auth.ok) return auth;
 
   const supabase = await createSupabaseServerClient();
+  const { data: attemptState } = await supabase
+    .from("exam_attempts")
+    .select("is_paused")
+    .eq("id", params.attemptId)
+    .eq("student_id", auth.data.userId)
+    .maybeSingle();
+
+  if (attemptState?.is_paused) {
+    return {
+      ok: false,
+      error: "This examination is paused awaiting instructor approval.",
+    };
+  }
   const { data, error } = await supabase.rpc("submit_exam_attempt", {
     p_attempt_id: params.attemptId,
   });
@@ -860,6 +938,7 @@ const saveAssignmentSubmissionSchema = z.object({
   attachmentStoragePath: z.string().trim().max(500).nullable().optional(),
   attachmentFileName: z.string().trim().max(240).nullable().optional(),
   attachmentMimeType: z.string().trim().max(140).nullable().optional(),
+  attachmentFileSizeBytes: z.coerce.number().int().min(1).nullable().optional(),
   isDraft: z.boolean().default(false),
 });
 
@@ -923,7 +1002,9 @@ export async function studentSaveAssignmentSubmissionAction(
 
   const { data: existing } = await supabase
     .from("assignment_submissions")
-    .select("id, is_grade_published, status")
+    .select(
+      "id, is_grade_published, status, attachment_storage_path, attachment_file_name, attachment_mime_type",
+    )
     .eq("assignment_id", asg.id)
     .eq("student_id", studentId)
     .maybeSingle();
@@ -938,6 +1019,31 @@ export async function studentSaveAssignmentSubmissionAction(
   let submissionId = existing?.id ?? "";
 
   if (existing) {
+    // Preserve previous file version when replacing an uploaded submission file
+    if (
+      existing.attachment_storage_path &&
+      cleanPath &&
+      existing.attachment_storage_path !== cleanPath
+    ) {
+      const { count } = await supabase
+        .from("assignment_submission_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("submission_id", existing.id);
+
+      await supabase.from("assignment_submission_versions").insert({
+        submission_id: existing.id,
+        student_id: studentId,
+        storage_bucket: "assignment-attachments",
+        storage_path: existing.attachment_storage_path,
+        file_name:
+          existing.attachment_file_name ||
+          existing.attachment_storage_path.split("/").pop() ||
+          "submission",
+        mime_type: existing.attachment_mime_type || "application/octet-stream",
+        version_number: (count ?? 0) + 1,
+      });
+    }
+
     const { data, error } = await supabase
       .from("assignment_submissions")
       .update({
@@ -999,7 +1105,7 @@ export async function studentSaveAssignmentSubmissionAction(
         p_title: `Assignment Submitted: ${asg.title}`,
         p_body: `${studentName} submitted "${asg.title}"${nextStatus === "late" ? " (Late)" : ""}.`,
         p_course_id: asg.course_id,
-        p_action_url: "/teacher/grading",
+        p_action_url: "/teacher/assignments",
         p_metadata: { assignmentId: asg.id, submissionId },
         p_is_announcement: false,
         p_target_scope: "individual",
@@ -1010,6 +1116,7 @@ export async function studentSaveAssignmentSubmissionAction(
   revalidatePath("/student");
   revalidatePath("/student/assignments");
   revalidatePath("/teacher");
+  revalidatePath("/teacher/assignments");
   revalidatePath("/teacher/grading");
   return { ok: true, data: { submissionId, status: nextStatus } };
 }

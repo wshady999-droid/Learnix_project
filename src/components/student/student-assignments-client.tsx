@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -8,11 +9,14 @@ import {
   CheckCircle2,
   Clock,
   Download,
+  Eye,
   FileText,
+  History,
   Paperclip,
   Save,
   Send,
   Upload,
+  User,
 } from "lucide-react";
 
 import { EmptyState } from "@/components/feedback/empty-state";
@@ -25,6 +29,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { LearnixFilePreview } from "@/components/ui/file-preview";
 import { Textarea, fieldBase } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -42,8 +54,7 @@ interface StudentAssignmentsClientProps {
 const DARK_GLASS_CARD =
   "border-white/10 bg-[#0F1115]/75 text-foreground backdrop-blur-xl shadow-[0_10px_34px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-white/10 dark:bg-[#0F1115]/75";
 
-const DARK_GLASS_SUBBOX =
-  "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
+const DARK_GLASS_SUBBOX = "border-white/10 bg-[#0F1115]/55 backdrop-blur-md";
 
 export function StudentAssignmentsClient({
   data,
@@ -57,6 +68,14 @@ export function StudentAssignmentsClient({
   const [selectedId, setSelectedId] = useState<string>(
     searchParams.get("assignmentId") || data.assignments[0]?.id || "",
   );
+
+  const [previewModal, setPreviewModal] = useState<{
+    bucketId: string;
+    storagePath: string;
+    fileName: string;
+    mimeType?: string | null;
+    fileSizeBytes?: number | null;
+  } | null>(null);
 
   const filteredAssignments = useMemo(() => {
     return data.assignments.filter((asg) => {
@@ -82,12 +101,15 @@ export function StudentAssignmentsClient({
     path: string;
     fileName: string;
     mimeType: string;
+    sizeBytes?: number;
   } | null>(
     activeAssignment?.submission?.attachmentPath
       ? {
           path: activeAssignment.submission.attachmentPath,
           fileName: activeAssignment.submission.attachmentFileName || "File",
-          mimeType: "application/octet-stream",
+          mimeType:
+            activeAssignment.submission.attachmentMimeType ||
+            "application/octet-stream",
         }
       : null,
   );
@@ -101,7 +123,8 @@ export function StudentAssignmentsClient({
         ? {
             path: asg.submission.attachmentPath,
             fileName: asg.submission.attachmentFileName || "File",
-            mimeType: "application/octet-stream",
+            mimeType:
+              asg.submission.attachmentMimeType || "application/octet-stream",
           }
         : null,
     );
@@ -110,8 +133,8 @@ export function StudentAssignmentsClient({
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !activeAssignment) return;
-    if (file.size > 25 * 1024 * 1024) {
-      toast.error("File must be 25 MB or smaller.");
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error("File must be 100 MB or smaller.");
       return;
     }
 
@@ -119,12 +142,12 @@ export function StudentAssignmentsClient({
     try {
       const supabase = createSupabaseBrowserClient();
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      // Storage RLS requires: {course_id}/{student_id}/{filename}
+      // Unique path preserves previous versions in Storage (never overwrites original)
       const storagePath = `${activeAssignment.courseId}/${data.studentId}/${Date.now()}_${safeName}`;
       const { error } = await supabase.storage
         .from("assignment-attachments")
         .upload(storagePath, file, {
-          upsert: true,
+          upsert: false,
           contentType: file.type || "application/octet-stream",
         });
 
@@ -137,8 +160,11 @@ export function StudentAssignmentsClient({
         path: storagePath,
         fileName: file.name,
         mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
       });
-      toast.success("Assignment file uploaded.");
+      toast.success(
+        "Solution file uploaded (previous version preserved if replacing).",
+      );
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -154,6 +180,7 @@ export function StudentAssignmentsClient({
         attachmentStoragePath: uploadedFile?.path ?? null,
         attachmentFileName: uploadedFile?.fileName ?? null,
         attachmentMimeType: uploadedFile?.mimeType ?? null,
+        attachmentFileSizeBytes: uploadedFile?.sizeBytes ?? null,
         isDraft,
       });
 
@@ -167,7 +194,7 @@ export function StudentAssignmentsClient({
           ? "Draft saved! You can continue editing before submitting."
           : res.data.status === "late"
             ? "Assignment submitted (marked Late)."
-            : "Assignment submitted successfully!",
+            : "Assignment solution submitted successfully!",
       );
       router.refresh();
     });
@@ -200,7 +227,8 @@ export function StudentAssignmentsClient({
             Course Assignments
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Read assignment instructions, save drafts, upload files, and view published instructor grades.
+            Preview and download assignment materials, submit your solution, and
+            view instructor-approved grades.
           </p>
         </div>
 
@@ -208,7 +236,7 @@ export function StudentAssignmentsClient({
           <select
             className={cn(
               fieldBase,
-              "h-9 w-48 border-white/10 bg-[#0F1115]/75 text-xs backdrop-blur-md",
+              "h-9 w-52 border-white/10 bg-[#0F1115]/75 text-xs backdrop-blur-md",
             )}
             value={courseFilter}
             onChange={(e) => setCourseFilter(e.target.value)}
@@ -216,7 +244,7 @@ export function StudentAssignmentsClient({
             <option value="all">All Enrolled Courses</option>
             {data.enrolledCourses.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.code} — {c.title}
+                {c.title}
               </option>
             ))}
           </select>
@@ -275,8 +303,8 @@ export function StudentAssignmentsClient({
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10px] text-[#C99A22]">
-                        {asg.courseCode}
+                      <span className="truncate text-[11px] font-medium text-[#C99A22]">
+                        {asg.courseTitle}
                       </span>
                       {renderStatusBadge(asg)}
                     </div>
@@ -298,7 +326,7 @@ export function StudentAssignmentsClient({
             </CardContent>
           </Card>
 
-          {/* Assignment Detail, Submission Form & Published Grade */}
+          {/* Assignment Detail, Materials, Submission Form & Published Grade */}
           <div className="space-y-6 lg:col-span-8">
             {!activeAssignment ? (
               <Card className={DARK_GLASS_CARD}>
@@ -306,7 +334,7 @@ export function StudentAssignmentsClient({
                   <EmptyState
                     icon={FileText}
                     title="Select an assignment"
-                    description="Choose an assignment from the list to view instructions and submit your work."
+                    description="Choose an assignment from the list to view materials and submit your solution."
                   />
                 </CardContent>
               </Card>
@@ -315,17 +343,20 @@ export function StudentAssignmentsClient({
                 <Card className={DARK_GLASS_CARD}>
                   <CardHeader className="border-b border-white/10">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Badge
                           variant="outline"
-                          className="border-white/15 bg-[#0F1115]/60 font-mono text-xs"
+                          className="border-white/15 bg-[#0F1115]/60 text-xs"
                         >
-                          {activeAssignment.courseCode}
+                          {activeAssignment.courseTitle}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {activeAssignment.courseTitle} •{" "}
-                          {activeAssignment.teacherName}
-                        </span>
+                        <Link
+                          href={`/teachers/${activeAssignment.teacherId}`}
+                          className="inline-flex items-center gap-1 font-medium text-emerald-400 hover:underline"
+                        >
+                          <User className="size-3" />
+                          <span>{activeAssignment.teacherName}</span>
+                        </Link>
                       </div>
                       {renderStatusBadge(activeAssignment)}
                     </div>
@@ -338,7 +369,9 @@ export function StudentAssignmentsClient({
                       <span>
                         Deadline:{" "}
                         {activeAssignment.dueAt
-                          ? activeAssignment.dueAt.slice(0, 16).replace("T", " ")
+                          ? activeAssignment.dueAt
+                              .slice(0, 16)
+                              .replace("T", " ")
                           : "No strict deadline"}
                       </span>
                       {!activeAssignment.allowLateSubmissions && (
@@ -378,30 +411,74 @@ export function StudentAssignmentsClient({
                       </div>
                     )}
 
-                    {activeAssignment.teacherAttachmentUrl && (
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="sm"
-                        className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
-                      >
-                        <a
-                          href={activeAssignment.teacherAttachmentUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Download className="size-3.5 text-[#C99A22]" />
+                    {/* Teacher Assignment Materials (Preview + Download) */}
+                    {activeAssignment.materials.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                          <Paperclip className="size-3.5 text-[#C99A22]" />
                           <span>
-                            Download Reference:{" "}
-                            {activeAssignment.teacherAttachmentName}
+                            Assignment Materials (
+                            {activeAssignment.materials.length})
                           </span>
-                        </a>
-                      </Button>
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {activeAssignment.materials.map((mat) => (
+                            <div
+                              key={mat.id}
+                              className={cn(
+                                "flex items-center justify-between gap-2 rounded-xl border p-3",
+                                DARK_GLASS_SUBBOX,
+                              )}
+                            >
+                              <span className="truncate font-medium text-foreground">
+                                {mat.fileName}
+                              </span>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 border-white/15 bg-[#0F1115]/60 px-2"
+                                  onClick={() =>
+                                    setPreviewModal({
+                                      bucketId: mat.storageBucket,
+                                      storagePath: mat.storagePath,
+                                      fileName: mat.fileName,
+                                      mimeType: mat.mimeType,
+                                      fileSizeBytes: mat.fileSizeBytes,
+                                    })
+                                  }
+                                >
+                                  <Eye className="size-3.5" />
+                                  <span>Preview</span>
+                                </Button>
+                                {mat.signedUrl && (
+                                  <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2"
+                                  >
+                                    <a
+                                      href={mat.signedUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      download={mat.fileName}
+                                    >
+                                      <Download className="size-3.5 text-[#C99A22]" />
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
 
-                {/* Published Grade & Feedback Card (Strictly shown ONLY when grade is published!) */}
+                {/* Published Grade & Feedback Card */}
                 {activeAssignment.submission?.isGradePublished ? (
                   <Card className="border-emerald-400/35 bg-[#0F1115]/75 text-foreground backdrop-blur-xl">
                     <CardHeader>
@@ -447,7 +524,8 @@ export function StudentAssignmentsClient({
                             )
                           </p>
                           <p className="text-muted-foreground">
-                            Your grade and teacher feedback will appear here as soon as your instructor approves and publishes them.
+                            Your grade and feedback will appear here once your
+                            instructor reviews and approves them.
                           </p>
                         </div>
                       </CardContent>
@@ -458,25 +536,25 @@ export function StudentAssignmentsClient({
                 {/* Answer & File Upload Workspace */}
                 <Card className={DARK_GLASS_CARD}>
                   <CardHeader className="border-b border-white/10">
-                    <CardTitle className="text-base">Your Submission</CardTitle>
+                    <CardTitle className="text-base">Your Solution</CardTitle>
                     <CardDescription>
                       {activeAssignment.submission?.isGradePublished
                         ? "This submission has been graded and finalized."
-                        : "Write your response below and/or attach your work file (PDF, DOCX, ZIP, TXT, or image)."}
+                        : "Write your solution and/or upload your completed file (PDF, Word, PowerPoint, Excel, video, image, ZIP, or TXT)."}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 pt-4">
                     {activeAssignment.submissionTypes.includes("text") && (
                       <div className="space-y-1.5">
-                        <Label>Written Response</Label>
+                        <Label>Written Solution</Label>
                         <Textarea
-                          rows={7}
+                          rows={6}
                           disabled={Boolean(
                             activeAssignment.submission?.isGradePublished,
                           )}
                           value={answerText}
                           onChange={(e) => setAnswerText(e.target.value)}
-                          placeholder="Write your structured assignment answer here..."
+                          placeholder="Write your structured assignment solution here..."
                           className={cn(DARK_GLASS_SUBBOX, "text-foreground")}
                         />
                       </div>
@@ -484,7 +562,7 @@ export function StudentAssignmentsClient({
 
                     {activeAssignment.submissionTypes.includes("file") && (
                       <div className="space-y-2">
-                        <Label>Assignment File Attachment</Label>
+                        <Label>Solution File Attachment</Label>
                         <div className="flex flex-wrap items-center gap-3">
                           {!activeAssignment.submission?.isGradePublished && (
                             <label
@@ -498,63 +576,93 @@ export function StudentAssignmentsClient({
                                 {uploading
                                   ? "Uploading..."
                                   : uploadedFile
-                                    ? "Replace File"
-                                    : "Upload File (≤ 25 MB)"}
+                                    ? "Replace Uploaded File"
+                                    : "Upload Solution File"}
                               </span>
                               <input
                                 type="file"
-                                accept=".pdf,.zip,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.zip,.txt,.md,.png,.jpg,.jpeg,.webp,.mp4,.webm"
                                 className="hidden"
                                 disabled={uploading}
-                                onChange={handleFileUpload}
+                                onChange={(e) => void handleFileUpload(e)}
                               />
                             </label>
                           )}
 
                           {uploadedFile && (
-                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#C99A22]/40 bg-[#0F1115]/65 px-3 py-1.5 text-xs font-medium">
+                            <div
+                              className={cn(
+                                "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs",
+                                DARK_GLASS_SUBBOX,
+                              )}
+                            >
                               <Paperclip className="size-3.5 text-[#C99A22]" />
-                              {uploadedFile.fileName}
-                            </span>
+                              <span className="max-w-52 truncate font-medium">
+                                {uploadedFile.fileName}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-1.5 text-[11px]"
+                                onClick={() =>
+                                  setPreviewModal({
+                                    bucketId: "assignment-attachments",
+                                    storagePath: uploadedFile.path,
+                                    fileName: uploadedFile.fileName,
+                                    mimeType: uploadedFile.mimeType,
+                                  })
+                                }
+                              >
+                                <Eye className="mr-1 size-3" />
+                                Preview
+                              </Button>
+                              {activeAssignment.submission
+                                ?.attachmentSignedUrl && (
+                                <a
+                                  href={
+                                    activeAssignment.submission
+                                      .attachmentSignedUrl
+                                  }
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[#C99A22] underline"
+                                >
+                                  Download
+                                </a>
+                              )}
+                            </div>
                           )}
 
-                          {activeAssignment.submission?.attachmentSignedUrl && (
-                            <Button
-                              asChild
-                              variant="outline"
-                              size="sm"
-                              className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
-                            >
-                              <a
-                                href={
-                                  activeAssignment.submission
-                                    .attachmentSignedUrl
-                                }
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                <Download className="size-3.5" />
-                                <span>Download Submitted File</span>
-                              </a>
-                            </Button>
+                          {(activeAssignment.submission?.versionCount ?? 0) >
+                            1 && (
+                            <Badge variant="outline" className="gap-1 text-xs">
+                              <History className="size-3" />
+                              <span>
+                                v{activeAssignment.submission?.versionCount}{" "}
+                                (history preserved)
+                              </span>
+                            </Badge>
                           )}
                         </div>
                       </div>
                     )}
 
                     {!activeAssignment.submission?.isGradePublished && (
-                      <div className="flex flex-wrap justify-end gap-2 pt-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 pt-4">
                         <Button
+                          type="button"
                           variant="outline"
                           size="sm"
                           disabled={isPending || uploading}
-                          onClick={() => handleSaveOrSubmit(true)}
                           className="border-white/15 bg-[#0F1115]/60 hover:bg-[#0F1115]/80"
+                          onClick={() => handleSaveOrSubmit(true)}
                         >
                           <Save className="size-3.5" />
                           <span>Save Draft</span>
                         </Button>
                         <Button
+                          type="button"
                           variant="gold"
                           size="sm"
                           disabled={isPending || uploading}
@@ -577,6 +685,34 @@ export function StudentAssignmentsClient({
           </div>
         </div>
       )}
+
+      {/* In-App File Preview Dialog */}
+      <Dialog
+        open={Boolean(previewModal)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewModal(null);
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+          {previewModal && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{previewModal.fileName}</DialogTitle>
+                <DialogDescription>
+                  Secure in-app preview & original file download.
+                </DialogDescription>
+              </DialogHeader>
+              <LearnixFilePreview
+                bucketId={previewModal.bucketId}
+                storagePath={previewModal.storagePath}
+                fileName={previewModal.fileName}
+                mimeType={previewModal.mimeType}
+                fileSizeBytes={previewModal.fileSizeBytes}
+              />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

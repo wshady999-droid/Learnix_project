@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  CalendarCheck,
   Clock,
   Eye,
   MessageSquare,
@@ -47,7 +46,6 @@ import {
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
 import { cn } from "@/lib/utils";
 import {
-  teacherRecordAttendanceAction,
   teacherSendStudentFeedbackAction,
 } from "@/services/teacher/actions";
 import type {
@@ -74,7 +72,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
   const [isPending, startTransition] = useTransition();
 
   const [activeTab, setActiveTab] = useState<
-    "roster" | "falling-behind" | "attendance" | "feedback"
+    "roster" | "falling-behind" | "feedback"
   >("roster");
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>(
     data.courses[0]?.id ?? "all",
@@ -83,18 +81,6 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
   const [search, setSearch] = useState("");
   const [profileStudent, setProfileStudent] =
     useState<AssignedStudentRow | null>(null);
-
-  // Attendance form state
-  const [attendanceCourseId, setAttendanceCourseId] = useState<string>(
-    data.courses[0]?.id ?? "",
-  );
-  const [sessionTitle, setSessionTitle] = useState("Weekly Lecture Session");
-  const [sessionDate, setSessionDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
-  const [attendanceStatuses, setAttendanceStatuses] = useState<
-    Record<string, "present" | "absent" | "late" | "excused">
-  >({});
 
   // Feedback / Announcement form state
   const [feedbackMode, setFeedbackMode] = useState<"personal" | "course">(
@@ -185,50 +171,6 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
     [data.students],
   );
 
-  const studentsInAttendanceCourse = useMemo(
-    () =>
-      data.students.filter((s) =>
-        s.enrolledCourses.some((ec) => ec.courseId === attendanceCourseId),
-      ),
-    [data.students, attendanceCourseId],
-  );
-
-  function handleSaveAttendance() {
-    if (!attendanceCourseId) {
-      toast.error("Select a course first.");
-      return;
-    }
-    const targetList =
-      studentsInAttendanceCourse.length > 0
-        ? studentsInAttendanceCourse
-        : data.students;
-
-    if (targetList.length === 0) {
-      toast.error("No enrolled students found to record attendance.");
-      return;
-    }
-
-    startTransition(async () => {
-      const res = await teacherRecordAttendanceAction({
-        courseId: attendanceCourseId,
-        title: sessionTitle,
-        sessionDate,
-        entries: targetList.map((stu) => ({
-          studentId: stu.studentId,
-          status: attendanceStatuses[stu.studentId] ?? "present",
-        })),
-      });
-
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-
-      toast.success(t.students.attendanceSavedToast);
-      router.refresh();
-    });
-  }
-
   function handleSendFeedback() {
     startTransition(async () => {
       const res = await teacherSendStudentFeedbackAction({
@@ -281,13 +223,6 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
           {t.students.tabFallingBehind} ({fallingBehindStudents.length})
         </Button>
         <Button
-          variant={activeTab === "attendance" ? "gold" : "outline"}
-          size="sm"
-          onClick={() => setActiveTab("attendance")}
-        >
-          {t.students.tabAttendance}
-        </Button>
-        <Button
           variant={activeTab === "feedback" ? "gold" : "outline"}
           size="sm"
           onClick={() => setActiveTab("feedback")}
@@ -310,7 +245,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                 <option value="all">All My Courses</option>
                 {data.courses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.code} — {c.title}
+                    {c.title}
                   </option>
                 ))}
               </select>
@@ -456,7 +391,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
               {t.students.tabFallingBehind}
             </CardTitle>
             <CardDescription>
-              Students with course progress below 35%, quiz/assignment average below 60%, or attendance rate under 70%.
+              Students with course progress below 35% or quiz/assignment average below 60%.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -507,129 +442,6 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                     </div>
                   </div>
                 ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "attendance" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {t.students.recordAttendanceTitle}
-            </CardTitle>
-            <CardDescription>
-              {t.students.recordAttendanceDescription}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label>{t.students.targetCourseLabel}</Label>
-                <select
-                  className={cn(fieldBase, "h-9 w-full")}
-                  value={attendanceCourseId}
-                  onChange={(e) => setAttendanceCourseId(e.target.value)}
-                >
-                  {data.courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} — {c.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t.students.sessionTitleLabel}</Label>
-                <Input
-                  value={sessionTitle}
-                  onChange={(e) => setSessionTitle(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>{t.students.sessionDateLabel}</Label>
-                <Input
-                  type="date"
-                  value={sessionDate}
-                  onChange={(e) => setSessionDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {studentsInAttendanceCourse.length === 0 ? (
-              <EmptyState
-                icon={CalendarCheck}
-                title={t.common.noRecordsTitle}
-                description="Enroll students in your course to mark their attendance."
-              />
-            ) : (
-              <div className="space-y-3">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t.students.studentNameLabel}</TableHead>
-                      <TableHead>Attendance Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {studentsInAttendanceCourse.map((stu) => {
-                      const current =
-                        attendanceStatuses[stu.studentId] ?? "present";
-                      return (
-                        <TableRow key={stu.studentId}>
-                          <TableCell>
-                            <p className="font-semibold text-foreground">
-                              {stu.fullName}
-                            </p>
-                            <p className="font-mono text-xs text-muted-foreground">
-                              {stu.email}
-                            </p>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1.5">
-                              {(
-                                [
-                                  ["present", t.students.statusPresent],
-                                  ["late", t.students.statusLate],
-                                  ["excused", t.students.statusExcused],
-                                  ["absent", t.students.statusAbsent],
-                                ] as const
-                              ).map(([statusKey, label]) => (
-                                <Button
-                                  key={statusKey}
-                                  type="button"
-                                  size="sm"
-                                  variant={
-                                    current === statusKey ? "gold" : "outline"
-                                  }
-                                  onClick={() =>
-                                    setAttendanceStatuses((prev) => ({
-                                      ...prev,
-                                      [stu.studentId]: statusKey,
-                                    }))
-                                  }
-                                >
-                                  {label}
-                                </Button>
-                              ))}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-
-                <Button
-                  variant="gold"
-                  disabled={isPending}
-                  onClick={handleSaveAttendance}
-                >
-                  <CalendarCheck className="size-4" />
-                  <span>{t.students.saveAttendanceButton}</span>
-                </Button>
               </div>
             )}
           </CardContent>
@@ -690,7 +502,7 @@ export function TeacherStudentsClient({ data }: TeacherStudentsClientProps) {
                 >
                   {data.courses.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.code} — {c.title}
+                      {c.title}
                     </option>
                   ))}
                 </select>

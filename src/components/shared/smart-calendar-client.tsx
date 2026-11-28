@@ -33,9 +33,9 @@ export function SmartCalendarClient({
   role,
   events,
 }: SmartCalendarClientProps) {
-  const [filter, setFilter] = useState<
-    "all" | "class" | "exam" | "assignment" | "study"
-  >("all");
+  const [filter, setFilter] = useState<"all" | "exam" | "assignment" | "study">(
+    "all",
+  );
 
   const filtered = useMemo(
     () =>
@@ -60,7 +60,8 @@ export function SmartCalendarClient({
             Learnix Smart Academic Calendar
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Unified view of class schedules, examination windows, assignment deadlines, and study sessions.
+            Unified view of examination windows, assignment deadlines, and
+            study sessions.
           </p>
         </div>
       </div>
@@ -69,7 +70,6 @@ export function SmartCalendarClient({
         {(
           [
             ["all", "All Events"],
-            ["class", "Class Schedules"],
             ["exam", "Examinations"],
             ["assignment", "Assignments"],
             ["study", "Study Sessions"],
@@ -90,7 +90,7 @@ export function SmartCalendarClient({
         <EmptyState
           icon={CalendarClock}
           title="No scheduled events"
-          description="No class schedules, exams, assignments, or study sessions match the selected filter."
+          description="No exams, assignments, or study sessions match the selected filter."
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -109,9 +109,6 @@ export function SmartCalendarClient({
                   </span>
                 </div>
                 <CardTitle className="mt-2 flex items-center gap-2 text-base">
-                  {ev.kind === "class" && (
-                    <CalendarClock className="size-4 text-gold-foreground" />
-                  )}
                   {ev.kind === "exam" && (
                     <ClipboardCheck className="size-4 text-gold-foreground" />
                   )}

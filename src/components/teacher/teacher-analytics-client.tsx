@@ -116,6 +116,7 @@ export function TeacherAnalyticsClient({ data }: TeacherAnalyticsClientProps) {
   const topStudents = useMemo(
     () =>
       [...scopedStudents]
+        .filter((s) => s.overall >= 60)
         .sort((a, b) => b.overall - a.overall)
         .slice(0, 6),
     [scopedStudents],
@@ -149,7 +150,7 @@ export function TeacherAnalyticsClient({ data }: TeacherAnalyticsClientProps) {
   }, [data, selectedCourseId]);
 
   const courseChartData = filteredCourses.map((c) => ({
-    name: c.code || c.title.slice(0, 14),
+    name: c.title.slice(0, 18),
     completion: c.completionRatePercent,
     assignmentAvg: c.assignmentAvgPercent,
     quizAvg: c.quizAvgPercent,
@@ -205,7 +206,7 @@ export function TeacherAnalyticsClient({ data }: TeacherAnalyticsClientProps) {
             <option value="all">All My Courses</option>
             {data.coursesSummary.map((c) => (
               <option key={c.courseId} value={c.courseId}>
-                {c.code} — {c.title}
+                {c.title}
               </option>
             ))}
           </select>
@@ -353,12 +354,14 @@ export function TeacherAnalyticsClient({ data }: TeacherAnalyticsClientProps) {
               <span>Top Performing Students</span>
             </CardTitle>
             <CardDescription>
-              Click any student to open their individual analytics report.
+              Passing students only (60%+ overall) — click any student to open their individual analytics report.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2.5 text-xs">
             {topStudents.length === 0 ? (
-              <p className="text-muted-foreground">No enrolled students yet.</p>
+              <p className="text-muted-foreground">
+                No passing students (60%+ overall) recorded yet.
+              </p>
             ) : (
               topStudents.map((item, idx) => (
                 <div

@@ -10,8 +10,6 @@ import {
   Bookmark,
   CheckCircle2,
   Clock,
-  Download,
-  ExternalLink,
   FileText,
   Film,
   HelpCircle,
@@ -24,6 +22,7 @@ import { EmptyState } from "@/components/feedback/empty-state";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LearnixFilePreview } from "@/components/ui/file-preview";
 import {
   Card,
   CardContent,
@@ -180,8 +179,8 @@ export function StudentLessonViewerClient({
             </Link>
           </Button>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="font-mono text-xs">
-              {data.course.code}
+            <Badge variant="outline" className="text-xs">
+              {data.course.title}
             </Badge>
             {data.chapter && (
               <Badge variant="outline">
@@ -363,71 +362,21 @@ export function StudentLessonViewerClient({
                     "Review the lesson lecture and attached materials below."}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  {data.signedAttachmentUrl && (
-                    <Button asChild variant="gold" size="sm">
-                      <a
-                        href={data.signedAttachmentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <Download className="size-3.5" />
-                        <span>{t.lessonViewer.downloadAttachmentButton}</span>
-                      </a>
-                    </Button>
-                  )}
-
-                  {data.lesson.external_resource_url && (
-                    <Button asChild variant="outline" size="sm">
-                      <a
-                        href={data.lesson.external_resource_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <ExternalLink className="size-3.5" />
-                        <span>{t.lessonViewer.openExternalResourceButton}</span>
-                      </a>
-                    </Button>
-                  )}
-                </div>
-
-                {data.learningResources.length > 0 && (
-                  <div className="space-y-2 border-t border-border/70 pt-3">
-                    <p className="text-xs font-semibold text-foreground">
-                      Supplementary Learning Resources
-                    </p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {data.learningResources.map((res) => {
-                        const href = res.signedUrl || res.externalUrl;
-                        return (
-                          <div
-                            key={res.id}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-border/70 p-2.5 text-xs"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold text-foreground">
-                                {res.title}
-                              </p>
-                              <p className="text-[11px] capitalize text-muted-foreground">
-                                {res.resourceType}
-                              </p>
-                            </div>
-                            {href && (
-                              <Button asChild variant="outline" size="sm">
-                                <a href={href} target="_blank" rel="noreferrer">
-                                  {res.signedUrl ? (
-                                    <Download className="size-3.5" />
-                                  ) : (
-                                    <ExternalLink className="size-3.5" />
-                                  )}
-                                </a>
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {data.lesson.attachment_storage_path && (
+                  <LearnixFilePreview
+                    bucketId={
+                      data.lesson.content_type === "presentation"
+                        ? "course-presentations"
+                        : data.lesson.content_type === "pdf"
+                          ? "course-pdfs"
+                          : "course-materials"
+                    }
+                    storagePath={data.lesson.attachment_storage_path}
+                    fileName={
+                      data.lesson.attachment_storage_path.split("/").pop() ||
+                      `${data.lesson.title}`
+                    }
+                  />
                 )}
               </CardContent>
             </Card>

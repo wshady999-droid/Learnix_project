@@ -1546,11 +1546,22 @@ export async function getStudentExamRunnerData(
 // -----------------------------------------------------------------------------
 // 6. STUDENT ASSIGNMENTS WORKSPACE DATA
 // -----------------------------------------------------------------------------
+export interface StudentAssignmentMaterialView {
+  id: string;
+  storageBucket: string;
+  storagePath: string;
+  fileName: string;
+  mimeType: string | null;
+  fileSizeBytes: number | null;
+  signedUrl: string | null;
+}
+
 export interface StudentAssignmentItem {
   id: string;
   courseId: string;
   courseCode: string;
   courseTitle: string;
+  teacherId: string;
   teacherName: string;
   title: string;
   description: string;
@@ -1561,18 +1572,21 @@ export interface StudentAssignmentItem {
   allowLateSubmissions: boolean;
   teacherAttachmentName: string | null;
   teacherAttachmentUrl: string | null;
+  materials: StudentAssignmentMaterialView[];
   submission: {
     id: string;
     status: "draft" | "submitted" | "under_review" | "graded" | "returned" | "late";
     submissionText: string | null;
     attachmentPath: string | null;
     attachmentFileName: string | null;
+    attachmentMimeType: string | null;
     attachmentSignedUrl: string | null;
     submittedAt: string;
     isGradePublished: boolean;
     publishedPoints: number | null;
     publishedFeedback: string | null;
     gradedAt: string | null;
+    versionCount: number;
   } | null;
 }
 
@@ -1606,7 +1620,7 @@ export async function getStudentAssignmentsData(): Promise<
     };
   }
 
-  const [coursesRes, assignmentsRes, submissionsRes, gradesRes] =
+  const [coursesRes, assignmentsRes, submissionsRes, gradesRes, versionsRes] =
     await Promise.all([
       supabase
         .from("courses")
@@ -1628,7 +1642,29 @@ export async function getStudentAssignmentsData(): Promise<
         .select("*")
         .eq("student_id", studentId)
         .eq("is_published", true),
+      supabase
+        .from("assignment_submission_versions")
+        .select("submission_id")
+        .eq("student_id", studentId),
     ]);
+
+  const assignmentIds = (assignmentsRes.data ?? []).map((a) => a.id);
+  const materialsRes =
+    assignmentIds.length > 0
+      ? await supabase
+          .from("assignment_materials")
+          .select("*")
+          .in("assignment_id", assignmentIds)
+          .order("created_at", { ascending: true })
+      : { data: [] as Array<TableRow<"assignment_materials">> };
+
+  const versionCountMap = new Map<string, number>();
+  for (const v of versionsRes.data ?? []) {
+    versionCountMap.set(
+      v.submission_id,
+      (versionCountMap.get(v.submission_id) ?? 0) + 1,
+    );
+  }
 
   const courses = coursesRes.data ?? [];
   const teacherIds = Array.from(new Set(courses.map((c) => c.teacher_id)));
@@ -1651,11 +1687,14 @@ export async function getStudentAssignmentsData(): Promise<
     (gradesRes.data ?? []).map((g) => [g.submission_id, g]),
   );
 
-  // Batch-sign teacher assignment attachments & student submission files
+  // Batch-sign teacher assignment attachments, materials & student submission files
   const allPaths = Array.from(
     new Set(
       [
         ...(assignmentsRes.data ?? []).map((a) => a.attachment_storage_path),
+        ...(materialsRes.data ?? [])
+          .filter((m) => m.storage_bucket === "assignment-attachments")
+          .map((m) => m.storage_path),
         ...(submissionsRes.data ?? []).map((s) => s.attachment_storage_path),
       ].filter((p): p is string => Boolean(p)),
     ),
@@ -1694,11 +1733,43 @@ export async function getStudentAssignmentsData(): Promise<
         }
       }
 
+      const rawMats = (materialsRes.data ?? []).filter(
+        (m) => m.assignment_id === asg.id,
+      );
+      const materials: StudentAssignmentMaterialView[] = rawMats.map((m) => ({
+        id: m.id,
+        storageBucket: m.storage_bucket,
+        storagePath: m.storage_path,
+        fileName: m.file_name,
+        mimeType: m.mime_type,
+        fileSizeBytes: m.file_size_bytes,
+        signedUrl: signedMap.get(m.storage_path) ?? null,
+      }));
+
+      if (
+        asg.attachment_storage_path &&
+        !materials.some((m) => m.storagePath === asg.attachment_storage_path)
+      ) {
+        materials.unshift({
+          id: `legacy-${asg.id}`,
+          storageBucket: "assignment-attachments",
+          storagePath: asg.attachment_storage_path,
+          fileName:
+            asg.attachment_file_name ||
+            asg.attachment_storage_path.split("/").pop() ||
+            "Attachment",
+          mimeType: null,
+          fileSizeBytes: null,
+          signedUrl: signedMap.get(asg.attachment_storage_path) ?? null,
+        });
+      }
+
       return {
         id: asg.id,
         courseId: course.id,
         courseCode: course.code,
         courseTitle: course.title,
+        teacherId: course.teacher_id,
         teacherName: teacherMap.get(course.teacher_id) || "Instructor",
         title: asg.title,
         description: asg.description,
@@ -1718,6 +1789,7 @@ export async function getStudentAssignmentsData(): Promise<
         teacherAttachmentUrl: asg.attachment_storage_path
           ? signedMap.get(asg.attachment_storage_path) ?? null
           : null,
+        materials,
         submission: sub
           ? {
               id: sub.id,
@@ -1729,6 +1801,7 @@ export async function getStudentAssignmentsData(): Promise<
                 (sub.attachment_storage_path
                   ? sub.attachment_storage_path.split("/").pop() ?? "File"
                   : null),
+              attachmentMimeType: sub.attachment_mime_type,
               attachmentSignedUrl: sub.attachment_storage_path
                 ? signedMap.get(sub.attachment_storage_path) ?? null
                 : null,
@@ -1744,6 +1817,9 @@ export async function getStudentAssignmentsData(): Promise<
               gradedAt: isGradePublished
                 ? pubGrade?.published_at ?? sub.graded_at ?? null
                 : null,
+              versionCount:
+                (versionCountMap.get(sub.id) ?? 0) +
+                (sub.attachment_storage_path ? 1 : 0),
             }
           : null,
       };

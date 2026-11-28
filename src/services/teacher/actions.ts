@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { COURSE_CATEGORIES } from "@/lib/constants/categories";
+import { validateNotPastDateTime } from "@/lib/date-validation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requireRole } from "@/services/db/utils";
 import type { Json, ServiceResult } from "@/types";
@@ -509,6 +510,31 @@ export async function teacherSaveLessonAction(
   }
 
   const supabase = await createSupabaseServerClient();
+  let prevLesson: {
+    video_storage_path: string | null;
+    attachment_storage_path: string | null;
+    scheduled_publish_at: string | null;
+  } | null = null;
+
+  if (parsed.data.id) {
+    const { data: existingLesson } = await supabase
+      .from("lessons")
+      .select("video_storage_path, attachment_storage_path, scheduled_publish_at")
+      .eq("id", parsed.data.id)
+      .eq("course_id", parsed.data.courseId)
+      .maybeSingle();
+    prevLesson = existingLesson ?? null;
+  }
+
+  if (parsed.data.scheduledPublishAt) {
+    const dtCheck = validateNotPastDateTime({
+      dateTime: parsed.data.scheduledPublishAt,
+      fieldName: "Scheduled publish date",
+      allowExistingValue: prevLesson?.scheduled_publish_at ?? null,
+    });
+    if (!dtCheck.ok) return dtCheck;
+  }
+
   const payload = {
     course_id: parsed.data.courseId,
     chapter_id: parsed.data.chapterId,
@@ -520,13 +546,65 @@ export async function teacherSaveLessonAction(
     position: parsed.data.positionOrder,
     video_storage_path: parsed.data.videoStoragePath || null,
     attachment_storage_path: parsed.data.attachmentStoragePath || null,
-    external_resource_url: parsed.data.externalResourceUrl || null,
+    external_resource_url: null,
     scheduled_publish_at: parsed.data.scheduledPublishAt || null,
     is_preview: parsed.data.isPreview,
     is_published: parsed.data.isPublished,
   };
 
   if (parsed.data.id) {
+    // Preserve file version history if replacing an uploaded video or attachment
+    if (
+      prevLesson?.video_storage_path &&
+      parsed.data.videoStoragePath &&
+      prevLesson.video_storage_path !== parsed.data.videoStoragePath
+    ) {
+      const { count } = await supabase
+        .from("material_file_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("entity_type", "lesson_video")
+        .eq("entity_id", parsed.data.id);
+      await supabase.from("material_file_versions").insert({
+        entity_type: "lesson_video",
+        entity_id: parsed.data.id,
+        course_id: parsed.data.courseId,
+        storage_bucket: "course-videos",
+        storage_path: prevLesson.video_storage_path,
+        file_name: prevLesson.video_storage_path.split("/").pop() || "video",
+        version_number: (count ?? 0) + 1,
+        uploaded_by: auth.data.userId,
+      });
+    }
+
+    if (
+      prevLesson?.attachment_storage_path &&
+      parsed.data.attachmentStoragePath &&
+      prevLesson.attachment_storage_path !== parsed.data.attachmentStoragePath
+    ) {
+      const prevBucket =
+        parsed.data.contentType === "presentation"
+          ? "course-presentations"
+          : parsed.data.contentType === "pdf"
+            ? "course-pdfs"
+            : "course-materials";
+      const { count } = await supabase
+        .from("material_file_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("entity_type", "lesson_attachment")
+        .eq("entity_id", parsed.data.id);
+      await supabase.from("material_file_versions").insert({
+        entity_type: "lesson_attachment",
+        entity_id: parsed.data.id,
+        course_id: parsed.data.courseId,
+        storage_bucket: prevBucket,
+        storage_path: prevLesson.attachment_storage_path,
+        file_name:
+          prevLesson.attachment_storage_path.split("/").pop() || "material",
+        version_number: (count ?? 0) + 1,
+        uploaded_by: auth.data.userId,
+      });
+    }
+
     const { data, error } = await supabase
       .from("lessons")
       .update(payload)
@@ -873,6 +951,37 @@ export async function teacherSaveExamAction(
   }
 
   const supabase = await createSupabaseServerClient();
+  let prevExamDates: {
+    status: string;
+    available_from: string | null;
+    available_until: string | null;
+  } | null = null;
+  if (parsed.data.id) {
+    const { data: prevRow } = await supabase
+      .from("exams")
+      .select("status, available_from, available_until")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+    prevExamDates = prevRow ?? null;
+  }
+
+  if (parsed.data.availableFrom) {
+    const fromCheck = validateNotPastDateTime({
+      dateTime: parsed.data.availableFrom,
+      fieldName: "Available from",
+      allowExistingValue: prevExamDates?.available_from ?? null,
+    });
+    if (!fromCheck.ok) return fromCheck;
+  }
+  if (parsed.data.availableUntil) {
+    const untilCheck = validateNotPastDateTime({
+      dateTime: parsed.data.availableUntil,
+      fieldName: "Available until",
+      allowExistingValue: prevExamDates?.available_until ?? null,
+    });
+    if (!untilCheck.ok) return untilCheck;
+  }
+
   const payload = {
     course_id: parsed.data.courseId,
     chapter_id: parsed.data.chapterId ?? null,
@@ -1139,6 +1248,7 @@ const saveGeneratedQuizBundleSchema = z.object({
   maxAttempts: z.coerce.number().int().min(1).max(10).default(1),
   availableUntil: z.string().trim().nullable().optional(),
   status: z.enum(["draft", "published"]).default("draft"),
+  materialIds: z.array(z.string().uuid()).default([]),
   questions: z
     .array(
       z.object({
@@ -1218,6 +1328,7 @@ export async function teacherSaveGeneratedQuizAction(
 
   if (!examRes.ok) return examRes;
 
+  const createdQuestionIds: string[] = [];
   for (let i = 0; i < parsed.data.questions.length; i++) {
     const q = parsed.data.questions[i]!;
     const qRes = await teacherSaveQuestionAction({
@@ -1234,6 +1345,49 @@ export async function teacherSaveGeneratedQuizAction(
     });
     if (!qRes.ok) {
       return { ok: false, error: `Question ${i + 1}: ${qRes.error}` };
+    }
+    createdQuestionIds.push(qRes.data.id);
+  }
+
+  // Persist material references for AI grounding (exam_question_materials)
+  if (parsed.data.materialIds.length > 0 && createdQuestionIds.length > 0) {
+    const supabase = await createSupabaseServerClient();
+    const [materialsRes, lessonsRes] = await Promise.all([
+      supabase
+        .from("learning_resources")
+        .select("id, title, file_name")
+        .in("id", parsed.data.materialIds),
+      supabase
+        .from("lessons")
+        .select("id, title, attachment_storage_path")
+        .in("id", parsed.data.materialIds),
+    ]);
+    const sourceItems = [
+      ...(materialsRes.data ?? []).map((m) => ({
+        sourceType: "learning_resource",
+        sourceId: m.id,
+        name: m.file_name || m.title,
+      })),
+      ...(lessonsRes.data ?? []).map((l) => ({
+        sourceType: "lesson",
+        sourceId: l.id,
+        name: l.title,
+      })),
+    ];
+    const materialRows = createdQuestionIds.flatMap((qId) =>
+      sourceItems.map((m) => ({
+        question_id: qId,
+        exam_id: examRes.data.id,
+        course_id: parsed.data.courseId,
+        material_source_type: m.sourceType,
+        material_source_id: m.sourceId,
+        material_name: m.name,
+        excerpt: null,
+        page_number: null,
+      })),
+    );
+    if (materialRows.length > 0) {
+      await supabase.from("exam_question_materials").insert(materialRows);
     }
   }
 
@@ -1379,59 +1533,11 @@ export async function teacherRecordAttendanceAction(
 ): Promise<ServiceResult<{ attendanceId: string }>> {
   const auth = await requireRole(["teacher", "admin"]);
   if (!auth.ok) return auth;
-
-  const parsed = recordAttendanceSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: parsed.error.issues[0]?.message ?? "Invalid attendance sheet.",
-    };
-  }
-
-  const allowed = await verifyTeacherOwnsCourse({
-    courseId: parsed.data.courseId,
-    userId: auth.data.userId,
-    role: auth.data.role,
-  });
-  if (!allowed) {
-    return { ok: false, error: "You do not own this course." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const { data: session, error: sessionErr } = await supabase
-    .from("attendance")
-    .insert({
-      course_id: parsed.data.courseId,
-      topic: parsed.data.title,
-      session_date: parsed.data.sessionDate,
-      recorded_by: auth.data.userId,
-    })
-    .select("id")
-    .single();
-
-  if (sessionErr || !session) {
-    return {
-      ok: false,
-      error: sessionErr?.message ?? "Failed to create attendance session.",
-    };
-  }
-
-  const recordsPayload = parsed.data.entries.map((entry) => ({
-    attendance_id: session.id,
-    student_id: entry.studentId,
-    status: entry.status,
-    remarks: entry.remarks || null,
-  }));
-
-  const { error: recErr } = await supabase
-    .from("attendance_records")
-    .insert(recordsPayload);
-  if (recErr) {
-    return { ok: false, error: recErr.message };
-  }
-
-  revalidatePath("/teacher/students");
-  return { ok: true, data: { attendanceId: session.id } };
+  void recordAttendanceSchema.safeParse(input);
+  return {
+    ok: false,
+    error: "Attendance and absence tracking has been retired.",
+  };
 }
 
 const sendFeedbackSchema = z.object({
@@ -1515,6 +1621,14 @@ export async function teacherSendStudentFeedbackAction(
 // -----------------------------------------------------------------------------
 // 4. ASSIGNMENTS MANAGEMENT & GRADING ACTIONS
 // -----------------------------------------------------------------------------
+const assignmentMaterialInputSchema = z.object({
+  storageBucket: z.string().trim().default("assignment-attachments"),
+  storagePath: z.string().trim().min(1).max(500),
+  fileName: z.string().trim().min(1).max(255),
+  fileSizeBytes: z.coerce.number().int().min(1),
+  mimeType: z.string().trim().min(1).max(160),
+});
+
 const saveAssignmentSchema = z.object({
   id: z.string().uuid().optional(),
   courseId: z.string().uuid(),
@@ -1529,11 +1643,12 @@ const saveAssignmentSchema = z.object({
   submissionTypes: z.array(z.enum(["text", "file"])).min(1).default(["text", "file"]),
   attachmentStoragePath: z.string().trim().max(500).nullable().optional(),
   attachmentFileName: z.string().trim().max(255).nullable().optional(),
+  newMaterials: z.array(assignmentMaterialInputSchema).default([]),
   isPublished: z.boolean().default(false),
 });
 
 export async function teacherSaveAssignmentAction(
-  input: z.infer<typeof saveAssignmentSchema>,
+  input: z.input<typeof saveAssignmentSchema>,
 ): Promise<ServiceResult<{ id: string }>> {
   const auth = await requireRole(["teacher", "admin"]);
   if (!auth.ok) return auth;
@@ -1556,6 +1671,26 @@ export async function teacherSaveAssignmentAction(
   }
 
   const supabase = await createSupabaseServerClient();
+  let prevAsg: { is_published: boolean; due_at: string | null } | null = null;
+  if (parsed.data.id) {
+    const { data: prev } = await supabase
+      .from("assignments")
+      .select("is_published, due_at")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+    prevAsg = prev ?? null;
+  }
+
+  if (parsed.data.dueAt) {
+    const dueCheck = validateNotPastDateTime({
+      dateTime: parsed.data.dueAt,
+      fieldName: "Assignment due date",
+      allowExistingValue: prevAsg?.due_at ?? null,
+    });
+    if (!dueCheck.ok) return dueCheck;
+  }
+
+  const primaryMaterial = parsed.data.newMaterials[0];
   const payload = {
     course_id: parsed.data.courseId,
     lesson_id: parsed.data.lessonId ?? null,
@@ -1567,18 +1702,18 @@ export async function teacherSaveAssignmentAction(
     due_at: parsed.data.dueAt || null,
     allow_late_submissions: parsed.data.allowLateSubmissions,
     submission_types: parsed.data.submissionTypes,
-    attachment_storage_path: parsed.data.attachmentStoragePath || null,
-    attachment_file_name: parsed.data.attachmentFileName || null,
+    attachment_storage_path:
+      parsed.data.attachmentStoragePath ??
+      primaryMaterial?.storagePath ??
+      undefined,
+    attachment_file_name:
+      parsed.data.attachmentFileName ?? primaryMaterial?.fileName ?? undefined,
     is_published: parsed.data.isPublished,
   };
 
-  if (parsed.data.id) {
-    const { data: prev } = await supabase
-      .from("assignments")
-      .select("is_published")
-      .eq("id", parsed.data.id)
-      .maybeSingle();
+  let assignmentId = parsed.data.id ?? "";
 
+  if (parsed.data.id) {
     const { data, error } = await supabase
       .from("assignments")
       .update(payload)
@@ -1590,8 +1725,9 @@ export async function teacherSaveAssignmentAction(
     if (error || !data) {
       return { ok: false, error: error?.message ?? "Failed to update assignment." };
     }
+    assignmentId = data.id;
 
-    if (parsed.data.isPublished && !prev?.is_published) {
+    if (parsed.data.isPublished && !prevAsg?.is_published) {
       await notifyEnrolledCourseStudents({
         courseId: parsed.data.courseId,
         title: `New Assignment Published: ${parsed.data.title}`,
@@ -1599,53 +1735,124 @@ export async function teacherSaveAssignmentAction(
           parsed.data.dueAt ? ` — due ${parsed.data.dueAt.slice(0, 10)}` : ""
         }.`,
         type: "assignment",
-        actionUrl: `/student/assignments`,
+        actionUrl: `/student/assignments?assignmentId=${assignmentId}`,
+      });
+    }
+  } else {
+    const { data, error } = await supabase
+      .from("assignments")
+      .insert({
+        ...payload,
+        attachment_storage_path:
+          parsed.data.attachmentStoragePath ??
+          primaryMaterial?.storagePath ??
+          null,
+        attachment_file_name:
+          parsed.data.attachmentFileName ?? primaryMaterial?.fileName ?? null,
+        created_by: auth.data.userId,
+      })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      return { ok: false, error: error?.message ?? "Failed to create assignment." };
+    }
+    assignmentId = data.id;
+
+    if (parsed.data.isPublished) {
+      await notifyEnrolledCourseStudents({
+        courseId: parsed.data.courseId,
+        title: `New Assignment Published: ${parsed.data.title}`,
+        body: `"${parsed.data.title}" (${parsed.data.maxPoints} marks)${
+          parsed.data.dueAt ? ` — due ${parsed.data.dueAt.slice(0, 10)}` : ""
+        }.`,
+        type: "assignment",
+        actionUrl: `/student/assignments?assignmentId=${assignmentId}`,
       });
     }
 
-    revalidatePath("/teacher");
-    revalidatePath("/teacher/grading");
-    revalidatePath("/student/assignments");
-    return { ok: true, data: { id: data.id } };
-  }
-
-  const { data, error } = await supabase
-    .from("assignments")
-    .insert({
-      ...payload,
-      created_by: auth.data.userId,
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    return { ok: false, error: error?.message ?? "Failed to create assignment." };
-  }
-
-  if (parsed.data.isPublished) {
-    await notifyEnrolledCourseStudents({
-      courseId: parsed.data.courseId,
-      title: `New Assignment Published: ${parsed.data.title}`,
-      body: `"${parsed.data.title}" (${parsed.data.maxPoints} marks)${
-        parsed.data.dueAt ? ` — due ${parsed.data.dueAt.slice(0, 10)}` : ""
-      }.`,
-      type: "assignment",
-      actionUrl: `/student/assignments`,
+    await logTeacherAudit({
+      actorId: auth.data.userId,
+      action: "teacher.assignment.create",
+      entityType: "assignments",
+      entityId: assignmentId,
+      newValues: { title: parsed.data.title, isPublished: parsed.data.isPublished },
     });
   }
 
-  await logTeacherAudit({
-    actorId: auth.data.userId,
-    action: "teacher.assignment.create",
-    entityType: "assignments",
-    entityId: data.id,
-    newValues: { title: parsed.data.title, isPublished: parsed.data.isPublished },
-  });
+  if (parsed.data.newMaterials.length > 0) {
+    const rows = parsed.data.newMaterials.map((m) => ({
+      assignment_id: assignmentId,
+      course_id: parsed.data.courseId,
+      storage_bucket: m.storageBucket || "assignment-attachments",
+      storage_path: m.storagePath,
+      file_name: m.fileName,
+      file_size_bytes: m.fileSizeBytes,
+      mime_type: m.mimeType,
+      uploaded_by: auth.data.userId,
+    }));
+    const { error: matErr } = await supabase
+      .from("assignment_materials")
+      .insert(rows);
+    if (matErr) {
+      return { ok: false, error: matErr.message };
+    }
+  }
 
   revalidatePath("/teacher");
+  revalidatePath("/teacher/assignments");
   revalidatePath("/teacher/grading");
   revalidatePath("/student/assignments");
-  return { ok: true, data: { id: data.id } };
+  return { ok: true, data: { id: assignmentId } };
+}
+
+export async function teacherDeleteAssignmentMaterialAction(params: {
+  materialId: string;
+  courseId: string;
+}): Promise<ServiceResult<{ deleted: true }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: params.courseId,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) return { ok: false, error: "You do not own this course." };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: existing } = await supabase
+    .from("assignment_materials")
+    .select("*")
+    .eq("id", params.materialId)
+    .eq("course_id", params.courseId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from("material_file_versions").insert({
+      entity_type: "assignment_material",
+      entity_id: existing.assignment_id,
+      course_id: existing.course_id,
+      storage_bucket: existing.storage_bucket,
+      storage_path: existing.storage_path,
+      file_name: existing.file_name,
+      file_size_bytes: existing.file_size_bytes,
+      mime_type: existing.mime_type,
+      version_number: existing.version_number,
+      uploaded_by: auth.data.userId,
+    });
+  }
+
+  const { error } = await supabase
+    .from("assignment_materials")
+    .delete()
+    .eq("id", params.materialId)
+    .eq("course_id", params.courseId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/teacher/assignments");
+  revalidatePath("/student/assignments");
+  return { ok: true, data: { deleted: true } };
 }
 
 export async function teacherDeleteAssignmentAction(params: {
@@ -2031,10 +2238,190 @@ export async function teacherGradeAssignmentSubmissionAction(
   });
 
   revalidatePath("/teacher");
+  revalidatePath("/teacher/assignments");
   revalidatePath("/teacher/grading");
   revalidatePath("/student/assignments");
   return {
     ok: true,
     data: { graded: true, published: parsed.data.publishGrade },
   };
+}
+
+// -----------------------------------------------------------------------------
+// 6. EXAM PAUSE / RESUME TEACHER APPROVAL & PUBLIC TEACHER PROFILE ACTIONS
+// -----------------------------------------------------------------------------
+const reviewPausedAttemptSchema = z.object({
+  attemptId: z.string().uuid(),
+  decision: z.enum(["approved", "rejected"]),
+  reviewNotes: z.string().trim().max(1000).optional(),
+});
+
+export async function teacherReviewPausedExamAttemptAction(
+  input: z.infer<typeof reviewPausedAttemptSchema>,
+): Promise<ServiceResult<{ decision: "approved" | "rejected" }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = reviewPausedAttemptSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid review decision.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data: attempt } = await supabase
+    .from("exam_attempts")
+    .select("*")
+    .eq("id", parsed.data.attemptId)
+    .maybeSingle();
+
+  if (!attempt) {
+    return { ok: false, error: "Exam attempt not found." };
+  }
+
+  const { data: exam } = await supabase
+    .from("exams")
+    .select("id, title, course_id, duration_minutes")
+    .eq("id", attempt.exam_id)
+    .maybeSingle();
+
+  if (!exam) {
+    return { ok: false, error: "Exam not found." };
+  }
+
+  const allowed = await verifyTeacherOwnsCourse({
+    courseId: exam.course_id,
+    userId: auth.data.userId,
+    role: auth.data.role,
+  });
+  if (!allowed) {
+    return { ok: false, error: "You do not own this course." };
+  }
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  if (parsed.data.decision === "approved") {
+    const fallbackRemaining = Math.max(
+      60,
+      Math.floor((new Date(attempt.expires_at).getTime() - now.getTime()) / 1000),
+    );
+    const resumeSeconds = Math.max(
+      60,
+      attempt.remaining_seconds ?? fallbackRemaining,
+    );
+    const nextExpiresAt = new Date(
+      now.getTime() + resumeSeconds * 1000,
+    ).toISOString();
+
+    const { error } = await supabase
+      .from("exam_attempts")
+      .update({
+        is_paused: false,
+        resume_status: "approved",
+        expires_at: nextExpiresAt,
+        resume_reviewed_by: auth.data.userId,
+        resume_reviewed_at: nowIso,
+        resume_review_notes: parsed.data.reviewNotes || null,
+      })
+      .eq("id", attempt.id);
+
+    if (error) return { ok: false, error: error.message };
+
+    await supabase.rpc("dispatch_event_notification", {
+      p_title: `Exam Resume Approved: ${exam.title}`,
+      p_body: `Your instructor approved your request to resume "${exam.title}".${
+        parsed.data.reviewNotes ? ` Note: ${parsed.data.reviewNotes}` : ""
+      }`,
+      p_type: "exam",
+      p_recipient_ids: [attempt.student_id],
+      p_target_scope: "individual",
+      p_course_id: exam.course_id,
+      p_action_url: `/student/exams/${exam.id}`,
+    });
+  } else {
+    const { error } = await supabase
+      .from("exam_attempts")
+      .update({
+        is_paused: false,
+        status: "invalidated",
+        submitted_at: nowIso,
+        resume_status: "rejected",
+        resume_reviewed_by: auth.data.userId,
+        resume_reviewed_at: nowIso,
+        resume_review_notes: parsed.data.reviewNotes || null,
+      })
+      .eq("id", attempt.id);
+
+    if (error) return { ok: false, error: error.message };
+
+    await supabase.rpc("dispatch_event_notification", {
+      p_title: `Exam Attempt Closed: ${exam.title}`,
+      p_body: `Your paused attempt on "${exam.title}" was closed by your instructor.${
+        parsed.data.reviewNotes ? ` Reason: ${parsed.data.reviewNotes}` : ""
+      }`,
+      p_type: "security",
+      p_recipient_ids: [attempt.student_id],
+      p_target_scope: "individual",
+      p_course_id: exam.course_id,
+      p_action_url: `/student/exams`,
+    });
+  }
+
+  revalidatePath("/teacher/assignments");
+  revalidatePath("/student/exams");
+  revalidatePath(`/student/exams/${exam.id}`);
+  return { ok: true, data: { decision: parsed.data.decision } };
+}
+
+const saveTeacherPublicProfileSchema = z.object({
+  displayName: z.string().trim().min(2).max(120).optional(),
+  headline: z.string().trim().max(180).optional(),
+  biography: z.string().trim().max(4000).optional(),
+  experienceYears: z.coerce.number().int().min(0).max(80).nullable().optional(),
+  education: z.string().trim().max(1000).optional(),
+  certifications: z.string().trim().max(1000).optional(),
+  websiteUrl: z.string().trim().max(500).optional(),
+  linkedinUrl: z.string().trim().max(500).optional(),
+  isPublicVisible: z.boolean().default(true),
+});
+
+export async function teacherSavePublicProfileAction(
+  input: z.infer<typeof saveTeacherPublicProfileSchema>,
+): Promise<ServiceResult<{ saved: true }>> {
+  const auth = await requireRole(["teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const parsed = saveTeacherPublicProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid public profile details.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.from("teacher_public_profiles").upsert(
+    {
+      teacher_id: auth.data.userId,
+      display_name: parsed.data.displayName || null,
+      headline: parsed.data.headline || null,
+      biography: parsed.data.biography || null,
+      experience_years: parsed.data.experienceYears ?? null,
+      education: parsed.data.education || null,
+      certifications: parsed.data.certifications || null,
+      website_url: parsed.data.websiteUrl || null,
+      linkedin_url: parsed.data.linkedinUrl || null,
+      is_public_visible: parsed.data.isPublicVisible,
+    },
+    { onConflict: "teacher_id" },
+  );
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/teacher/ratings");
+  revalidatePath("/profile");
+  revalidatePath(`/teachers/${auth.data.userId}`);
+  return { ok: true, data: { saved: true } };
 }

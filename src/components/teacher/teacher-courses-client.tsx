@@ -11,12 +11,10 @@ import {
   CalendarClock,
   CheckCircle2,
   Edit3,
-  ExternalLink,
   Eye,
   EyeOff,
   FileText,
   Film,
-  FolderPlus,
   HelpCircle,
   ImagePlus,
   Layers,
@@ -34,6 +32,7 @@ import { EmptyState } from "@/components/feedback/empty-state";
 import { useLocale } from "@/components/i18n/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LearnixFilePreview } from "@/components/ui/file-preview";
 import {
   Card,
   CardContent,
@@ -62,6 +61,7 @@ import {
 } from "@/components/ui/table";
 import { getTeacherDictionary } from "@/i18n/teacher-dictionaries";
 import { COURSE_CATEGORIES } from "@/lib/constants/categories";
+import { getNowDateTimeLocalString } from "@/lib/date-validation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   uploadCourseThumbnail,
@@ -71,13 +71,11 @@ import { cn } from "@/lib/utils";
 import type { TableRow as DbTableRow } from "@/services/db/utils";
 import {
   teacherDeleteChapterAction,
-  teacherDeleteLearningResourceAction,
   teacherDeleteLessonAction,
   teacherReorderChapterAction,
   teacherReorderLessonAction,
   teacherSaveChapterAction,
   teacherSaveCourseAction,
-  teacherSaveLearningResourceAction,
   teacherSaveLessonAction,
   teacherToggleCourseStatusAction,
   teacherToggleLessonPublishedAction,
@@ -103,7 +101,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   }, [data.categories]);
 
   const [activeTab, setActiveTab] = useState<
-    "courses" | "chapters" | "resources" | "students"
+    "courses" | "chapters" | "students"
   >("courses");
   const [search, setSearch] = useState("");
   const [selectedCourseId, setSelectedCourseId] = useState<string>(
@@ -167,31 +165,18 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   const [lessonOrder, setLessonOrder] = useState("1");
   const [videoStoragePath, setVideoStoragePath] = useState("");
   const [attachmentStoragePath, setAttachmentStoragePath] = useState("");
-  const [externalResourceUrl, setExternalResourceUrl] = useState("");
   const [scheduledPublishAt, setScheduledPublishAt] = useState("");
   const [isPreview, setIsPreview] = useState(false);
   const [isPublished, setIsPublished] = useState(true);
   const [uploadingLessonMedia, setUploadingLessonMedia] = useState(false);
 
-  // Learning Resource modal state
-  const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
-  const [editingResourceId, setEditingResourceId] = useState<
-    string | undefined
-  >(undefined);
-  const [resourceChapterId, setResourceChapterId] = useState<string>("none");
-  const [resourceLessonId, setResourceLessonId] = useState<string>("none");
-  const [resourceTitle, setResourceTitle] = useState("");
-  const [resourceDescription, setResourceDescription] = useState("");
-  const [resourceType, setResourceType] = useState<
-    "pdf" | "document" | "link" | "slides" | "archive" | "other"
-  >("pdf");
-  const [resourceStoragePath, setResourceStoragePath] = useState("");
-  const [resourceFileName, setResourceFileName] = useState("");
-  const [resourceFileSize, setResourceFileSize] = useState<number | null>(null);
-  const [resourceMimeType, setResourceMimeType] = useState("");
-  const [resourceExternalUrl, setResourceExternalUrl] = useState("");
-  const [resourcePublished, setResourcePublished] = useState(true);
-  const [uploadingResourceFile, setUploadingResourceFile] = useState(false);
+  // Lesson preview modal state
+  const [previewLessonMedia, setPreviewLessonMedia] = useState<{
+    bucketId: string;
+    storagePath: string;
+    fileName: string;
+    title: string;
+  } | null>(null);
 
   useEffect(() => {
     if (searchParams.get("action") === "new") {
@@ -214,7 +199,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     return data.courses.filter(
       (c) =>
         c.title.toLowerCase().includes(q) ||
-        c.code.toLowerCase().includes(q) ||
         (c.category ?? "").toLowerCase().includes(q) ||
         (c.subtitle ?? "").toLowerCase().includes(q),
     );
@@ -232,10 +216,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
   const courseLessons = useMemo(
     () => data.lessons.filter((l) => l.course_id === activeCourseId),
     [data.lessons, activeCourseId],
-  );
-  const courseResources = useMemo(
-    () => data.learningResources.filter((r) => r.course_id === activeCourseId),
-    [data.learningResources, activeCourseId],
   );
   const courseEnrollments = useMemo(
     () => data.enrollments.filter((e) => e.course_id === activeCourseId),
@@ -396,8 +376,8 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
 
       toast.success(
         targetStatus === "published"
-          ? `Course published (${res.data.code}).`
-          : `Course draft saved (${res.data.code}).`,
+          ? "Course published."
+          : "Course draft saved.",
       );
       setCourseDialogOpen(false);
       setThumbnailFile(null);
@@ -516,7 +496,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     );
     setVideoStoragePath("");
     setAttachmentStoragePath("");
-    setExternalResourceUrl("");
     setScheduledPublishAt("");
     setIsPreview(false);
     setIsPublished(true);
@@ -536,7 +515,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     setLessonOrder(String(lesson.position));
     setVideoStoragePath(lesson.video_storage_path ?? "");
     setAttachmentStoragePath(lesson.attachment_storage_path ?? "");
-    setExternalResourceUrl(lesson.external_resource_url ?? "");
     setScheduledPublishAt(
       lesson.scheduled_publish_at
         ? lesson.scheduled_publish_at.slice(0, 16)
@@ -553,11 +531,24 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     const file = e.target.files?.[0];
     if (!file || !activeCourseId) return;
 
-    let bucketId: "course-videos" | "course-pdfs" | "course-presentations" =
-      "course-videos";
-    if (lessonType === "pdf") {
+    const isVideoFile =
+      lessonType === "video" ||
+      file.type.startsWith("video/") ||
+      /\.(mp4|webm|mov)$/i.test(file.name);
+
+    let bucketId:
+      | "course-videos"
+      | "course-pdfs"
+      | "course-presentations"
+      | "course-materials" = "course-materials";
+    if (isVideoFile) {
+      bucketId = "course-videos";
+    } else if (lessonType === "pdf" && /\.pdf$/i.test(file.name)) {
       bucketId = "course-pdfs";
-    } else if (lessonType === "presentation") {
+    } else if (
+      lessonType === "presentation" &&
+      /\.(ppt|pptx|pdf)$/i.test(file.name)
+    ) {
       bucketId = "course-presentations";
     }
 
@@ -568,7 +559,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
       const storagePath = `${activeCourseId}/${Date.now()}_${safeName}`;
       const { error } = await supabase.storage
         .from(bucketId)
-        .upload(storagePath, file, { upsert: true });
+        .upload(storagePath, file, {
+          upsert: false,
+          contentType: file.type || "application/octet-stream",
+        });
 
       if (error) {
         toast.error(error.message);
@@ -583,6 +577,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
       toast.success(t.courses.uploadSuccessToast);
     } finally {
       setUploadingLessonMedia(false);
+      e.target.value = "";
     }
   }
 
@@ -601,7 +596,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         positionOrder: Number(lessonOrder),
         videoStoragePath: videoStoragePath || null,
         attachmentStoragePath: attachmentStoragePath || null,
-        externalResourceUrl: externalResourceUrl || null,
         scheduledPublishAt: scheduledPublishAt
           ? new Date(scheduledPublishAt).toISOString()
           : null,
@@ -676,125 +670,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
     });
   }
 
-  function openNewResourceModal() {
-    if (!activeCourseId) return;
-    setEditingResourceId(undefined);
-    setResourceChapterId("none");
-    setResourceLessonId("none");
-    setResourceTitle("");
-    setResourceDescription("");
-    setResourceType("pdf");
-    setResourceStoragePath("");
-    setResourceFileName("");
-    setResourceFileSize(null);
-    setResourceMimeType("");
-    setResourceExternalUrl("");
-    setResourcePublished(true);
-    setResourceDialogOpen(true);
-  }
-
-  function openEditResourceModal(resItem: DbTableRow<"learning_resources">) {
-    setEditingResourceId(resItem.id);
-    setResourceChapterId(resItem.chapter_id ?? "none");
-    setResourceLessonId(resItem.lesson_id ?? "none");
-    setResourceTitle(resItem.title);
-    setResourceDescription(resItem.description ?? "");
-    setResourceType(
-      (resItem.resource_type as
-        | "pdf"
-        | "document"
-        | "link"
-        | "slides"
-        | "archive"
-        | "other") || "pdf",
-    );
-    setResourceStoragePath(resItem.storage_path ?? "");
-    setResourceFileName(resItem.file_name ?? "");
-    setResourceFileSize(resItem.file_size_bytes);
-    setResourceMimeType(resItem.mime_type ?? "");
-    setResourceExternalUrl(resItem.external_url ?? "");
-    setResourcePublished(resItem.is_published);
-    setResourceDialogOpen(true);
-  }
-
-  async function handleResourceFileUpload(
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) {
-    const file = e.target.files?.[0];
-    if (!file || !activeCourseId) return;
-
-    setUploadingResourceFile(true);
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = `${activeCourseId}/resources_${Date.now()}_${safeName}`;
-      const { error } = await supabase.storage
-        .from("course-materials")
-        .upload(storagePath, file, { upsert: true });
-
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
-      setResourceStoragePath(storagePath);
-      setResourceFileName(file.name);
-      setResourceFileSize(file.size);
-      setResourceMimeType(file.type || "application/octet-stream");
-      if (!resourceTitle.trim()) {
-        setResourceTitle(file.name.replace(/\.[^.]+$/, ""));
-      }
-      toast.success("Learning resource uploaded.");
-    } finally {
-      setUploadingResourceFile(false);
-    }
-  }
-
-  function handleSaveResource() {
-    if (!activeCourseId) return;
-    startTransition(async () => {
-      const res = await teacherSaveLearningResourceAction({
-        id: editingResourceId,
-        courseId: activeCourseId,
-        chapterId: resourceChapterId === "none" ? null : resourceChapterId,
-        lessonId: resourceLessonId === "none" ? null : resourceLessonId,
-        title: resourceTitle,
-        description: resourceDescription,
-        resourceType,
-        storageBucket: resourceStoragePath ? "course-materials" : null,
-        storagePath: resourceStoragePath || null,
-        externalUrl: resourceExternalUrl || null,
-        fileName: resourceFileName || null,
-        fileSizeBytes: resourceFileSize,
-        mimeType: resourceMimeType || null,
-        isPublished: resourcePublished,
-      });
-
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Learning resource saved.");
-      setResourceDialogOpen(false);
-      router.refresh();
-    });
-  }
-
-  function handleDeleteResource(resourceId: string) {
-    if (!activeCourseId) return;
-    startTransition(async () => {
-      const res = await teacherDeleteLearningResourceAction({
-        resourceId,
-        courseId: activeCourseId,
-      });
-      if (!res.ok) {
-        toast.error(res.error);
-        return;
-      }
-      toast.success("Learning resource removed.");
-      router.refresh();
-    });
-  }
-
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -826,13 +701,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
           onClick={() => setActiveTab("chapters")}
         >
           {t.courses.tabChaptersLessons}
-        </Button>
-        <Button
-          variant={activeTab === "resources" ? "gold" : "outline"}
-          size="sm"
-          onClick={() => setActiveTab("resources")}
-        >
-          Learning Resources ({courseResources.length})
         </Button>
         <Button
           variant={activeTab === "students" ? "gold" : "outline"}
@@ -905,10 +773,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                       </div>
                     </div>
                     <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {course.code}
-                        </Badge>
+                      <div className="flex items-start justify-end gap-2">
                         <Badge
                           variant={
                             course.status === "published" ? "gold" : "outline"
@@ -1004,11 +869,11 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
             <div>
               <CardTitle className="text-base">
                 {activeCourse
-                  ? `${activeCourse.code} — ${activeCourse.title}`
+                  ? activeCourse.title
                   : t.courses.selectCoursePrompt}
               </CardTitle>
               <CardDescription>
-                Organize sections, videos, PDFs, text lessons, reordering, and visibility.
+                Organize sections, videos, PDFs, Word, PowerPoint, Excel, and text lessons with in-app previews.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1019,7 +884,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               >
                 {data.courses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.code} — {c.title}
+                    {c.title}
                   </option>
                 ))}
               </select>
@@ -1032,15 +897,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               >
                 <Plus className="size-4" />
                 <span>Add Section</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!activeCourseId}
-                onClick={openNewResourceModal}
-              >
-                <FolderPlus className="size-4" />
-                <span>Add Resource</span>
               </Button>
               <Button
                 variant="gold"
@@ -1216,22 +1072,43 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                                         .replace("T", " ")}
                                     </span>
                                   )}
-                                  {lesson.external_resource_url && (
-                                    <a
-                                      href={lesson.external_resource_url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-flex items-center gap-1 text-emerald-600 underline dark:text-emerald-400"
-                                    >
-                                      <ExternalLink className="size-3" />
-                                      External Resource
-                                    </a>
-                                  )}
                                 </div>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-1">
+                              {(lesson.video_storage_path ||
+                                lesson.attachment_storage_path) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  title="Preview & download uploaded file"
+                                  onClick={() => {
+                                    const path =
+                                      lesson.video_storage_path ||
+                                      lesson.attachment_storage_path ||
+                                      "";
+                                    const bucket = lesson.video_storage_path
+                                      ? "course-videos"
+                                      : lesson.content_type === "presentation"
+                                        ? "course-presentations"
+                                        : lesson.content_type === "pdf" &&
+                                            /\.pdf$/i.test(path)
+                                          ? "course-pdfs"
+                                          : "course-materials";
+                                    setPreviewLessonMedia({
+                                      bucketId: bucket,
+                                      storagePath: path,
+                                      fileName:
+                                        path.split("/").pop() || lesson.title,
+                                      title: lesson.title,
+                                    });
+                                  }}
+                                >
+                                  <Eye className="size-3.5 text-emerald-500" />
+                                  <span>Preview</span>
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1312,112 +1189,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         </Card>
       )}
 
-      {activeTab === "resources" && (
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-base">
-                Course Learning Resources
-              </CardTitle>
-              <CardDescription>
-                Supplementary PDFs, reference guides, slide decks, and external links for students.
-              </CardDescription>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                className={cn(fieldBase, "h-9 w-64")}
-                value={activeCourseId}
-                onChange={(e) => setSelectedCourseId(e.target.value)}
-              >
-                {data.courses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.code} — {c.title}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant="gold"
-                size="sm"
-                disabled={!activeCourseId}
-                onClick={openNewResourceModal}
-              >
-                <Plus className="size-4" />
-                <span>Add Learning Resource</span>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {courseResources.length === 0 ? (
-              <EmptyState
-                icon={FolderPlus}
-                title="No Learning Resources Yet"
-                description="Upload supplementary PDFs, worksheets, or external links for this course."
-              />
-            ) : (
-              <div className="space-y-2.5">
-                {courseResources.map((resItem) => (
-                  <div
-                    key={resItem.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/80 bg-card/60 p-3.5 text-xs"
-                  >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-foreground">
-                          {resItem.title}
-                        </span>
-                        <Badge variant="outline" className="uppercase">
-                          {resItem.resource_type}
-                        </Badge>
-                        <Badge
-                          variant={resItem.is_published ? "gold" : "outline"}
-                        >
-                          {resItem.is_published ? "Published" : "Draft"}
-                        </Badge>
-                      </div>
-                      {resItem.description && (
-                        <p className="mt-1 text-muted-foreground">
-                          {resItem.description}
-                        </p>
-                      )}
-                      <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                        {resItem.file_name && <span>File: {resItem.file_name}</span>}
-                        {resItem.external_url && (
-                          <a
-                            href={resItem.external_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-emerald-600 underline dark:text-emerald-400"
-                          >
-                            {resItem.external_url}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditResourceModal(resItem)}
-                      >
-                        <Edit3 className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={isPending}
-                        onClick={() => handleDeleteResource(resItem.id)}
-                      >
-                        <Trash2 className="size-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {activeTab === "students" && (
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1436,7 +1207,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
             >
               {data.courses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.code} — {c.title}
+                  {c.title}
                 </option>
               ))}
             </select>
@@ -1515,9 +1286,7 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 : t.courses.createCourse}
             </DialogTitle>
             <DialogDescription>
-              {editingCourseId
-                ? `Course Code: ${editingCourseCode} (auto-generated)`
-                : "Course codes are generated automatically in the database and linked to your teacher account."}
+              Manage your course details, cover image, duration, and curriculum settings.
             </DialogDescription>
           </DialogHeader>
 
@@ -1607,38 +1376,6 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
                 onChange={(e) => setCourseSummary(e.target.value)}
                 placeholder="Short tagline shown on catalog cards"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>{t.courses.departmentLabel}</Label>
-              <select
-                className={cn(fieldBase, "h-9 w-full")}
-                value={departmentId}
-                onChange={(e) => setDepartmentId(e.target.value)}
-              >
-                <option value="none">— Optional —</option>
-                {data.departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>{t.courses.levelLabel}</Label>
-              <select
-                className={cn(fieldBase, "h-9 w-full")}
-                value={levelId}
-                onChange={(e) => setLevelId(e.target.value)}
-              >
-                <option value="none">— Optional —</option>
-                {data.educationalLevels.map((lvl) => (
-                  <option key={lvl.id} value={lvl.id}>
-                    {lvl.name}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <div className="space-y-2.5 sm:col-span-2">
@@ -1864,16 +1601,17 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
               />
             </div>
 
-            {(lessonType === "video" ||
-              lessonType === "pdf" ||
-              lessonType === "presentation") && (
+            {lessonType !== "quiz" && (
               <div className="space-y-1.5 sm:col-span-2">
                 <Label className="flex items-center gap-2">
                   <Upload className="size-3.5 text-emerald-500" />
-                  <span>{t.courses.uploadLessonMediaLabel}</span>
+                  <span>
+                    Upload Lesson File (PDF, Word, PowerPoint, Excel, Video, or Image)
+                  </span>
                 </Label>
                 <Input
                   type="file"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.mp4,.webm,.png,.jpg,.jpeg,.webp"
                   disabled={uploadingLessonMedia}
                   onChange={handleLessonMediaUpload}
                 />
@@ -1886,18 +1624,10 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
             )}
 
             <div className="space-y-1.5">
-              <Label>{t.courses.externalResourceUrlLabel}</Label>
-              <Input
-                value={externalResourceUrl}
-                onChange={(e) => setExternalResourceUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
-            <div className="space-y-1.5">
               <Label>{t.courses.scheduledPublishAtLabel}</Label>
               <Input
                 type="datetime-local"
+                min={getNowDateTimeLocalString()}
                 value={scheduledPublishAt}
                 onChange={(e) => setScheduledPublishAt(e.target.value)}
               />
@@ -1958,149 +1688,29 @@ export function TeacherCoursesClient({ data }: TeacherCoursesClientProps) {
         </DialogContent>
       </Dialog>
 
-      {/* LEARNING RESOURCE DIALOG */}
-      <Dialog open={resourceDialogOpen} onOpenChange={setResourceDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+      {/* IN-APP FILE PREVIEW & DOWNLOAD DIALOG */}
+      <Dialog
+        open={Boolean(previewLessonMedia)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewLessonMedia(null);
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>
-              {editingResourceId
-                ? "Edit Learning Resource"
-                : "Add Learning Resource"}
+              {previewLessonMedia?.title || "Lesson Material Preview"}
             </DialogTitle>
             <DialogDescription>
-              Attach PDFs, worksheets, code archives, or reference URLs to this course.
+              In-app preview and download — original uploaded files are never modified.
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-2 text-xs">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Resource Type</Label>
-                <select
-                  className={cn(fieldBase, "h-9 w-full")}
-                  value={resourceType}
-                  onChange={(e) =>
-                    setResourceType(
-                      e.target.value as
-                        | "pdf"
-                        | "document"
-                        | "link"
-                        | "slides"
-                        | "archive"
-                        | "other",
-                    )
-                  }
-                >
-                  <option value="pdf">PDF Document</option>
-                  <option value="document">Document / Worksheet</option>
-                  <option value="slides">Slides</option>
-                  <option value="link">External Link</option>
-                  <option value="archive">Code / Archive</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label>Link to Section (Optional)</Label>
-                <select
-                  className={cn(fieldBase, "h-9 w-full")}
-                  value={resourceChapterId}
-                  onChange={(e) => setResourceChapterId(e.target.value)}
-                >
-                  <option value="none">Course-wide</option>
-                  {courseChapters.map((ch) => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Link to Lesson (Optional)</Label>
-              <select
-                className={cn(fieldBase, "h-9 w-full")}
-                value={resourceLessonId}
-                onChange={(e) => setResourceLessonId(e.target.value)}
-              >
-                <option value="none">None</option>
-                {courseLessons.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Resource Title *</Label>
-              <Input
-                value={resourceTitle}
-                onChange={(e) => setResourceTitle(e.target.value)}
-                placeholder="Formula Cheat Sheet / Lab Starter Pack"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Textarea
-                rows={2}
-                value={resourceDescription}
-                onChange={(e) => setResourceDescription(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                <Upload className="size-3.5 text-emerald-500" />
-                <span>Upload File (Supabase Storage)</span>
-              </Label>
-              <Input
-                type="file"
-                disabled={uploadingResourceFile}
-                onChange={handleResourceFileUpload}
-              />
-              {resourceFileName && (
-                <p className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
-                  Uploaded: {resourceFileName}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <Label>Or External URL</Label>
-              <Input
-                value={resourceExternalUrl}
-                onChange={(e) => setResourceExternalUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
-            <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border p-3 font-medium">
-              <span>Visible to Enrolled Students</span>
-              <input
-                type="checkbox"
-                checked={resourcePublished}
-                onChange={(e) => setResourcePublished(e.target.checked)}
-              />
-            </label>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setResourceDialogOpen(false)}
-            >
-              {t.common.cancel}
-            </Button>
-            <Button
-              variant="gold"
-              disabled={isPending || uploadingResourceFile}
-              onClick={handleSaveResource}
-            >
-              {t.common.save}
-            </Button>
-          </DialogFooter>
+          {previewLessonMedia && (
+            <LearnixFilePreview
+              bucketId={previewLessonMedia.bucketId}
+              storagePath={previewLessonMedia.storagePath}
+              fileName={previewLessonMedia.fileName}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

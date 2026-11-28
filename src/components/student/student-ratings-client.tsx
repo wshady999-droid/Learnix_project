@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Award, ShieldCheck, Star } from "lucide-react";
+import { Award, ExternalLink, ShieldCheck, Star } from "lucide-react";
 
 import { EmptyState } from "@/components/feedback/empty-state";
 import { useLocale } from "@/components/i18n/locale-provider";
@@ -150,7 +151,7 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
             >
               {data.enrolledCourses.map((c) => (
                 <option key={c.id} value={c.id} className="bg-[#0F1115] text-foreground">
-                  {c.code} — {c.title} ({c.progressPercent}%)
+                  {c.title} ({c.progressPercent}%)
                 </option>
               ))}
             </select>
@@ -178,7 +179,8 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                 )}
               </div>
               <CardDescription>
-                {t.ratings.courseRatingStarsLabel} (Requires 100% completion)
+                Instructor: <strong>{activeCourse?.teacherName ?? "Instructor"}</strong> •{" "}
+                {t.ratings.courseRatingStarsLabel}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
@@ -238,15 +240,26 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
           {/* Teacher Rating Form */}
           <Card className={DARK_GLASS_CARD}>
             <CardHeader className="border-b border-white/10">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <CardTitle className="text-base">
-                  {activeCourse?.teacherName ?? "Instructor"}
+                  {activeCourse ? (
+                    <Link
+                      href={`/teachers/${activeCourse.teacher_id}`}
+                      className="inline-flex items-center gap-1.5 hover:text-emerald-400 hover:underline"
+                    >
+                      <span>{activeCourse.teacherName}</span>
+                      <ExternalLink className="size-3.5" />
+                    </Link>
+                  ) : (
+                    "Instructor"
+                  )}
                 </CardTitle>
                 {existingTeacherReview && (
                   <Badge variant="gold">Submitted (Editable)</Badge>
                 )}
               </div>
               <CardDescription>
+                Course: <strong>{activeCourse?.title ?? "Course"}</strong> •{" "}
                 {t.ratings.teacherRatingStarsLabel}
               </CardDescription>
             </CardHeader>
@@ -335,7 +348,8 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                   >
                     <div>
                       <p className="font-semibold text-foreground">
-                        Course: {course?.title ?? "Enrolled Course"}
+                        Course: {course?.title ?? "Enrolled Course"} • Instructor:{" "}
+                        {course?.teacherName ?? "Instructor"}
                       </p>
                       <p className="text-muted-foreground">
                         {rev.comment || "No written comment"}
@@ -370,7 +384,8 @@ export function StudentRatingsClient({ data }: StudentRatingsClientProps) {
                   >
                     <div>
                       <p className="font-semibold text-foreground">
-                        Instructor: {course?.teacherName ?? "Instructor"}
+                        Instructor: {course?.teacherName ?? "Instructor"} • Course:{" "}
+                        {course?.title ?? "Enrolled Course"}
                       </p>
                       <p className="text-muted-foreground">
                         {rev.comment || "No written comment"}

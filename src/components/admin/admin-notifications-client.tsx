@@ -27,6 +27,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getAdminDictionary } from "@/i18n/admin-dictionaries";
+import {
+  getNowDateTimeLocalString,
+  validateNotPastDateTime,
+} from "@/lib/date-validation";
 import { cn } from "@/lib/utils";
 import { adminDispatchNotificationAction } from "@/services/admin/actions";
 import type { AdminNotificationsData } from "@/services/admin/queries";
@@ -51,8 +55,6 @@ export function AdminNotificationsClient({
     | "all_users"
     | "one_student"
     | "one_teacher"
-    | "department"
-    | "class"
   >("all_students");
   const [targetId, setTargetId] = useState("");
   const [notificationType, setNotificationType] = useState<
@@ -62,14 +64,12 @@ export function AdminNotificationsClient({
     | "assignment"
     | "grade"
     | "message"
-    | "attendance"
     | "review"
     | "security"
   >("system");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
-  const [isAnnouncement, setIsAnnouncement] = useState(true);
   const [sending, setSending] = useState(false);
 
   const studentOptions = useMemo(
@@ -83,6 +83,17 @@ export function AdminNotificationsClient({
 
   async function handleDispatch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (scheduledFor.trim()) {
+      const check = validateNotPastDateTime({
+        dateTime: scheduledFor,
+        fieldName: "Scheduled announcement time",
+      });
+      if (!check.ok) {
+        toast.error(check.error);
+        return;
+      }
+    }
+
     setSending(true);
     const res = await adminDispatchNotificationAction({
       targetScope,
@@ -91,7 +102,7 @@ export function AdminNotificationsClient({
       title,
       body,
       scheduledFor: scheduledFor || undefined,
-      isAnnouncement,
+      isAnnouncement: true,
     });
     setSending(false);
 
@@ -178,12 +189,6 @@ export function AdminNotificationsClient({
                       <option value="all_users">All Users</option>
                       <option value="one_student">One Student</option>
                       <option value="one_teacher">One Teacher</option>
-                      <option value="department">
-                        {adminT.notifications.audienceDepartment}
-                      </option>
-                      <option value="class">
-                        {adminT.notifications.audienceClass}
-                      </option>
                     </select>
                   </div>
 
@@ -251,50 +256,6 @@ export function AdminNotificationsClient({
                   </div>
                 ) : null}
 
-                {targetScope === "department" ? (
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="notif-dept">
-                      {adminT.users.departmentLabel}
-                    </Label>
-                    <select
-                      id="notif-dept"
-                      value={targetId}
-                      onChange={(e) => setTargetId(e.target.value)}
-                      className={cn(fieldBase, "h-10 py-2")}
-                      required
-                    >
-                      <option value="">—</option>
-                      {data.departments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name} ({d.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
-                {targetScope === "class" ? (
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="notif-class">
-                      {adminT.departments.classLabel}
-                    </Label>
-                    <select
-                      id="notif-class"
-                      value={targetId}
-                      onChange={(e) => setTargetId(e.target.value)}
-                      className={cn(fieldBase, "h-10 py-2")}
-                      required
-                    >
-                      <option value="">—</option>
-                      {data.classes.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null}
-
                 <div className="grid gap-1.5">
                   <Label htmlFor="notif-title">
                     {adminT.notifications.titleLabel}
@@ -329,22 +290,15 @@ export function AdminNotificationsClient({
                   <Input
                     id="notif-schedule"
                     type="datetime-local"
+                    min={getNowDateTimeLocalString()}
                     value={scheduledFor}
                     onChange={(e) => setScheduledFor(e.target.value)}
                   />
                 </div>
 
-                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground select-none">
-                  <input
-                    type="checkbox"
-                    checked={isAnnouncement}
-                    onChange={(e) => setIsAnnouncement(e.target.checked)}
-                    className="size-4 rounded border-input accent-emerald-600"
-                  />
-                  <span>
-                    Send as Official Read-Only Announcement (shown in Messages & Notifications)
-                  </span>
-                </label>
+                <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  Published as an official read-only announcement created by your administrator account.
+                </p>
 
                 <div className="flex justify-end pt-2">
                   <Button type="submit" variant="gold" loading={sending}>
@@ -362,7 +316,7 @@ export function AdminNotificationsClient({
                 {adminT.notifications.historyTitle}
               </CardTitle>
               <CardDescription>
-                Live delivery and read receipt counts across all recipients.
+                Announcements created by your administrator account, with live delivery and read receipt counts.
               </CardDescription>
             </CardHeader>
             <CardContent>

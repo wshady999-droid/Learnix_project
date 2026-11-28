@@ -62,7 +62,6 @@ import { evaluatePasswordStrength } from "@/lib/auth/validation";
 import { cn } from "@/lib/utils";
 import {
   adminBulkImportUsersAction,
-  adminChangeUserRoleAction,
   adminChangeUserStatusAction,
   adminCreateUserAccountAction,
   adminDeleteUserAccountAction,
@@ -102,8 +101,6 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("student");
   const [newPhone, setNewPhone] = useState("");
-  const [newDeptId, setNewDeptId] = useState("");
-  const [newLevelId, setNewLevelId] = useState("");
   const [creatingUser, setCreatingUser] = useState(false);
 
   // Inspect User Details, Activity & Custom Permissions dialog
@@ -168,8 +165,6 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
       password: newPassword,
       role: newRole,
       phone: newPhone || undefined,
-      departmentId: newDeptId || null,
-      educationalLevelId: newLevelId || null,
     });
     setCreatingUser(false);
 
@@ -178,24 +173,12 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
       return;
     }
 
-    toast.success(adminT.departments.savedToast);
+    toast.success("User account created.");
     setAddOpen(false);
     setNewFullName("");
     setNewEmail("");
     setNewPassword("");
     setNewPhone("");
-    router.refresh();
-  }
-
-  async function handleRoleChange(userId: string, role: UserRole) {
-    setBusyUserId(userId);
-    const res = await adminChangeUserRoleAction({ targetUserId: userId, role });
-    setBusyUserId(null);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success(adminT.users.roleUpdatedToast);
     router.refresh();
   }
 
@@ -444,45 +427,6 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-dept">
-                      {adminT.users.departmentLabel}
-                    </Label>
-                    <select
-                      id="admin-new-dept"
-                      value={newDeptId}
-                      onChange={(e) => setNewDeptId(e.target.value)}
-                      className={cn(fieldBase, "h-10 py-2")}
-                    >
-                      <option value="">—</option>
-                      {data.departments.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name} ({d.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="admin-new-level">
-                      {adminT.users.levelLabel}
-                    </Label>
-                    <select
-                      id="admin-new-level"
-                      value={newLevelId}
-                      onChange={(e) => setNewLevelId(e.target.value)}
-                      className={cn(fieldBase, "h-10 py-2")}
-                    >
-                      <option value="">—</option>
-                      {data.educationalLevels.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name} ({l.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
                 <div className="grid gap-1.5">
                   <Label htmlFor="admin-new-password">
                     {authT.signup.passwordLabel}
@@ -647,22 +591,9 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                           {user.email}
                         </TableCell>
                         <TableCell>
-                          <select
-                            value={user.role}
-                            disabled={busyUserId === user.id || isSelf}
-                            onChange={(e) =>
-                              handleRoleChange(
-                                user.id,
-                                e.target.value as UserRole,
-                              )
-                            }
-                            aria-label={`${adminT.users.roleLabel} ${user.email}`}
-                            className={cn(fieldBase, "h-8 w-32 py-1 text-xs")}
-                          >
-                            <option value="student">{t.roles.student}</option>
-                            <option value="teacher">{t.roles.teacher}</option>
-                            <option value="admin">{t.roles.admin}</option>
-                          </select>
+                          <Badge variant="outline" className="capitalize">
+                            {t.roles[user.role]}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -901,22 +832,13 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                 onClick={() =>
                   downloadExcelCsv(
                     "learnix-bulk-import-template.csv",
-                    [
-                      "full_name",
-                      "email",
-                      "role",
-                      "phone",
-                      "department_code",
-                      "level_code",
-                    ],
+                    ["full_name", "email", "role", "phone"],
                     [
                       [
                         "Student Example",
                         "student.cohort1@example.edu",
                         "student",
                         "+15550109911",
-                        "CS",
-                        "L1",
                       ],
                     ],
                   )
@@ -946,7 +868,7 @@ export function AdminUsersClient({ data }: AdminUsersClientProps) {
                 rows={5}
                 value={rawBulkText}
                 onChange={(e) => setRawBulkText(e.target.value)}
-                placeholder="full_name,email,role,phone,department_code,level_code"
+                placeholder="full_name,email,role,phone"
                 className="font-mono text-xs"
               />
             </div>

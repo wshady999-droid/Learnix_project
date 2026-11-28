@@ -69,7 +69,7 @@ export function parseAndValidateBulkUsers(rawContent: string): BulkImportParseRe
           rowNumber: 1,
           rawEmail: "-",
           message:
-            "File must include a header row (full_name,email,role,phone,department_code,level_code) and at least one data row.",
+            "File must include a header row (full_name,email,role,phone) and at least one data row.",
         },
       ],
     };

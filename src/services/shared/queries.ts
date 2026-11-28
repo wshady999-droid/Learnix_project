@@ -47,7 +47,7 @@ export async function getMyNotificationsData(): Promise<
       )
       .eq("recipient_id", userId)
       .order("created_at", { ascending: false })
-      .limit(80),
+      .limit(250),
     supabase
       .from("profiles")
       .select("notification_preferences")
@@ -169,56 +169,39 @@ export async function getSmartCalendarData(): Promise<
     courseIds = (data ?? []).map((e) => e.course_id);
   }
 
-  const [coursesRes, schedulesRes, examsRes, assignmentsRes, studyRes] =
-    await Promise.all([
-      courseIds.length > 0
-        ? supabase.from("courses").select("id, code, title").in("id", courseIds)
-        : Promise.resolve({
-            data: [] as Array<{ id: string; code: string; title: string }>,
-          }),
-      courseIds.length > 0
-        ? supabase
-            .from("class_schedules")
-            .select("*")
-            .in("course_id", courseIds)
-            .eq("is_active", true)
-        : Promise.resolve({ data: [] as Array<TableRow<"class_schedules">> }),
-      courseIds.length > 0
-        ? supabase
-            .from("exams")
-            .select("*")
-            .in("course_id", courseIds)
-            .eq("status", "published")
-        : Promise.resolve({ data: [] as Array<TableRow<"exams">> }),
-      courseIds.length > 0
-        ? supabase
-            .from("assignments")
-            .select("*")
-            .in("course_id", courseIds)
-            .eq("is_published", true)
-        : Promise.resolve({ data: [] as Array<TableRow<"assignments">> }),
-      supabase
-        .from("study_sessions")
-        .select("*")
-        .eq("student_id", userId)
-        .order("started_at", { ascending: false })
-        .limit(12),
-    ]);
+  const [coursesRes, examsRes, assignmentsRes, studyRes] = await Promise.all([
+    courseIds.length > 0
+      ? supabase.from("courses").select("id, title").in("id", courseIds)
+      : Promise.resolve({
+          data: [] as Array<{ id: string; title: string }>,
+        }),
+    courseIds.length > 0
+      ? supabase
+          .from("exams")
+          .select("*")
+          .in("course_id", courseIds)
+          .eq("status", "published")
+      : Promise.resolve({ data: [] as Array<TableRow<"exams">> }),
+    courseIds.length > 0
+      ? supabase
+          .from("assignments")
+          .select("*")
+          .in("course_id", courseIds)
+          .eq("is_published", true)
+      : Promise.resolve({ data: [] as Array<TableRow<"assignments">> }),
+    supabase
+      .from("study_sessions")
+      .select("*")
+      .eq("student_id", userId)
+      .order("started_at", { ascending: false })
+      .limit(12),
+  ]);
 
   const courseMap = new Map(
-    (coursesRes.data ?? []).map((c) => [c.id, `${c.code} — ${c.title}`]),
+    (coursesRes.data ?? []).map((c) => [c.id, c.title]),
   );
 
   const events: SmartCalendarEvent[] = [
-    ...(schedulesRes.data ?? []).map((s) => ({
-      id: `class-${s.id}`,
-      kind: "class" as const,
-      title: `Class Session (${DAY_NAMES[s.day_of_week] ?? "Weekly"})`,
-      subtitle: s.room ? `Room ${s.room}` : s.notes || "Scheduled class",
-      dateLabel: `Every ${DAY_NAMES[s.day_of_week] ?? "Week"}`,
-      timeLabel: `${s.start_time.slice(0, 5)} – ${s.end_time.slice(0, 5)}`,
-      courseTitle: courseMap.get(s.course_id) || "Course",
-    })),
     ...(examsRes.data ?? []).map((e) => ({
       id: `exam-${e.id}`,
       kind: "exam" as const,
@@ -271,6 +254,8 @@ export interface MessagingMessageView {
   senderId: string;
   senderName: string;
   body: string;
+  messageType: "text" | "voice" | "file" | "system";
+  voiceDurationSeconds: number | null;
   createdAt: string;
   isReadByPeer: boolean;
   attachments: MessagingAttachmentView[];
@@ -278,6 +263,7 @@ export interface MessagingMessageView {
 
 export interface MessagingConversationItem {
   id: string;
+  isGroup: boolean;
   subject: string;
   courseId: string | null;
   courseTitle: string | null;
@@ -308,6 +294,7 @@ export interface MessagingContactsData {
   role: UserRole;
   conversations: MessagingConversationItem[];
   announcements: MessagingAnnouncementItem[];
+  teacherCourses: Array<{ id: string; title: string }>;
   authorizedContacts: Array<{
     id: string;
     fullName: string;
@@ -358,6 +345,7 @@ export async function getMessagingData(): Promise<
     { courseId: string | null; courseTitle: string | null }
   >();
   const courseTitleById = new Map<string, string>();
+  const teacherCourses: Array<{ id: string; title: string }> = [];
 
   if (role === "student") {
     const { data: enrollments } = await supabase
@@ -385,10 +373,12 @@ export async function getMessagingData(): Promise<
       .from("courses")
       .select("id, title")
       .eq("teacher_id", userId)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .order("title", { ascending: true });
 
     const myCourseIds = (myCourses ?? []).map((c) => {
       courseTitleById.set(c.id, c.title);
+      teacherCourses.push({ id: c.id, title: c.title });
       return c.id;
     });
 
@@ -583,6 +573,9 @@ export async function getMessagingData(): Promise<
             senderId: m.sender_id,
             senderName: sender?.full_name?.trim() || sender?.email || "User",
             body: m.body,
+            messageType:
+              (m.message_type as MessagingMessageView["messageType"]) || "text",
+            voiceDurationSeconds: m.voice_duration_seconds ?? null,
             createdAt: m.created_at,
             isReadByPeer,
             attachments: atts,
@@ -597,25 +590,32 @@ export async function getMessagingData(): Promise<
       ).length;
 
       const lastMsg = convMsgs[convMsgs.length - 1];
+      const isGroup = Boolean(conv.is_group);
 
       return {
         id: conv.id,
-        subject: conv.subject || "Direct Conversation",
+        isGroup,
+        subject:
+          conv.subject || (isGroup ? "Course Group Chat" : "Direct Conversation"),
         courseId: conv.course_id,
         courseTitle: conv.course_id
           ? courseTitleById.get(conv.course_id) ?? null
           : null,
         lastMessageAt: conv.last_message_at,
-        lastMessagePreview: lastMsg?.body || conv.subject || "No messages yet",
+        lastMessagePreview:
+          lastMsg?.messageType === "voice"
+            ? "🎤 Voice message"
+            : lastMsg?.body || conv.subject || "No messages yet",
         unreadCount,
-        peerUserId: peerProf?.id ?? null,
-        peerName:
-          peerProf?.full_name?.trim() ||
-          peerProf?.email ||
-          conv.subject ||
-          "Conversation",
-        peerAvatarUrl: peerProf?.avatar_url ?? null,
-        peerRole: peerProf?.role ?? "user",
+        peerUserId: isGroup ? null : peerProf?.id ?? null,
+        peerName: isGroup
+          ? conv.subject || "Course Group Chat"
+          : peerProf?.full_name?.trim() ||
+            peerProf?.email ||
+            conv.subject ||
+            "Conversation",
+        peerAvatarUrl: isGroup ? null : peerProf?.avatar_url ?? null,
+        peerRole: isGroup ? `Group (${parts.length} members)` : peerProf?.role ?? "user",
         peerLastReadAt,
         participantNames,
         messages: convMsgs,
@@ -649,6 +649,7 @@ export async function getMessagingData(): Promise<
       role,
       conversations,
       announcements,
+      teacherCourses,
       authorizedContacts,
     },
   };
@@ -737,6 +738,247 @@ export async function getStudentAttendanceViewData(): Promise<
           remarks: r.remarks,
         };
       }),
+    },
+  };
+}
+
+// -----------------------------------------------------------------------------
+// 5. PUBLIC TEACHER PROFILE DATA (Accessible to Visitors & Authenticated Users)
+// -----------------------------------------------------------------------------
+export interface PublicTeacherProfileView {
+  teacherId: string;
+  fullName: string;
+  avatarUrl: string | null;
+  headline: string;
+  biography: string;
+  experienceYears: number | null;
+  education: string | null;
+  certifications: string | null;
+  websiteUrl: string | null;
+  linkedinUrl: string | null;
+  averageTeacherRating: number;
+  averageCourseRating: number;
+  totalReviews: number;
+  courses: Array<{
+    id: string;
+    title: string;
+    category: string;
+    subtitle: string | null;
+    description: string | null;
+    thumbnailUrl: string | null;
+    estimatedHours: number;
+    durationUnit: string;
+    ratingAvg: number;
+    reviewCount: number;
+  }>;
+  reviews: Array<{
+    id: string;
+    kind: "teacher" | "course";
+    courseTitle: string;
+    studentName: string;
+    rating: number;
+    comment: string | null;
+    createdAt: string;
+  }>;
+}
+
+export async function getPublicTeacherProfileData(
+  teacherId: string,
+): Promise<ServiceResult<PublicTeacherProfileView>> {
+  const supabase = await createSupabaseServerClient();
+
+  const [profileRes, publicProfRes, coursesRes, teacherRevsRes] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_url, bio, role, status")
+        .eq("id", teacherId)
+        .eq("role", "teacher")
+        .maybeSingle(),
+      supabase
+        .from("teacher_public_profiles")
+        .select("*")
+        .eq("teacher_id", teacherId)
+        .maybeSingle(),
+      supabase
+        .from("courses")
+        .select(
+          "id, title, category, subtitle, description, thumbnail_url, estimated_hours, duration_unit",
+        )
+        .eq("teacher_id", teacherId)
+        .eq("status", "published")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("teacher_reviews")
+        .select("id, course_id, student_id, rating, comment, created_at")
+        .eq("teacher_id", teacherId)
+        .eq("moderation_status", "approved")
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ]);
+
+  const prof = profileRes.data;
+  const pubProf = publicProfRes.data;
+
+  if (!prof && !pubProf) {
+    return { ok: false, error: "Instructor profile not found." };
+  }
+
+  if (pubProf && pubProf.is_public_visible === false) {
+    return {
+      ok: false,
+      error: "This instructor profile is currently set to private.",
+    };
+  }
+
+  const courses = coursesRes.data ?? [];
+  const courseIds = courses.map((c) => c.id);
+  const courseTitleMap = new Map(courses.map((c) => [c.id, c.title]));
+
+  const courseRevsRes =
+    courseIds.length > 0
+      ? await supabase
+          .from("course_reviews")
+          .select("id, course_id, student_id, rating, comment, created_at")
+          .in("course_id", courseIds)
+          .eq("moderation_status", "approved")
+          .order("created_at", { ascending: false })
+          .limit(60)
+      : {
+          data: [] as Array<{
+            id: string;
+            course_id: string;
+            student_id: string;
+            rating: number;
+            comment: string | null;
+            created_at: string;
+          }>,
+        };
+
+  const courseRevs = courseRevsRes.data ?? [];
+  const teacherRevs = teacherRevsRes.data ?? [];
+
+  const reviewerIds = Array.from(
+    new Set([
+      ...courseRevs.map((r) => r.student_id),
+      ...teacherRevs.map((r) => r.student_id),
+    ]),
+  );
+
+  const reviewerProfilesRes =
+    reviewerIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", reviewerIds)
+      : { data: [] as Array<{ id: string; full_name: string | null }> };
+
+  const reviewerMap = new Map(
+    (reviewerProfilesRes.data ?? []).map((p) => [
+      p.id,
+      p.full_name?.trim() || "Verified Student",
+    ]),
+  );
+
+  const averageTeacherRating =
+    teacherRevs.length > 0
+      ? Number(
+          (
+            teacherRevs.reduce((s, r) => s + Number(r.rating ?? 0), 0) /
+            teacherRevs.length
+          ).toFixed(2),
+        )
+      : 0;
+
+  const averageCourseRating =
+    courseRevs.length > 0
+      ? Number(
+          (
+            courseRevs.reduce((s, r) => s + Number(r.rating ?? 0), 0) /
+            courseRevs.length
+          ).toFixed(2),
+        )
+      : 0;
+
+  const mappedCourses = courses.map((c) => {
+    const cRevs = courseRevs.filter((r) => r.course_id === c.id);
+    const rAvg =
+      cRevs.length > 0
+        ? Number(
+            (
+              cRevs.reduce((s, r) => s + Number(r.rating ?? 0), 0) /
+              cRevs.length
+            ).toFixed(1),
+          )
+        : 0;
+    return {
+      id: c.id,
+      title: c.title,
+      category: c.category || "General",
+      subtitle: c.subtitle,
+      description: c.description,
+      thumbnailUrl: c.thumbnail_url,
+      estimatedHours: Number(c.estimated_hours ?? 0),
+      durationUnit: c.duration_unit || "hours",
+      ratingAvg: rAvg,
+      reviewCount: cRevs.length,
+    };
+  });
+
+  const combinedReviews = [
+    ...teacherRevs.map((r) => ({
+      id: `tr-${r.id}`,
+      kind: "teacher" as const,
+      courseTitle: r.course_id
+        ? courseTitleMap.get(r.course_id) || "Published Course"
+        : "Instructor Review",
+      studentName: reviewerMap.get(r.student_id) ?? "Verified Student",
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.created_at,
+    })),
+    ...courseRevs.map((r) => ({
+      id: `cr-${r.id}`,
+      kind: "course" as const,
+      courseTitle: courseTitleMap.get(r.course_id) || "Published Course",
+      studentName: reviewerMap.get(r.student_id) ?? "Verified Student",
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.created_at,
+    })),
+  ].sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const fullName =
+    pubProf?.display_name?.trim() ||
+    prof?.full_name?.trim() ||
+    "Learnix Instructor";
+
+  return {
+    ok: true,
+    data: {
+      teacherId,
+      fullName,
+      avatarUrl: prof?.avatar_url ?? null,
+      headline:
+        pubProf?.headline?.trim() || "Academic Instructor at Learnix LMS",
+      biography:
+        pubProf?.biography?.trim() ||
+        prof?.bio?.trim() ||
+        `${fullName} teaches structured academic courses on Learnix.`,
+      experienceYears: pubProf?.experience_years ?? null,
+      education: pubProf?.education ?? null,
+      certifications: pubProf?.certifications ?? null,
+      websiteUrl: pubProf?.website_url ?? null,
+      linkedinUrl: pubProf?.linkedin_url ?? null,
+      averageTeacherRating,
+      averageCourseRating,
+      totalReviews: teacherRevs.length + courseRevs.length,
+      courses: mappedCourses,
+      reviews: combinedReviews,
     },
   };
 }

@@ -671,32 +671,23 @@ export async function getAdminNotificationsData(): Promise<
 
   const supabase = await createSupabaseServerClient();
 
-  const [notifsRes, contactsRes, deptsRes, classesRes, profilesRes] =
-    await Promise.all([
-      supabase
-        .from("notifications")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100),
-      supabase
-        .from("contact_messages")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from("departments")
-        .select("id, name, code")
-        .order("name", { ascending: true }),
-      supabase
-        .from("classes")
-        .select("id, name, code")
-        .order("code", { ascending: true }),
-      supabase.from("profiles").select("id, full_name, email, role"),
-    ]);
+  const [notifsRes, contactsRes, profilesRes] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("*")
+      .eq("sender_id", adminCheck.data.userId)
+      .eq("is_announcement", true)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("contact_messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase.from("profiles").select("id, full_name, email, role"),
+  ]);
 
   if (notifsRes.error) return { ok: false, error: notifsRes.error.message };
-  if (deptsRes.error) return { ok: false, error: deptsRes.error.message };
-  if (classesRes.error) return { ok: false, error: classesRes.error.message };
   if (profilesRes.error) return { ok: false, error: profilesRes.error.message };
 
   const notifList = notifsRes.data ?? [];
@@ -732,8 +723,8 @@ export async function getAdminNotificationsData(): Promise<
     data: {
       notifications,
       contactMessages: contactsRes.data ?? [],
-      departments: deptsRes.data ?? [],
-      classes: classesRes.data ?? [],
+      departments: [],
+      classes: [],
       profiles: profilesRes.data ?? [],
     },
   };

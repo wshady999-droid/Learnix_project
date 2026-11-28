@@ -9,7 +9,7 @@ import { getTeacherStudentsData } from "@/services/teacher/queries";
 
 export const metadata: Metadata = {
   title: "Assigned Student Management | Learnix Teacher",
-  description: "Monitor progress, identify at-risk learners, record attendance, and send personal feedback or announcements.",
+  description: "Monitor progress, identify at-risk learners, and send personal feedback or announcements.",
 };
 
 async function TeacherStudentsLoader() {

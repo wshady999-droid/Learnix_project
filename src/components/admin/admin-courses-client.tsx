@@ -50,7 +50,6 @@ import { getAdminDictionary } from "@/i18n/admin-dictionaries";
 import { downloadExcelCsv } from "@/lib/admin/export-and-import";
 import { cn } from "@/lib/utils";
 import {
-  adminAssignCourseTeacherAction,
   adminDeleteCategoryAction,
   adminRestoreCourseAction,
   adminSaveCategoryAction,
@@ -141,18 +140,6 @@ export function AdminCoursesClient({ data }: AdminCoursesClientProps) {
   ) {
     setBusyCourseId(courseId);
     const res = await adminUpdateCourseStatusAction({ courseId, status });
-    setBusyCourseId(null);
-    if (!res.ok) {
-      toast.error(res.error);
-      return;
-    }
-    toast.success(adminT.courses.courseUpdatedToast);
-    router.refresh();
-  }
-
-  async function handleReassignTeacher(courseId: string, teacherId: string) {
-    setBusyCourseId(courseId);
-    const res = await adminAssignCourseTeacherAction({ courseId, teacherId });
     setBusyCourseId(null);
     if (!res.ok) {
       toast.error(res.error);
@@ -274,7 +261,6 @@ export function AdminCoursesClient({ data }: AdminCoursesClientProps) {
               downloadExcelCsv(
                 "learnix-courses-report.csv",
                 [
-                  "Code",
                   "Title",
                   "Category",
                   "Instructor",
@@ -283,7 +269,6 @@ export function AdminCoursesClient({ data }: AdminCoursesClientProps) {
                   "Average Rating",
                 ],
                 filteredCourses.map((c) => [
-                  c.course.code,
                   c.course.title,
                   c.course.category,
                   c.teacherName,
@@ -334,7 +319,7 @@ export function AdminCoursesClient({ data }: AdminCoursesClientProps) {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search courses by title, code, teacher..."
+                placeholder="Search courses by title, category, teacher..."
                 className="ps-9"
               />
             </div>
@@ -415,7 +400,6 @@ export function AdminCoursesClient({ data }: AdminCoursesClientProps) {
                             {item.course.title}
                           </div>
                           <div className="font-mono text-xs text-muted-foreground">
-                            {item.course.code} ·{" "}
                             {item.course.language.toUpperCase()}
                           </div>
                           {item.course.deletion_reason && (
@@ -426,26 +410,16 @@ export function AdminCoursesClient({ data }: AdminCoursesClientProps) {
                         </TableCell>
                         <TableCell>{item.course.category}</TableCell>
                         <TableCell>
-                          <select
-                            value={item.course.teacher_id}
-                            disabled={
-                              busyCourseId === item.course.id || isDeleted
-                            }
-                            onChange={(e) =>
-                              handleReassignTeacher(
-                                item.course.id,
-                                e.target.value,
-                              )
-                            }
-                            aria-label={adminT.courses.assignTeacher}
-                            className={cn(fieldBase, "h-8 w-44 py-1 text-xs")}
-                          >
-                            {data.teachers.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.full_name || t.email}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="text-xs">
+                            <p className="font-medium text-foreground">
+                              {item.teacherName}
+                            </p>
+                            {item.teacherEmail ? (
+                              <p className="font-mono text-[11px] text-muted-foreground">
+                                {item.teacherEmail}
+                              </p>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <span className="inline-flex items-center gap-1 font-mono text-xs">

@@ -12,11 +12,9 @@ import {
   CheckCircle2,
   Circle,
   Clock,
-  Download,
   ExternalLink,
   FileText,
   Film,
-  FolderOpen,
   Layers,
   MessageSquare,
   PlayCircle,
@@ -37,7 +35,6 @@ import {
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TiltedCard } from "@/components/ui/TiltedCard";
 import {
   studentSaveCourseReviewAction,
   studentSaveTeacherReviewAction,
@@ -119,7 +116,9 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
         return;
       }
       toast.success(
-        nextCompleted ? "Lesson marked as completed!" : "Lesson marked incomplete.",
+        nextCompleted
+          ? "Lesson marked as completed!"
+          : "Lesson marked incomplete.",
       );
       router.refresh();
     });
@@ -159,7 +158,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // VIEW A: FULL ENROLLED COURSE WORKSPACE (Overview, Sections, Lessons, Videos, PDFs, Resources, Progress, Reviews)
+  // VIEW A: FULL ENROLLED COURSE WORKSPACE
   // ---------------------------------------------------------------------------
   if (activeCourse) {
     const courseChapters = data.chapters.filter(
@@ -167,9 +166,6 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
     );
     const courseLessons = data.lessons.filter(
       (l) => l.course_id === activeCourse.id,
-    );
-    const courseResources = data.learningResources.filter(
-      (r) => r.courseId === activeCourse.id,
     );
     const completedLessonIds = new Set(
       data.lessonProgress
@@ -202,6 +198,13 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
+              <Link href={`/teachers/${activeCourse.teacher_id}`}>
+                <User className="size-3.5 text-[#10b981]" />
+                <span>Instructor Profile</span>
+                <ExternalLink className="size-3" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
               <Link
                 href={`/messages?userId=${activeCourse.teacher_id}&courseId=${activeCourse.id}`}
               >
@@ -228,7 +231,6 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
         <Card className="overflow-hidden border-border/70 bg-white/20 backdrop-blur-lg dark:bg-[#121a19]">
           <CardContent className="grid gap-6 p-6 lg:grid-cols-12">
             <div className="lg:col-span-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={
                   activeCourse.thumbnail_url?.trim() || FALLBACK_COURSE_IMAGE
@@ -241,9 +243,6 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="gold-subtle">{activeCourse.category}</Badge>
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {activeCourse.code}
-                  </Badge>
                   {isCompleted && (
                     <Badge variant="gold">
                       <Award className="mr-1 size-3" />
@@ -257,15 +256,22 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {activeCourse.description ||
                     activeCourse.subtitle ||
-                    "Complete the sections, videos, PDFs, and resources below to master this course."}
+                    "Complete the sections and lessons below to master this course."}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-medium text-muted-foreground">
-                    Instructor: <strong className="text-foreground">{activeCourse.teacherName}</strong> •{" "}
-                    {completedLessonIds.size}/{courseLessons.length} lessons completed
+                    Instructor:{" "}
+                    <Link
+                      href={`/teachers/${activeCourse.teacher_id}`}
+                      className="font-semibold text-foreground hover:text-[#10b981] hover:underline"
+                    >
+                      {activeCourse.teacherName}
+                    </Link>{" "}
+                    • {completedLessonIds.size}/{courseLessons.length} lessons
+                    completed
                   </span>
                   <span className="font-mono font-bold text-emerald-500">
                     {activeCourse.progressPercent}%
@@ -284,7 +290,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
           </CardContent>
         </Card>
 
-        {/* Sections & Lessons + Supplementary Resources */}
+        {/* Sections & Lessons + Course Review Form */}
         <div className="grid gap-6 lg:grid-cols-12">
           <div className="space-y-4 lg:col-span-8">
             <Card>
@@ -297,7 +303,8 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                   </span>
                 </CardTitle>
                 <CardDescription>
-                  Open videos, PDF documents, and articles, or mark completed lessons to save your progress.
+                  Open video lectures, presentations, and documents with in-app
+                  previews, or mark completed lessons to save your progress.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -361,7 +368,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                                         ? "Completed — click to undo"
                                         : "Mark lesson as completed"
                                     }
-                                    className="shrink-0 text-emerald-500 transition-transform hover:scale-110"
+                                    className="shrink-0 text-emerald-500 transition-colors"
                                   >
                                     {done ? (
                                       <CheckCircle2 className="size-5 fill-emerald-500/20" />
@@ -380,7 +387,14 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                                       </span>
                                       {lesson.duration_seconds > 0 && (
                                         <span>
-                                          • {Math.max(1, Math.round(lesson.duration_seconds / 60))} min
+                                          •{" "}
+                                          {Math.max(
+                                            1,
+                                            Math.round(
+                                              lesson.duration_seconds / 60,
+                                            ),
+                                          )}{" "}
+                                          min
                                         </span>
                                       )}
                                     </div>
@@ -405,59 +419,8 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
             </Card>
           </div>
 
-          {/* Right Column: Learning Resources + Course Review Form on Completion */}
+          {/* Right Column: Course & Instructor Review Form */}
           <div className="space-y-6 lg:col-span-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FolderOpen className="size-4 text-gold-foreground" />
-                  <span>Learning Resources ({courseResources.length})</span>
-                </CardTitle>
-                <CardDescription>
-                  Downloadable PDFs, slides, reference links, and study files.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2.5 text-xs">
-                {courseResources.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    Lesson-specific PDFs and videos are available inside each lesson viewer.
-                  </p>
-                ) : (
-                  courseResources.map((res) => {
-                    const href = res.signedUrl || res.externalUrl;
-                    return (
-                      <div
-                        key={res.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-border/70 p-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-foreground">
-                            {res.title}
-                          </p>
-                          <p className="text-[11px] capitalize text-muted-foreground">
-                            {res.resourceType}
-                            {res.description ? ` • ${res.description}` : ""}
-                          </p>
-                        </div>
-                        {href && (
-                          <Button asChild variant="outline" size="sm">
-                            <a href={href} target="_blank" rel="noreferrer">
-                              {res.signedUrl ? (
-                                <Download className="size-3.5" />
-                              ) : (
-                                <ExternalLink className="size-3.5" />
-                              )}
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Student Course & Teacher Review Form (Shown when course is 100% completed!) */}
             {isCompleted ? (
               <Card className="border-emerald-500/50 bg-emerald-500/5">
                 <CardHeader>
@@ -470,12 +433,13 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                     </span>
                   </CardTitle>
                   <CardDescription>
-                    Congratulations on completing 100% of this course! Share your rating and optional improvement suggestions.
+                    Course: <strong>{activeCourse.title}</strong> • Instructor:{" "}
+                    <strong>{activeCourse.teacherName}</strong>
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 text-xs">
                   <div className="space-y-1.5">
-                    <Label>Course Rating (1 to 5)</Label>
+                    <Label>Course Rating ({activeCourse.title})</Label>
                     <div className="flex gap-1.5">
                       {[1, 2, 3, 4, 5].map((st) => (
                         <Button
@@ -528,7 +492,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                       onChange={(e) =>
                         setImprovementSuggestions(e.target.value)
                       }
-                      placeholder="Any topics or resources that could make this course even better?"
+                      placeholder="Any topics that could make this course even better?"
                     />
                   </div>
 
@@ -551,7 +515,8 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                     <span>Course Reviews ({courseReviewsList.length})</span>
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Complete 100% of lessons ({activeCourse.progressPercent}% done) to unlock the course rating form.
+                    Complete 100% of lessons ({activeCourse.progressPercent}%
+                    done) to unlock the course and instructor rating form.
                   </CardDescription>
                 </CardHeader>
                 {courseReviewsList.length > 0 && (
@@ -569,6 +534,9 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                             {"★".repeat(rev.rating)}
                           </span>
                         </div>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {activeCourse.title} • {activeCourse.teacherName}
+                        </p>
                         {rev.comment && (
                           <p className="mt-1 text-muted-foreground">
                             {rev.comment}
@@ -587,7 +555,7 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
   }
 
   // ---------------------------------------------------------------------------
-  // VIEW B: MY ENROLLED COURSES GRID (ONLY STUDENT'S OWN COURSES)
+  // VIEW B: MY ENROLLED COURSES GRID (ONLY STUDENT'S OWN ENROLLED COURSES)
   // ---------------------------------------------------------------------------
   return (
     <div className="space-y-8">
@@ -600,6 +568,10 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
             My Enrolled Courses
           </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Access your active courses, track lesson completion, and view your
+            instructors.
+          </p>
         </div>
 
         <Button
@@ -647,96 +619,87 @@ export function MyLearningOrbitClient({ data }: MyLearningOrbitClientProps) {
                 : FALLBACK_COURSE_IMAGE;
 
             return (
-              <div
+              <article
                 key={course.id}
-                className="perspective-1000 h-[400px] w-full"
+                className="flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-[#0F1115]/80 text-foreground shadow-md backdrop-blur-md transition-colors hover:border-[#10b981]/50"
               >
-                <TiltedCard
-                  imageSrc={thumb}
-                  altText={course.title}
-                  containerHeight="100%"
-                  containerWidth="100%"
-                  imageHeight="100%"
-                  imageWidth="100%"
-                  rotateAmplitude={8}
-                  scaleOnHover={1.02}
-                  showTooltip={false}
-                  displayOverlayContent={true}
-                  overlayContent={
-                    <div className="flex h-full w-full flex-col justify-between bg-gradient-to-t from-black/85 via-black/25 to-transparent p-6 text-white backdrop-blur-[2px]">
-                      <div className="flex items-start justify-between">
-                        <Badge className="border border-[#10b981]/60 bg-white/10 font-mono text-[10px] font-semibold text-[#10b981] backdrop-blur-md">
-                          {course.code}
-                        </Badge>
-                        <Badge
-                          variant={isCompleted ? "gold" : "outline"}
-                          className={
-                            isCompleted
-                              ? ""
-                              : "border-white/25 bg-white/10 text-white backdrop-blur-md"
-                          }
-                        >
-                          {isCompleted && (
-                            <CheckCircle2 className="mr-1 size-3" />
-                          )}
-                          {course.progressPercent}%
-                        </Badge>
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="line-clamp-2 text-xl font-bold">
-                          {course.title}
-                        </h3>
-                        <p className="flex items-center gap-1.5 text-xs text-white/80">
-                          <User className="size-3.5" /> {course.teacherName}
-                        </p>
-                      </div>
+                <div>
+                  <div className="relative h-48 w-full overflow-hidden">
+                    <img
+                      src={thumb}
+                      alt={course.title}
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 to-transparent p-3.5">
+                      <Badge variant="gold-subtle">{course.category}</Badge>
+                      <Badge
+                        variant={isCompleted ? "gold" : "outline"}
+                        className={
+                          isCompleted
+                            ? ""
+                            : "border-white/25 bg-black/60 text-white backdrop-blur-md"
+                        }
+                      >
+                        {isCompleted && (
+                          <CheckCircle2 className="mr-1 size-3" />
+                        )}
+                        {course.progressPercent}%
+                      </Badge>
                     </div>
-                  }
-                  backContent={
-                    <div className="flex h-full w-full flex-col justify-between rounded-2xl border border-white/20 bg-white/20 p-6 text-foreground backdrop-blur-lg dark:border-[#353644] dark:bg-[#121a19]">
-                      <div className="space-y-3">
-                        <Badge variant="gold-subtle">{course.category}</Badge>
-                        <h3 className="line-clamp-2 text-lg font-bold">
-                          {course.title}
-                        </h3>
-                        <p className="line-clamp-4 text-sm text-muted-foreground">
-                          {course.description ||
-                            course.subtitle ||
-                            "Structured sections, lessons, videos, PDFs, and resources."}
-                        </p>
-                      </div>
-                      <div className="space-y-4 border-t border-white/20 pt-4 dark:border-[#353644]">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Layers className="size-3.5 text-[#10b981]" />
-                            {chaptersCount} Sections • {lessonsCount} Lessons
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="size-3.5 text-[#10b981]" />
-                            {Number(course.estimated_hours ?? 0)}h
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          data-no-flip="true"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openCourseWorkspace(course.id);
-                          }}
-                          variant="gold"
-                          className="w-full justify-center gap-2"
-                        >
-                          <PlayCircle className="size-4" />
-                          <span>
-                            {isCompleted ? "Open & Review Course" : "Open Course"}
-                          </span>
-                          <ArrowRight className="ml-1 size-4" />
-                        </Button>
-                      </div>
+                  </div>
+
+                  <div className="space-y-3 p-5">
+                    <h3 className="line-clamp-2 text-lg font-bold tracking-tight text-foreground">
+                      {course.title}
+                    </h3>
+
+                    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <User className="size-3.5 text-[#10b981]" />
+                      <Link
+                        href={`/teachers/${course.teacher_id}`}
+                        className="font-medium text-foreground hover:text-[#10b981] hover:underline"
+                      >
+                        {course.teacherName}
+                      </Link>
+                    </p>
+
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-emerald-500 transition-all"
+                        style={{
+                          width: `${Math.min(100, course.progressPercent)}%`,
+                        }}
+                      />
                     </div>
-                  }
-                />
-              </div>
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Layers className="size-3.5 text-[#10b981]" />
+                        {chaptersCount} Sections • {lessonsCount} Lessons
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="size-3.5 text-[#10b981]" />
+                        {Number(course.estimated_hours ?? 0)}h
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-white/10 px-5 py-4">
+                  <Button
+                    type="button"
+                    onClick={() => openCourseWorkspace(course.id)}
+                    variant="gold"
+                    className="w-full justify-center gap-2"
+                  >
+                    <PlayCircle className="size-4" />
+                    <span>
+                      {isCompleted ? "Open & Review Course" : "Open Course"}
+                    </span>
+                    <ArrowRight className="ml-1 size-4" />
+                  </Button>
+                </div>
+              </article>
             );
           })}
         </div>
