@@ -1,10 +1,15 @@
+
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable Next.js development indicator
+  devIndicators: false,
+
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
   reactStrictMode: true,
+
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 30,
@@ -16,6 +21,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+
   experimental: {
     turbopackPluginRuntimeStrategy: "forceWorkerThreads",
     optimizePackageImports: [
@@ -25,6 +31,7 @@ const nextConfig: NextConfig = {
       "framer-motion",
     ],
   },
+
   turbopack: {
     rules: {
       "*.css": {
@@ -33,6 +40,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
+
   async headers() {
     return [
       {

@@ -25,3 +25,27 @@ export async function aiSubmitMessageFeedbackAction(params: {
   revalidatePath("/teacher/ai-assistant");
   return { ok: true, data: { saved: true } };
 }
+
+export async function aiDeleteConversationAction(
+  conversationId: string,
+): Promise<ServiceResult<{ deleted: boolean }>> {
+  const auth = await requireRole(["student", "teacher", "admin"]);
+  if (!auth.ok) return auth;
+
+  const supabase = await createSupabaseServerClient();
+  
+  // حذف المحادثة بشرط أن تكون ملك المستخدم الحالي
+  const { error } = await supabase
+    .from("ai_conversations")
+    .delete()
+    .eq("id", conversationId)
+    .eq("user_id", auth.data.userId);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/student/ai-assistant");
+  revalidatePath("/teacher/ai-assistant");
+  return { ok: true, data: { deleted: true } };
+}

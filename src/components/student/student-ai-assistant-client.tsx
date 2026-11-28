@@ -33,6 +33,7 @@ import {
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  Trash2, // <-- تمت الإضافة
   User,
   X,
 } from "lucide-react";
@@ -58,7 +59,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { aiSubmitMessageFeedbackAction } from "@/services/ai/actions";
+import {
+  aiDeleteConversationAction, // <-- تمت الإضافة
+  aiSubmitMessageFeedbackAction,
+} from "@/services/ai/actions";
 import type { AiCitation } from "@/services/ai/engine";
 import type { AiWorkspaceHistoryData } from "@/services/ai/queries";
 import type { StudentCoursesData } from "@/services/student/queries";
@@ -397,11 +401,12 @@ export function StudentAiAssistantClient({
   const [sending, setSending] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null); // <-- تمت الإضافة
 
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [waveformLevels, setWaveformLevels] = useState<number[]>(
-    () => Array.from({ length: 28 }, () => 14),
+  const [waveformLevels, setWaveformLevels] = useState<number[]>(() =>
+    Array.from({ length: 28 }, () => 14),
   );
   const [liveSpeechPreview, setLiveSpeechPreview] = useState("");
 
@@ -557,6 +562,32 @@ export function StudentAiAssistantClient({
     textareaRef.current?.focus();
   }
 
+  // <-- تمت الإضافة: دالة الحذف
+  async function handleDeleteConversation(
+    e: React.MouseEvent,
+    convId: string,
+  ) {
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to delete this conversation?")) {
+      return;
+    }
+    setDeletingId(convId);
+    try {
+      const res = await aiDeleteConversationAction(convId);
+      if (!res.ok) {
+        toast.error(res.error || "Failed to delete conversation.");
+        return;
+      }
+      toast.success("Conversation deleted.");
+      if (activeConversationId === convId) {
+        startNewConversation();
+      }
+      router.refresh();
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   function stageSelectedFiles(
     files: FileList | null,
     expectedKind: "document" | "image" | "audio",
@@ -703,7 +734,10 @@ export function StudentAiAssistantClient({
                 Math.floor((i / barCount) * (freqData.length * 0.75)),
               );
               const val = freqData[binIndex] ?? 0;
-              const pct = Math.max(12, Math.min(100, Math.round((val / 255) * 100)));
+              const pct = Math.max(
+                12,
+                Math.min(100, Math.round((val / 255) * 100)),
+              );
               nextBars.push(pct);
             }
             setWaveformLevels(nextBars);
@@ -718,10 +752,10 @@ export function StudentAiAssistantClient({
       try {
         const SpeechRecConstructor =
           (window as unknown as Record<string, unknown>).SpeechRecognition ||
-          (window as unknown as Record<string, unknown>)
-            .webkitSpeechRecognition;
+          (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
         if (typeof SpeechRecConstructor === "function") {
-          const recognition = new (SpeechRecConstructor as new () => BrowserSpeechRecognitionInstance)();
+          const recognition =
+            new (SpeechRecConstructor as new () => BrowserSpeechRecognitionInstance)();
           recognition.continuous = true;
           recognition.interimResults = true;
           recognition.onresult = (event: BrowserSpeechRecognitionEvent) => {
@@ -1111,30 +1145,45 @@ export function StudentAiAssistantClient({
                   history.conversations.map((conv) => {
                     const isActive = activeConversationId === conv.id;
                     return (
-                      <button
+                      <div // <-- تم التعديل: من button إلى div
                         key={conv.id}
-                        type="button"
                         onClick={() => selectConversation(conv.id)}
                         className={cn(
-                          "w-full rounded-xl border p-3 text-start text-xs transition-colors",
+                          "group relative flex w-full cursor-pointer flex-col rounded-xl border p-3 text-start text-xs transition-colors",
                           isActive
                             ? "border-emerald-400/50 bg-emerald-500/15 font-medium text-foreground"
                             : "border-white/10 bg-[#0F1115]/60 text-muted-foreground hover:border-emerald-400/35 hover:bg-[#161B24]/80 hover:text-foreground",
                         )}
                       >
-                        <p
-                          className="truncate font-medium text-foreground"
-                          dir="auto"
-                        >
-                          {conv.title}
-                        </p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p
+                            className="truncate font-medium text-foreground pe-6"
+                            dir="auto"
+                          >
+                            {conv.title}
+                          </p>
+                          {/* <-- تمت الإضافة: زر الحذف */}
+                          <button
+                            type="button"
+                            disabled={deletingId === conv.id}
+                            onClick={(e) => handleDeleteConversation(e, conv.id)}
+                            className="absolute end-2 top-2 rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
+                            title="Delete Conversation"
+                          >
+                            {deletingId === conv.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="size-3.5" />
+                            )}
+                          </button>
+                        </div>
                         <div className="mt-1 flex items-center justify-between gap-2 font-mono text-[10px] opacity-75">
                           <span className="truncate">
                             {conv.course_id ? "Course RAG" : "General AI"}
                           </span>
                           <span>{conv.updated_at.slice(0, 10)}</span>
                         </div>
-                      </button>
+                      </div>
                     );
                   })
                 )}
@@ -1731,7 +1780,7 @@ export function StudentAiAssistantClient({
                         )}
                         <span className="truncate">
                           {selectedCourse
-                            ? `${selectedCourse.code} — ${selectedCourse.title}`
+                            ? selectedCourse.title // <-- تم التعديل هنا: عرض الاسم فقط
                             : "General AI Assistant"}
                         </span>
                         <ChevronDown className="size-3 shrink-0 opacity-60" />
@@ -1760,10 +1809,7 @@ export function StudentAiAssistantClient({
                         {data.enrolledCourses.map((c) => (
                           <DropdownMenuRadioItem key={c.id} value={c.id}>
                             <span className="truncate">
-                              <strong className="font-mono text-xs">
-                                {c.code}
-                              </strong>{" "}
-                              — {c.title}
+                              {c.title} {/* <-- تم التعديل هنا */}
                             </span>
                           </DropdownMenuRadioItem>
                         ))}
